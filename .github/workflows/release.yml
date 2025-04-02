@@ -99,8 +99,10 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY_IMAGE }}
-          tags: |
+          tags: | 
             type=semver,pattern={{version}}
+            # use custom value instead of git tag
+            type=semver,pattern={{version}},value=${{ github.event.inputs.version }}
 
       - name: Create manifest list and push
         working-directory: ${{ runner.temp }}/digests
