@@ -114,38 +114,6 @@ jobs:
         run: |
           docker buildx imagetools inspect ${{ env.REGISTRY_IMAGE }}:${{ steps.meta.outputs.version }}
 
-  # push-image:
-  #   runs-on: ubuntu-latest
-  #   permissions:
-  #     contents: read
-  #     packages: write
-  #   steps:
-  #   - name: 'Checkout GitHub Action'
-  #     uses: actions/checkout@main
-
-  #   - name: Login to GitHub Container Registry
-  #     uses: docker/login-action@v3
-  #     with:
-  #       registry: ghcr.io
-  #       username: ${{ github.actor }}
-  #       password: ${{ secrets.GITHUB_TOKEN }}
-
-  #   - name: Set up QEMU
-  #     uses: docker/setup-qemu-action@v3
-  #   - name: Set up Docker Buildx
-  #     uses: docker/setup-buildx-action@v3
-  #   - name: Build
-  #     env:
-  #       DOCKER_BUILD_ARGS: "--push"
-  #       DOCKER_BUILDER: "docker buildx"
-  #     run: |
-  #       # if workflow_dispatch is used, use the version input
-  #       if [ -n "${{ github.event.inputs.version }}" ]; then
-  #         export VERSION=${{ github.event.inputs.version }}
-  #       else
-  #         export VERSION=$(echo "$GITHUB_REF" | cut -c12-)
-  #       fi
-  #       make docker
   build:
     runs-on: ${{ matrix.os }}
     strategy:
