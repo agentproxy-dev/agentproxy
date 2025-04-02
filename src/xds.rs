@@ -2,8 +2,8 @@ use std::error::Error as StdErr;
 use std::fmt;
 use std::fmt::Formatter;
 use std::sync::{Arc, RwLock};
-use tracing::Level;
 use tokio::sync::mpsc;
+use tracing::Level;
 use tracing::{error, instrument, warn};
 
 pub use client::*;

@@ -1,7 +1,7 @@
 use crate::backend::BackendAuth;
 use crate::metrics::Recorder;
-use crate::rbac;
 use crate::outbound::{OpenAPISchema, Target, TargetSpec};
+use crate::rbac;
 use crate::xds::XdsStore;
 use http::{HeaderMap, HeaderValue, Method, header::AUTHORIZATION};
 use itertools::Itertools;

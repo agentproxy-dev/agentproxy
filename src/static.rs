@@ -1,10 +1,10 @@
 use std::sync::Arc;
 use tracing::{debug, info, trace};
 
-use crate::rbac;
-use crate::relay;
 use crate::inbound::Listener;
 use crate::outbound::Target;
+use crate::rbac;
+use crate::relay;
 use crate::xds::XdsStore as ProxyState;
 
 #[derive(Default, Debug, Clone, serde::Serialize, serde::Deserialize)]

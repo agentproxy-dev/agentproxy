@@ -27,7 +27,7 @@ impl BackendAuthConfig {
 	pub async fn build(&self) -> impl BackendAuth {
 		match self {
 			BackendAuthConfig::GCP => gcp::GCPBackend::new().await.unwrap(),
-      #[cfg(feature = "aws")]
+			#[cfg(feature = "aws")]
 			BackendAuthConfig::AWS => {
 				panic!("AWS backend not implemented")
 			},

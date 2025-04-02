@@ -5,11 +5,9 @@ use tracing::info;
 
 use crate::rbac;
 
-use crate::xds;
 use crate::sse::App as SseApp;
+use crate::xds;
 use serde::{Deserialize, Serialize};
-
-
 
 #[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
 #[serde(tag = "type")]

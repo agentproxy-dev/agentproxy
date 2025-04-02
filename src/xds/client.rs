@@ -231,8 +231,7 @@ impl State {
 impl Config {
 	pub fn new(config: Arc<super::Config>) -> Config {
 		Config {
-			address: config
-				.xds_address.clone(),
+			address: config.xds_address.clone(),
 			handlers: HashMap::new(),
 			initial_requests: Vec::new(),
 			on_demand: false,

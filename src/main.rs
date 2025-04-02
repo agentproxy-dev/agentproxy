@@ -1,7 +1,7 @@
 use anyhow::Result;
 use clap::Parser;
-use mcp_proxy::xds::Config as XdsConfig;
 use mcp_proxy::r#static::{StaticConfig, run_local_client};
+use mcp_proxy::xds::Config as XdsConfig;
 use prometheus_client::registry::Registry;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, RwLock};
