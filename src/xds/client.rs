@@ -1,6 +1,5 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt::{Display, Formatter};
-use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 use std::{fmt, mem};
@@ -9,7 +8,6 @@ use itertools::Itertools;
 use prost::{DecodeError, EncodeError};
 use prost_types::value::Kind;
 use prost_types::{Struct, Value};
-use split_iter::Splittable;
 use thiserror::Error;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;

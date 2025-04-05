@@ -1,7 +1,6 @@
 use std::error::Error as StdErr;
 use std::fmt;
 use std::fmt::Formatter;
-use std::pin::Pin;
 use std::sync::{Arc, RwLock};
 use tokio::sync::mpsc;
 use tracing::Level;
