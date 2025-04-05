@@ -38,7 +38,9 @@ pub async fn run_local_client(
 		let num_policies = cfg.policies.len();
 		for target in cfg.targets.clone() {
 			trace!("inserting target {}", &target.name);
-			state.targets.insert(outbound::Target::try_from(&target).unwrap());
+			state
+				.targets
+				.insert(outbound::Target::try_from(&target).unwrap());
 		}
 		let rule_set = rbac::RuleSet::new("test".to_string(), "test".to_string(), cfg.policies.clone());
 		state.policies.insert(rule_set);
