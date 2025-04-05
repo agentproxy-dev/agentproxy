@@ -24,7 +24,7 @@ message Target {
 
   message StdioTarget {
     // The command of the target.
-    string command = 1;
+    string cmd = 1;
     // The arguments of the target.
     repeated string args = 2;
     // The environment variables of the target.

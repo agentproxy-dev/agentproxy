@@ -194,7 +194,7 @@ impl TryFrom<&XdsTarget> for outbound::Target {
 				backend_auth: None,
 			},
 			XdsTargetSpec::Stdio(stdio) => outbound::TargetSpec::Stdio {
-				cmd: stdio.command.clone(),
+				cmd: stdio.cmd.clone(),
 				args: stdio.args.clone(),
 				env: stdio.env.clone(),
 			},

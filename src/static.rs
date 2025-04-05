@@ -2,16 +2,17 @@ use std::sync::Arc;
 use tracing::{debug, info, trace};
 
 use crate::inbound::Listener;
-use crate::outbound::Target;
+use crate::outbound;
 use crate::rbac;
 use crate::relay;
 use crate::xds::XdsStore as ProxyState;
+use crate::xds::mcp::kgateway_dev::target::Target as XdsTarget;
 
 #[derive(Default, Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct StaticConfig {
 	#[serde(default)]
-	pub targets: Vec<Target>,
+	pub targets: Vec<XdsTarget>,
 	#[serde(default)]
 	pub policies: Vec<rbac::Rule>,
 	#[serde(default)]
@@ -37,7 +38,7 @@ pub async fn run_local_client(
 		let num_policies = cfg.policies.len();
 		for target in cfg.targets.clone() {
 			trace!("inserting target {}", &target.name);
-			state.targets.insert(target);
+			state.targets.insert(outbound::Target::try_from(&target).unwrap());
 		}
 		let rule_set = rbac::RuleSet::new("test".to_string(), "test".to_string(), cfg.policies.clone());
 		state.policies.insert(rule_set);

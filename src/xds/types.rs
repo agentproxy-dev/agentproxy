@@ -19,9 +19,11 @@ pub mod mcp {
 	pub mod kgateway_dev {
 		pub mod rbac {
 			tonic::include_proto!("mcp.kgateway.dev.rbac.v1alpha1");
+			include!(concat!(env!("OUT_DIR"), "/mcp.kgateway.dev.rbac.v1alpha1.serde.rs"));
 		}
 		pub mod target {
 			tonic::include_proto!("mcp.kgateway.dev.target.v1alpha1");
+			include!(concat!(env!("OUT_DIR"), "/mcp.kgateway.dev.target.v1alpha1.serde.rs"));
 		}
 	}
 }

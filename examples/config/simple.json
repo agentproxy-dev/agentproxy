@@ -8,8 +8,7 @@
   "targets": [
     {
       "name": "everything",
-      "spec": {
-        "type": "stdio",
+      "stdio": {
         "cmd": "npx",
         "args": [
           "@modelcontextprotocol/server-everything"
