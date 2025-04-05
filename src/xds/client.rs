@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt::{Display, Formatter};
+use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 use std::{fmt, mem};
@@ -8,6 +9,7 @@ use prost::{DecodeError, EncodeError};
 use prost_types::value::Kind;
 use prost_types::{Struct, Value};
 use split_iter::Splittable;
+use itertools::Itertools;
 use thiserror::Error;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
@@ -69,10 +71,11 @@ impl Display for RejectedConfig {
 /// handle_single_resource is a helper to process a set of updates with a closure that processes items one-by-one.
 /// It handles aggregating errors as NACKS.
 pub fn handle_single_resource<T: prost::Message, F: FnMut(XdsUpdate<T>) -> anyhow::Result<()>>(
-	updates: impl Iterator<Item = XdsUpdate<T>>,
+	updates: Vec<XdsUpdate<T>>,
 	mut handle_one: F,
 ) -> Result<(), Vec<RejectedConfig>> {
 	let rejects: Vec<RejectedConfig> = updates
+    .into_iter()
 		.filter_map(|res| {
 			let name = res.name();
 			if let Err(e) = handle_one(res) {
@@ -91,21 +94,24 @@ pub fn handle_single_resource<T: prost::Message, F: FnMut(XdsUpdate<T>) -> anyho
 
 // Handler is responsible for handling a discovery response.
 // Handlers can mutate state and return a list of rejected configurations (if there are any).
-pub trait Handler<T: prost::Message>: Send + Sync + 'static {
+#[async_trait::async_trait]
+pub trait Handler<T: prost::Message + Send>: Send + Sync + 'static {
 	fn no_on_demand(&self) -> bool {
 		false
 	}
-	fn handle(
+
+	async fn handle(
 		&self,
-		res: Box<&mut dyn Iterator<Item = XdsUpdate<T>>>,
+		res: Vec<XdsUpdate<T>>,
 	) -> Result<(), Vec<RejectedConfig>>;
 }
 
 // ResponseHandler is responsible for handling a discovery response.
 // Handlers can mutate state and return a list of rejected configurations (if there are any).
 // This is an internal only trait; public usage uses the Handler type which is typed.
+#[async_trait::async_trait]
 trait RawHandler: Send + Sync + 'static {
-	fn handle(
+	async fn handle(
 		&self,
 		state: &mut State,
 		res: DeltaDiscoveryResponse,
@@ -117,17 +123,21 @@ struct HandlerWrapper<T: prost::Message> {
 	h: Box<dyn Handler<T>>,
 }
 
+#[async_trait::async_trait]
 impl<T: 'static + prost::Message + Default> RawHandler for HandlerWrapper<T> {
-	fn handle(
+	async fn handle(
 		&self,
 		state: &mut State,
 		res: DeltaDiscoveryResponse,
 	) -> Result<(), Vec<RejectedConfig>> {
 		let type_url = strng::new(res.type_url);
-		let removes = &res.removed_resources;
+    
+		let removes = res.removed_resources.clone();
 
+    // TODO: Less list mangling
+    
 		// Keep track of any failures but keep going
-		let (decode_failures, updates) = res
+		let (updates, decode_failures): (Vec<_>, Vec<_>) = res
 			.resources
 			.iter()
 			.map(|raw| {
@@ -136,28 +146,24 @@ impl<T: 'static + prost::Message + Default> RawHandler for HandlerWrapper<T> {
 					reason: err.into(),
 				})
 			})
-			.split(|i| i.is_ok());
+      .map_ok(XdsUpdate::Update)
+			.partition_result();
 
-		let mut updates = updates
-			// We already filtered to ok
-			.map(|r| r.expect("must be ok"))
-			.map(XdsUpdate::Update)
-			.chain(removes.iter().cloned().map(|s| XdsUpdate::Remove(s.into())));
+		// Collect removes explicitly to avoid borrowing `removes` in the chained iterator
+		let remove_updates: Vec<_> = removes.iter().cloned().map(|s| XdsUpdate::Remove(s.into())).collect();
+
+		let final_updates = updates.into_iter()
+			.chain(remove_updates)
+      .collect();
+
 
 		// First, call handlers that update the proxy state.
 		// other wise on-demand notifications might observe a cache without their resource
-		let updates: Box<&mut dyn Iterator<Item = XdsUpdate<T>>> = Box::new(&mut updates);
-		let result = self.h.handle(updates);
-
-		// Collecting after handle() is important, as the split() will cache the side we use last.
-		// Updates >>> Errors (hopefully), so we want this one to do the allocations.
-		let decode_failures: Vec<_> = decode_failures
-			.map(|r| r.expect_err("must be err"))
-			.collect();
+		let result = self.h.handle(final_updates).await;
 
 		// after we update the proxy cache, we can update our xds cache. it's important that we do this after
 		// as we make on demand notifications here, so the proxy cache must be updated first.
-		for name in res.removed_resources {
+		for name in removes {
 			let k = ResourceKey {
 				name: name.into(),
 				type_url: type_url.clone(),
@@ -623,7 +629,7 @@ impl AdsClient {
 		);
 		let handler_response: Result<(), Vec<RejectedConfig>> =
 			match self.config.handlers.get(&strng::new(&type_url)) {
-				Some(h) => h.handle(&mut self.state, response),
+				Some(h) => h.handle(&mut self.state, response).await,
 				None => {
 					error!(%type_url, "unknown type");
 					// TODO: this will just send another discovery request, to server. We should

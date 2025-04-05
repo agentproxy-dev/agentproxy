@@ -1,6 +1,7 @@
 use std::error::Error as StdErr;
 use std::fmt;
 use std::fmt::Formatter;
+use std::pin::Pin;
 use std::sync::{Arc, RwLock};
 use tokio::sync::mpsc;
 use tracing::Level;
@@ -142,10 +143,11 @@ impl ProxyStateUpdateMutator {
 	}
 }
 
+#[async_trait::async_trait]
 impl Handler<XdsTarget> for ProxyStateUpdater {
-	fn handle(
+	async fn handle(
 		&self,
-		updates: Box<&mut dyn Iterator<Item = XdsUpdate<XdsTarget>>>,
+		updates: Vec<XdsUpdate<XdsTarget>>,
 	) -> Result<(), Vec<RejectedConfig>> {
 		let mut state = self.state.write().unwrap();
 		let handle = |res: XdsUpdate<XdsTarget>| {
@@ -159,10 +161,11 @@ impl Handler<XdsTarget> for ProxyStateUpdater {
 	}
 }
 
+#[async_trait::async_trait]
 impl Handler<XdsRbac> for ProxyStateUpdater {
-	fn handle(
+	async fn handle(
 		&self,
-		updates: Box<&mut dyn Iterator<Item = XdsUpdate<XdsRbac>>>,
+		updates: Vec<XdsUpdate<XdsRbac>>,
 	) -> Result<(), Vec<RejectedConfig>> {
 		let mut state = self.state.write().unwrap();
 		let handle = |res: XdsUpdate<XdsRbac>| {
