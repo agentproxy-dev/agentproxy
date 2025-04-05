@@ -2,18 +2,42 @@ syntax = "proto3";
 
 package mcp.kgateway.dev.target.v1alpha1;
 
+// import "google/protobuf/struct.proto";
+
 message Target {
   // The name of the target.
   string name = 1;
-  // The host of the target.
-  string host = 2;
-  // The port of the target.
-  uint32 port = 3;
-  string path = 4;
-  // The backend auth config of the target.
-  BackendAuthConfig backend_auth = 5;
+
+  oneof target {
+    SseTarget sse = 2;
+    OpenAPITarget openapi = 3;
+    StdioTarget stdio = 4;
+  }
+
+  message SseTarget {
+    // The host of the target.
+    string host = 1;
+    // The port of the target.
+    uint32 port = 2;
+    string path = 3;
+  }
+
+  message StdioTarget {
+    // The command of the target.
+    string command = 1;
+    // The arguments of the target.
+    repeated string args = 2;
+    // The environment variables of the target.
+    map<string, string> env = 3;
+  }
+
+  message OpenAPITarget {
+    // The host of the target.
+    string host = 1;
+    // The port of the target.
+    uint32 port = 2;
+    // The schema of the target.
+    bytes schema = 3;
+  }
 }
 
-message BackendAuthConfig {
-  string type = 1;
-}

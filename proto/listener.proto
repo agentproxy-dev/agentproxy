@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package mcp.kgateway.dev.listener.v1alpha1;
+
+message Listener {
+  message SseListener { 
+    string address = 1;
+    uint32 port = 2;
+
+  }
+
+  message StdioListener {
+  }
+  
+  oneof listener {
+    SseListener sse = 1;
+    StdioListener stdio = 2;
+  }
+
+
+}

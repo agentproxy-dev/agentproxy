@@ -12,6 +12,7 @@ pub use types::*;
 
 use xds::mcp::kgateway_dev::rbac::Config as XdsRbac;
 use xds::mcp::kgateway_dev::target::Target as XdsTarget;
+use xds::mcp::kgateway_dev::target::target::Target as XdsTargetSpec;
 
 use self::envoy::service::discovery::v3::DeltaDiscoveryRequest;
 use crate::rbac;
@@ -103,7 +104,8 @@ impl ProxyStateUpdateMutator {
         fields(name=%target.name),
     )]
 	pub fn insert_target(&self, state: &mut XdsStore, target: XdsTarget) -> anyhow::Result<()> {
-		let target = outbound::Target::from(&target);
+		let target = outbound::Target::try_from(&target)
+			.map_err(|e| anyhow::anyhow!("failed to parse target: {e}"))?;
 		// TODO: This is a hack
 		// TODO: Separate connection/LB from insertion
 		state.targets.insert(target);
@@ -172,19 +174,45 @@ impl Handler<XdsRbac> for ProxyStateUpdater {
 	}
 }
 
-impl From<&XdsTarget> for outbound::Target {
-	fn from(value: &XdsTarget) -> Self {
-		outbound::Target {
-			name: value.name.clone(),
-			spec: {
-				outbound::TargetSpec::Sse {
-					host: value.host.clone(),
-					port: value.port,
-					path: value.path.clone(),
-					backend_auth: None,
-				}
+#[derive(Debug, thiserror::Error)]
+pub enum ParseError {
+	#[error("missing fields")]
+	MissingFields,
+	#[error("invalid schema")]
+	InvalidSchema,
+}
+
+impl TryFrom<&XdsTarget> for outbound::Target {
+	type Error = ParseError;
+	fn try_from(value: &XdsTarget) -> Result<Self, Self::Error> {
+		let target = value.target.as_ref().ok_or(ParseError::MissingFields)?;
+		let spec = match target {
+			XdsTargetSpec::Sse(sse) => outbound::TargetSpec::Sse {
+				host: sse.host.clone(),
+				port: sse.port,
+				path: sse.path.clone(),
+				backend_auth: None,
 			},
-		}
+			XdsTargetSpec::Stdio(stdio) => outbound::TargetSpec::Stdio {
+				cmd: stdio.command.clone(),
+				args: stdio.args.clone(),
+				env: stdio.env.clone(),
+			},
+			XdsTargetSpec::Openapi(openapi) => outbound::TargetSpec::OpenAPI {
+				host: openapi.host.clone(),
+				port: openapi.port,
+				schema: {
+					let struct_schema = openapi.schema.clone();
+					let schema: outbound::OpenAPISchema =
+						serde_json::from_slice(&struct_schema).map_err(|_| ParseError::InvalidSchema)?;
+					schema
+				},
+			},
+		};
+		Ok(outbound::Target {
+			name: value.name.clone(),
+			spec,
+		})
 	}
 }
 

@@ -493,7 +493,7 @@ impl ConnectionPool {
 
 				UpstreamTarget::Mcp(serve_client((), transport).await?)
 			},
-			TargetSpec::Stdio { cmd, args } => {
+			TargetSpec::Stdio { cmd, args, env: _ } => {
 				tracing::trace!("starting stdio transport for target: {}", target.name);
 				UpstreamTarget::Mcp(
 					serve_client(

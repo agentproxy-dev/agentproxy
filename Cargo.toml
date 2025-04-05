@@ -8,6 +8,7 @@ rust-version = "1.85"
 default = ["gcp"]
 gcp = ["dep:google-cloud-auth"]
 aws = ["dep:aws-config", "dep:aws-sdk-lambda", "dep:aws-smithy-runtime-api"]
+
 [dependencies]
 arcstr = { version = "1.2", features = ["serde"] }
 async-stream = "0.3"
@@ -51,6 +52,8 @@ openapiv3 = "2.0.0"
 reqwest = "0.12.14"
 itertools = "0.14"
 async-trait = "0.1"
+pbjson = "0.7"
+pbjson-types = "0.7"
 
 google-cloud-auth = {version = "0.18.0", optional = true}
 aws-config = {version = "1.6.1", optional = true}
@@ -64,6 +67,7 @@ tonic-build = { version = "0.12", features = [
 prost-build = "0.13"
 anyhow = "1.0"
 rustc_version = "0.4"
+pbjson-build = "0.7"
 
 [lib]
 path = "src/lib.rs"

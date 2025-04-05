@@ -1,6 +1,6 @@
 use openapiv3::Paths;
 use serde::{Deserialize, Serialize};
-
+use std::collections::HashMap;
 pub mod backend;
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -20,7 +20,11 @@ pub enum TargetSpec {
 		backend_auth: Option<backend::BackendAuthConfig>,
 	},
 	#[serde(rename = "stdio")]
-	Stdio { cmd: String, args: Vec<String> },
+	Stdio {
+		cmd: String,
+		args: Vec<String>,
+		env: HashMap<String, String>,
+	},
 	#[serde(rename = "openapi")]
 	OpenAPI {
 		host: String,

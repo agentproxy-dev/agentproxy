@@ -1,13 +1,13 @@
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 use std::time::Duration;
 use std::{fmt, mem};
 
 use itertools::Itertools;
+use pbjson_types::value::Kind;
+use pbjson_types::{Struct, Value};
 use prost::{DecodeError, EncodeError};
-use prost_types::value::Kind;
-use prost_types::{Struct, Value};
 use thiserror::Error;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
@@ -268,7 +268,7 @@ impl Config {
 	}
 
 	fn build_struct<T: IntoIterator<Item = (S, S)>, S: ToString>(a: T) -> Struct {
-		let fields = BTreeMap::from_iter(a.into_iter().map(|(k, v)| {
+		let fields = HashMap::from_iter(a.into_iter().map(|(k, v)| {
 			(
 				k.to_string(),
 				Value {
@@ -305,7 +305,7 @@ impl Config {
 		]);
 		metadata
 			.fields
-			.append(&mut Self::build_struct(self.metadata.clone()).fields);
+			.extend(Self::build_struct(self.metadata.clone()).fields);
 
 		Node {
 			id: format!("mcpgw~{ip}~{pod_name}.{ns}~{ns}.svc.cluster.local"),

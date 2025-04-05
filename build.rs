@@ -7,10 +7,15 @@ fn main() -> Result<(), anyhow::Error> {
 	// Fuzzing uses custom cfg (https://rust-fuzz.github.io/book/cargo-fuzz/guide.html)
 	// Tell cargo to expect this (https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html).
 	println!("cargo::rustc-check-cfg=cfg(fuzzing)");
-	let proto_files = ["proto/xds.proto", "proto/rbac.proto", "proto/target.proto"]
-		.iter()
-		.map(|name| std::env::current_dir().unwrap().join(name))
-		.collect::<Vec<_>>();
+	let proto_files = [
+		"proto/xds.proto",
+		"proto/rbac.proto",
+		"proto/target.proto",
+		"proto/listener.proto",
+	]
+	.iter()
+	.map(|name| std::env::current_dir().unwrap().join(name))
+	.collect::<Vec<_>>();
 	let include_dirs = ["proto/"]
 		.iter()
 		.map(|i| std::env::current_dir().unwrap().join(i))
@@ -20,8 +25,15 @@ fn main() -> Result<(), anyhow::Error> {
 		c.disable_comments(Some("."));
 		c
 	};
+
+	let out_dir = env::var("OUT_DIR").unwrap();
+	let descriptor_path = std::path::PathBuf::from(out_dir.clone()).join("proto_descriptor.bin");
+
 	tonic_build::configure()
 		.build_server(true)
+		.file_descriptor_set_path(descriptor_path.clone())
+		.compile_well_known_types(true)
+		.extern_path(".google.protobuf", "::pbjson_types")
 		.compile_protos_with_config(
 			config,
 			&proto_files
@@ -35,7 +47,6 @@ fn main() -> Result<(), anyhow::Error> {
 		)?;
 
 	// Adoppted from https://github.com/uutils/coreutils/blob/main/src/uu/stdbuf/build.rs
-	let out_dir = env::var("OUT_DIR").unwrap();
 	let profile_name = out_dir
 		.split(std::path::MAIN_SEPARATOR)
 		.nth_back(3)
@@ -68,6 +79,14 @@ fn main() -> Result<(), anyhow::Error> {
 	for path in [proto_files, include_dirs].concat() {
 		println!("cargo:rerun-if-changed={}", path.to_str().unwrap());
 	}
+	let descriptor_set = std::fs::read(descriptor_path).expect("descriptors not present");
+	pbjson_build::Builder::new()
+		.register_descriptors(&descriptor_set)?
+		.build(&[
+			".mcp.kgateway.dev.target.v1alpha1",
+			".mcp.kgateway.dev.rbac.v1alpha1",
+			".mcp.kgateway.dev.listener.v1alpha1",
+		])?;
 
 	Ok(())
 }
