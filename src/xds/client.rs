@@ -5,11 +5,11 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::{fmt, mem};
 
+use itertools::Itertools;
 use prost::{DecodeError, EncodeError};
 use prost_types::value::Kind;
 use prost_types::{Struct, Value};
 use split_iter::Splittable;
-use itertools::Itertools;
 use thiserror::Error;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
@@ -75,7 +75,7 @@ pub fn handle_single_resource<T: prost::Message, F: FnMut(XdsUpdate<T>) -> anyho
 	mut handle_one: F,
 ) -> Result<(), Vec<RejectedConfig>> {
 	let rejects: Vec<RejectedConfig> = updates
-    .into_iter()
+		.into_iter()
 		.filter_map(|res| {
 			let name = res.name();
 			if let Err(e) = handle_one(res) {
@@ -100,10 +100,7 @@ pub trait Handler<T: prost::Message + Send>: Send + Sync + 'static {
 		false
 	}
 
-	async fn handle(
-		&self,
-		res: Vec<XdsUpdate<T>>,
-	) -> Result<(), Vec<RejectedConfig>>;
+	async fn handle(&self, res: Vec<XdsUpdate<T>>) -> Result<(), Vec<RejectedConfig>>;
 }
 
 // ResponseHandler is responsible for handling a discovery response.
@@ -131,11 +128,11 @@ impl<T: 'static + prost::Message + Default> RawHandler for HandlerWrapper<T> {
 		res: DeltaDiscoveryResponse,
 	) -> Result<(), Vec<RejectedConfig>> {
 		let type_url = strng::new(res.type_url);
-    
+
 		let removes = res.removed_resources.clone();
 
-    // TODO: Less list mangling
-    
+		// TODO: Less list mangling
+
 		// Keep track of any failures but keep going
 		let (updates, decode_failures): (Vec<_>, Vec<_>) = res
 			.resources
@@ -146,16 +143,17 @@ impl<T: 'static + prost::Message + Default> RawHandler for HandlerWrapper<T> {
 					reason: err.into(),
 				})
 			})
-      .map_ok(XdsUpdate::Update)
+			.map_ok(XdsUpdate::Update)
 			.partition_result();
 
 		// Collect removes explicitly to avoid borrowing `removes` in the chained iterator
-		let remove_updates: Vec<_> = removes.iter().cloned().map(|s| XdsUpdate::Remove(s.into())).collect();
+		let remove_updates: Vec<_> = removes
+			.iter()
+			.cloned()
+			.map(|s| XdsUpdate::Remove(s.into()))
+			.collect();
 
-		let final_updates = updates.into_iter()
-			.chain(remove_updates)
-      .collect();
-
+		let final_updates = updates.into_iter().chain(remove_updates).collect();
 
 		// First, call handlers that update the proxy state.
 		// other wise on-demand notifications might observe a cache without their resource

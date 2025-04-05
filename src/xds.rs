@@ -145,10 +145,7 @@ impl ProxyStateUpdateMutator {
 
 #[async_trait::async_trait]
 impl Handler<XdsTarget> for ProxyStateUpdater {
-	async fn handle(
-		&self,
-		updates: Vec<XdsUpdate<XdsTarget>>,
-	) -> Result<(), Vec<RejectedConfig>> {
+	async fn handle(&self, updates: Vec<XdsUpdate<XdsTarget>>) -> Result<(), Vec<RejectedConfig>> {
 		let mut state = self.state.write().unwrap();
 		let handle = |res: XdsUpdate<XdsTarget>| {
 			match res {
@@ -163,10 +160,7 @@ impl Handler<XdsTarget> for ProxyStateUpdater {
 
 #[async_trait::async_trait]
 impl Handler<XdsRbac> for ProxyStateUpdater {
-	async fn handle(
-		&self,
-		updates: Vec<XdsUpdate<XdsRbac>>,
-	) -> Result<(), Vec<RejectedConfig>> {
+	async fn handle(&self, updates: Vec<XdsUpdate<XdsRbac>>) -> Result<(), Vec<RejectedConfig>> {
 		let mut state = self.state.write().unwrap();
 		let handle = |res: XdsUpdate<XdsRbac>| {
 			match res {
