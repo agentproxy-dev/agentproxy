@@ -20,7 +20,7 @@ pub mod mcp {
 		pub mod rbac {
 			tonic::include_proto!("mcp.kgateway.dev.rbac.v1alpha1");
 		}
-    #[allow(clippy::all)]
+		#[allow(clippy::all)]
 		pub mod target {
 			tonic::include_proto!("mcp.kgateway.dev.target.v1alpha1");
 			include!(concat!(
