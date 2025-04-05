@@ -201,11 +201,11 @@ impl TryFrom<&XdsTarget> for outbound::Target {
 			XdsTargetSpec::Openapi(openapi) => outbound::TargetSpec::OpenAPI {
 				host: openapi.host.clone(),
 				port: openapi.port,
-				schema: {
+				tools: {
 					let struct_schema = openapi.schema.clone();
 					let schema: outbound::OpenAPISchema =
 						serde_json::from_slice(&struct_schema).map_err(|_| ParseError::InvalidSchema)?;
-					schema
+					outbound::parse_openapi_schema(&schema)
 				},
 			},
 		};

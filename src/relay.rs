@@ -1,9 +1,9 @@
 use crate::backend::BackendAuth;
 use crate::metrics::Recorder;
-use crate::outbound::{OpenAPISchema, Target, TargetSpec};
+use crate::outbound::{UpstreamOpenAPICall, Target, TargetSpec};
 use crate::rbac;
 use crate::xds::XdsStore;
-use http::{HeaderMap, HeaderValue, Method, header::AUTHORIZATION};
+use http::{HeaderMap, HeaderValue, header::AUTHORIZATION, Method};
 use itertools::Itertools;
 use rmcp::RoleClient;
 use rmcp::serve_client;
@@ -14,7 +14,6 @@ use rmcp::{
 	Error as McpError, RoleServer, ServerHandler, model::CallToolRequestParam, model::Tool, model::*,
 	service::RequestContext,
 };
-use serde_json::json;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -503,14 +502,14 @@ impl ConnectionPool {
 					.await?,
 				)
 			},
-			TargetSpec::OpenAPI { host, port, schema } => {
+			TargetSpec::OpenAPI { host, port, tools } => {
 				tracing::info!("starting OpenAPI transport for target: {}", target.name);
 				let client = reqwest::Client::new();
 
 				UpstreamTarget::OpenAPI(OpenAPIHandler {
 					host: format!("http://{}:{}", host, port),
 					client,
-					schema: schema.clone(),
+					tools: tools.clone(),
 				})
 			},
 		};
@@ -685,13 +684,7 @@ impl UpstreamTarget {
 struct OpenAPIHandler {
 	host: String,
 	client: reqwest::Client,
-	schema: OpenAPISchema,
-}
-
-struct UpstreamOpenAPICall {
-	method: Method,
-	path: String,
-	// todo: params
+	tools: Vec<(Tool, UpstreamOpenAPICall)>,
 }
 
 impl OpenAPIHandler {
@@ -704,13 +697,13 @@ impl OpenAPIHandler {
   )]
 	async fn call_tool(&self, name: &str, args: Option<JsonObject>) -> Result<String, anyhow::Error> {
 		let (_, info) = self
-			.info()
-			.into_iter()
+			.tools
+			.iter()
 			.find(|(t, _info)| t.name == name)
 			.ok_or_else(|| anyhow::anyhow!("tool {} not found", name))?;
 		let body = self
 			.client
-			.request(info.method.clone(), format!("{}{}", self.host, &info.path))
+			.request(Method::from_bytes(&info.method.as_bytes()).unwrap(), format!("{}{}", self.host, &info.path))
 			.json(args.as_ref().unwrap())
 			.send()
 			.await?
@@ -720,74 +713,6 @@ impl OpenAPIHandler {
 	}
 
 	fn tools(&self) -> Vec<Tool> {
-		self.info().into_iter().map(|(t, _)| t).collect()
-	}
-
-	fn info(&self) -> Vec<(Tool, UpstreamOpenAPICall)> {
-		self
-			.schema
-			.paths
-			.iter()
-			.flat_map(|(path, path_info)| {
-				let item = path_info.as_item().unwrap();
-				item
-					.iter()
-					.map(|(method, op)| {
-						let name = op.operation_id.clone().expect("TODO");
-						let props: Vec<_> = op
-							.parameters
-							.iter()
-							.map(|p| {
-								let item = dbg!(p).as_item().unwrap();
-								let p = dbg!(item.parameter_data_ref());
-								let mut schema = JsonObject::new();
-								if let openapiv3::ParameterSchemaOrContent::Schema(openapiv3::ReferenceOr::Item(
-									s,
-								)) = &p.format
-								{
-									schema = serde_json::to_value(s)
-										.expect("TODO")
-										.as_object()
-										.expect("TODO")
-										.clone();
-								}
-								if let Some(desc) = &p.description {
-									schema.insert("description".to_string(), json!(desc));
-								}
-
-								(p.name.clone(), schema, p.required)
-							})
-							.collect();
-						let mut schema = JsonObject::new();
-						schema.insert("type".to_string(), json!("object"));
-						let required: Vec<String> = props
-							.iter()
-							.flat_map(|(name, _, req)| if *req { Some(name.clone()) } else { None })
-							.collect();
-						schema.insert("required".to_string(), json!(required));
-						let mut schema_props = JsonObject::new();
-						for (name, s, _) in props {
-							schema_props.insert(name, json!(s));
-						}
-						schema.insert("properties".to_string(), json!(schema_props));
-						let tool = Tool {
-							name: Cow::Owned(name.clone()),
-							description: Some(Cow::Owned(
-								op.description
-									.as_ref()
-									.unwrap_or_else(|| op.summary.as_ref().unwrap_or(&name))
-									.to_string(),
-							)),
-							input_schema: Arc::new(schema),
-						};
-						let upstream = UpstreamOpenAPICall {
-							method: Method::from_bytes(method.as_ref()).expect("todo"),
-							path: path.clone(),
-						};
-						(tool, upstream)
-					})
-					.collect::<Vec<_>>()
-			})
-			.collect()
+		self.tools.clone().into_iter().map(|(t, _)| t).collect()
 	}
 }
