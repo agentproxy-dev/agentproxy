@@ -1,9 +1,9 @@
 use crate::backend::BackendAuth;
 use crate::metrics::Recorder;
-use crate::outbound::{UpstreamOpenAPICall, Target, TargetSpec};
+use crate::outbound::{Target, TargetSpec, UpstreamOpenAPICall};
 use crate::rbac;
 use crate::xds::XdsStore;
-use http::{HeaderMap, HeaderValue, header::AUTHORIZATION, Method};
+use http::{HeaderMap, HeaderValue, Method, header::AUTHORIZATION};
 use itertools::Itertools;
 use rmcp::RoleClient;
 use rmcp::serve_client;
@@ -703,7 +703,10 @@ impl OpenAPIHandler {
 			.ok_or_else(|| anyhow::anyhow!("tool {} not found", name))?;
 		let body = self
 			.client
-			.request(Method::from_bytes(&info.method.as_bytes()).unwrap(), format!("{}{}", self.host, &info.path))
+			.request(
+				Method::from_bytes(info.method.as_bytes()).unwrap(),
+				format!("{}{}", self.host, &info.path),
+			)
 			.json(args.as_ref().unwrap())
 			.send()
 			.await?
