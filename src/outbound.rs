@@ -47,7 +47,13 @@ pub struct OpenAPISchema {
 	pub paths: Paths,
 }
 
-pub fn parse_openapi_schema(schema: &OpenAPISchema) -> Vec<(Tool, UpstreamOpenAPICall)> {
+impl OpenAPISchema {
+  pub fn transform(&self) -> Vec<(Tool, UpstreamOpenAPICall)> {
+    parse_openapi_schema(&self)
+  }
+}
+
+fn parse_openapi_schema(schema: &OpenAPISchema) -> Vec<(Tool, UpstreamOpenAPICall)> {
 	schema
 		.paths
 		.iter()

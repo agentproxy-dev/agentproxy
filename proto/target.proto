@@ -4,6 +4,13 @@ package mcp.kgateway.dev.target.v1alpha1;
 
 // import "google/protobuf/struct.proto";
 
+message LocalDataSource {
+  oneof source {
+    string file_path = 1;
+    bytes inline = 2;
+  }
+}
+
 message Target {
   // The name of the target.
   string name = 1;
@@ -37,7 +44,7 @@ message Target {
     // The port of the target.
     uint32 port = 2;
     // The schema of the target.
-    bytes schema = 3;
+    LocalDataSource schema = 3;
   }
 }
 

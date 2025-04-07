@@ -27,6 +27,4 @@ message Listener {
     SseListener sse = 1;
     StdioListener stdio = 2;
   }
-
-
 }

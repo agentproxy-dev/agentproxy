@@ -11,8 +11,10 @@ pub use metrics::*;
 pub use types::*;
 
 use xds::mcp::kgateway_dev::rbac::Config as XdsRbac;
-use xds::mcp::kgateway_dev::target::Target as XdsTarget;
+use xds::mcp::kgateway_dev::target::{Target as XdsTarget, LocalDataSource};
+use xds::mcp::kgateway_dev::target::local_data_source::{Source as XdsSource};
 use xds::mcp::kgateway_dev::target::target::Target as XdsTargetSpec;
+
 
 use self::envoy::service::discovery::v3::DeltaDiscoveryRequest;
 use crate::rbac;
@@ -202,10 +204,11 @@ impl TryFrom<&XdsTarget> for outbound::Target {
 				host: openapi.host.clone(),
 				port: openapi.port,
 				tools: {
-					let struct_schema = openapi.schema.clone();
+					let struct_schema = openapi.schema.as_ref().ok_or(ParseError::MissingFields)?;
+          let schema_bytes = resolve_local_data_source(struct_schema)?;
 					let schema: outbound::OpenAPISchema =
-						serde_json::from_slice(&struct_schema).map_err(|_| ParseError::InvalidSchema)?;
-					outbound::parse_openapi_schema(&schema)
+						serde_json::from_slice(&schema_bytes).map_err(|_| ParseError::InvalidSchema)?;
+          schema.transform()
 				},
 			},
 		};
@@ -214,6 +217,16 @@ impl TryFrom<&XdsTarget> for outbound::Target {
 			spec,
 		})
 	}
+}
+
+pub fn resolve_local_data_source(local_data_source: &LocalDataSource) -> Result<Vec<u8>, ParseError> {
+  match local_data_source.source.as_ref().ok_or(ParseError::MissingFields)? {
+    XdsSource::FilePath(file_path) => {
+      let file = std::fs::read(file_path).map_err(|_| ParseError::MissingFields)?;
+      Ok(file)
+    }
+    XdsSource::Inline(inline) => Ok(inline.clone()),
+  }
 }
 
 #[derive(Clone, Serialize, Deserialize)]
