@@ -1,18 +1,18 @@
 {
   "type": "static",
   "listener": {
-    "type": "sse",
-    "host": "0.0.0.0",
-    "port": 8001,
-    "authn": {
-      "type": "jwt",
-      "issuer": ["me"],
-      "audience": ["me.com"],
-      "jwks": {
-        "type": "local",
-        "source": {
-          "type": "file",
-          "data": "manifests/jwt/pub-key"
+    "sse": {
+      "host": "0.0.0.0",
+      "port": 3000,
+      "authn": {
+        "jwt": {
+          "issuer": ["me"],
+          "audience": ["me.com"],
+          "jwks": {
+            "local": {
+              "file": "manifests/jwt/pub-key"
+            }
+          }
         }
       }
     }
@@ -22,11 +22,12 @@
       "key": "sub",
       "value": "me",
       "resource": {
-        "type": "tool",
-        "id": "*"
+        "tool": {
+          "id": "everything:echo"
+        }
       },
       "matcher": {
-        "type": "equals"
+        "equals": {}
       }
     }
   ],

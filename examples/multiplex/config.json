@@ -1,0 +1,29 @@
+{
+  "type": "static",
+  "listener": {
+    "sse": {  
+      "host": "0.0.0.0",
+      "port": 3000
+    }
+  },
+  "targets": [
+    {
+      "name": "everything",
+      "stdio": {
+        "cmd": "npx",
+        "args": [
+          "@modelcontextprotocol/server-everything"
+        ]
+      }
+    },
+    {
+      "name": "everything_else",
+      "stdio": {
+        "cmd": "npx",
+        "args": [
+          "@modelcontextprotocol/server-everything"
+        ]
+      }
+    }
+  ]
+}

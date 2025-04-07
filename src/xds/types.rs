@@ -28,6 +28,14 @@ pub mod mcp {
 				"/mcp.kgateway.dev.target.v1alpha1.serde.rs"
 			));
 		}
+		#[allow(clippy::all)]
+		pub mod listener {
+			tonic::include_proto!("mcp.kgateway.dev.listener.v1alpha1");
+			include!(concat!(
+				env!("OUT_DIR"),
+				"/mcp.kgateway.dev.listener.v1alpha1.serde.rs"
+			));
+		}
 	}
 }
 

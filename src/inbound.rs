@@ -3,25 +3,45 @@ use std::sync::Arc;
 use rmcp::serve_server;
 use tracing::info;
 
-use crate::rbac;
-
+use crate::authn;
+use crate::proxyprotocol;
+use crate::relay;
 use crate::sse::App as SseApp;
 use crate::xds;
 use serde::{Deserialize, Serialize};
 
+
 #[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
-#[serde(tag = "type")]
 #[allow(clippy::large_enum_variant)]
 pub enum Listener {
 	#[serde(rename = "sse")]
-	Sse {
-		host: String,
-		port: u32,
-		mode: Option<ListenerMode>,
-		authn: Option<Authn>,
-	},
+	Sse(SseListener),
 	#[serde(rename = "stdio")]
-	Stdio {},
+	Stdio,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
+
+pub struct SseListener {
+  host: String,
+  port: u32,
+  mode: Option<ListenerMode>,
+  authn: Option<Authn>,
+  tls: Option<TlsConfig>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
+pub struct TlsConfig {
+  key_pem: Option<LocalDataSource>,
+  cert_pem: Option<LocalDataSource>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
+pub enum LocalDataSource {
+	#[serde(rename = "file")]
+	File(String),
+	#[serde(rename = "inline")]
+	Inline(String),
 }
 
 #[derive(Debug)]
@@ -34,13 +54,13 @@ impl Listener {
 	pub async fn listen(
 		&self,
 		state: Arc<std::sync::RwLock<xds::XdsStore>>,
-		metrics: Arc<crate::relay::metrics::Metrics>,
+		metrics: Arc<relay::metrics::Metrics>,
 	) -> Result<(), ServingError> {
 		match self {
 			Listener::Stdio {} => {
 				let relay = serve_server(
 					// TODO: This is a hack
-					crate::relay::Relay::new(state.clone(), rbac::Identity::empty(), metrics),
+					relay::Relay::new(state.clone(), metrics),
 					(tokio::io::stdin(), tokio::io::stdout()),
 				)
 				.await
@@ -58,19 +78,14 @@ impl Listener {
 						tracing::error!("serving error: {:?}", e);
 					})
 			},
-			Listener::Sse {
-				host,
-				port,
-				mode,
-				authn,
-			} => {
-				let listener = tokio::net::TcpListener::bind(format!("{}:{}", host, port))
+			Listener::Sse(sse_listener) => {
+				let listener = tokio::net::TcpListener::bind(format!("{}:{}", sse_listener.host, sse_listener.port))
 					.await
 					.unwrap();
-				let authenticator = match authn {
+				let authenticator = match &sse_listener.authn {
 					Some(authn) => match authn {
 						Authn::Jwt(jwt) => Arc::new(tokio::sync::RwLock::new(Some(
-							crate::authn::JwtAuthenticator::new(jwt).await.unwrap(),
+							authn::JwtAuthenticator::new(&jwt).await.unwrap(),
 						))),
 					},
 					None => Arc::new(tokio::sync::RwLock::new(None)),
@@ -80,7 +95,7 @@ impl Listener {
 					tokio::task::JoinSet::new();
 				let clone = authenticator.clone();
 				run_set.spawn(async move {
-					crate::authn::sync_jwks_loop(clone)
+					authn::sync_jwks_loop(clone)
 						.await
 						.map_err(|e| anyhow::anyhow!("error syncing jwks: {:?}", e))
 				});
@@ -88,14 +103,14 @@ impl Listener {
 				let app = SseApp::new(state.clone(), metrics, authenticator);
 				let router = app.router();
 
-				let enable_proxy = Some(&ListenerMode::Proxy) == mode.as_ref();
+				let enable_proxy = Some(&ListenerMode::Proxy) == sse_listener.mode.as_ref();
 
-				let listener = crate::proxyprotocol::Listener::new(listener, enable_proxy);
+				let listener = proxyprotocol::Listener::new(listener, enable_proxy);
 				let svc: axum::extract::connect_info::IntoMakeServiceWithConnectInfo<
 					axum::Router,
-					crate::proxyprotocol::Address,
-				> = router.into_make_service_with_connect_info::<crate::proxyprotocol::Address>();
-				info!("serving sse on {}:{}", host, port);
+					proxyprotocol::Address,
+				> = router.into_make_service_with_connect_info::<proxyprotocol::Address>();
+				info!("serving sse on {}:{}", sse_listener.host, sse_listener.port);
 				run_set.spawn(async move {
 					axum::serve(listener, svc)
 						.await
@@ -121,10 +136,9 @@ impl Listener {
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
-#[serde(tag = "type")]
 pub enum Authn {
 	#[serde(rename = "jwt")]
-	Jwt(crate::authn::JwtConfig),
+	Jwt(authn::JwtConfig),
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]

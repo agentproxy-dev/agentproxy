@@ -93,7 +93,7 @@ pub fn parse_openapi_schema(schema: &OpenAPISchema) -> Vec<(Tool, UpstreamOpenAP
 					}
 					schema.insert("properties".to_string(), json!(schema_props));
 					let tool = Tool {
-            annotations: None,
+						annotations: None,
 						name: Cow::Owned(name.clone()),
 						description: Some(Cow::Owned(
 							op.description

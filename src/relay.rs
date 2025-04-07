@@ -23,24 +23,22 @@ use tracing::instrument;
 
 pub mod metrics;
 
+lazy_static::lazy_static! {
+	static ref DEFAULT_ID: rbac::Identity = rbac::Identity::default();
+}
+
 #[derive(Clone)]
 pub struct Relay {
 	state: Arc<std::sync::RwLock<XdsStore>>,
 	pool: Arc<RwLock<ConnectionPool>>,
-	id: rbac::Identity,
 	metrics: Arc<metrics::Metrics>,
 }
 
 impl Relay {
-	pub fn new(
-		state: Arc<std::sync::RwLock<XdsStore>>,
-		id: rbac::Identity,
-		metrics: Arc<metrics::Metrics>,
-	) -> Self {
+	pub fn new(state: Arc<std::sync::RwLock<XdsStore>>, metrics: Arc<metrics::Metrics>) -> Self {
 		Self {
 			state: state.clone(),
 			pool: Arc::new(RwLock::new(ConnectionPool::new(state.clone()))),
-			id,
 			metrics,
 		}
 	}
@@ -201,10 +199,14 @@ impl ServerHandler for Relay {
 			&rbac::ResourceType::Resource {
 				id: request.uri.to_string(),
 			},
-			&self.id,
+			match _context.extensions.get::<rbac::Identity>() {
+				Some(id) => id,
+				None => &DEFAULT_ID,
+			},
 		) {
 			return Err(McpError::invalid_request("not allowed", None));
 		}
+
 		let uri = request.uri.to_string();
 		let (service_name, resource) = uri.split_once(':').unwrap();
 		let pool = self.pool.read().await;
@@ -242,10 +244,14 @@ impl ServerHandler for Relay {
 			&rbac::ResourceType::Prompt {
 				id: request.name.to_string(),
 			},
-			&self.id,
+			match _context.extensions.get::<rbac::Identity>() {
+				Some(id) => id,
+				None => &DEFAULT_ID,
+			},
 		) {
 			return Err(McpError::invalid_request("not allowed", None));
 		}
+
 		let prompt_name = request.name.to_string();
 		let (service_name, prompt) = prompt_name.split_once(':').unwrap();
 		let pool = self.pool.read().await;
@@ -329,12 +335,14 @@ impl ServerHandler for Relay {
 		request: CallToolRequestParam,
 		_context: RequestContext<RoleServer>,
 	) -> std::result::Result<CallToolResult, McpError> {
-		tracing::trace!("calling tool: {:?}", request);
 		if !self.state.read().unwrap().policies.validate(
 			&rbac::ResourceType::Tool {
 				id: request.name.to_string(),
 			},
-			&self.id,
+			match _context.extensions.get::<rbac::Identity>() {
+				Some(id) => id,
+				None => &DEFAULT_ID,
+			},
 		) {
 			return Err(McpError::invalid_request("not allowed", None));
 		}

@@ -2,11 +2,22 @@ syntax = "proto3";
 
 package mcp.kgateway.dev.listener.v1alpha1;
 
+message LocalDataSource {
+  oneof source {
+    string file_path = 1;
+    bytes inline = 2;
+  }
+}
+
 message Listener {
   message SseListener { 
+    message TlsConfig {
+      LocalDataSource key_pem = 1;
+      LocalDataSource cert_pem = 2;
+    }
     string address = 1;
     uint32 port = 2;
-
+    TlsConfig tls = 3;
   }
 
   message StdioListener {

@@ -33,7 +33,7 @@ pub enum JwkError {
 impl JwtAuthenticator {
 	pub async fn new(value: &JwtConfig) -> Result<Self, JwkError> {
 		let (jwk, remote): (Jwk, Option<JwksRemoteSource>) = match &value.jwks {
-			JwksSource::Local { source } => match source {
+			JwksSource::Local(source) => match source {
 				JwksLocalSource::Inline(jwk) => {
 					let jwk: Jwk = serde_json::from_str(jwk).map_err(JwkError::JwksParseError)?;
 					(jwk, None)
@@ -164,7 +164,6 @@ impl JwtAuthenticator {
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
-#[serde(tag = "type")]
 pub enum Authn {
 	#[serde(rename = "jwt")]
 	Jwt(JwtConfig),
@@ -178,12 +177,9 @@ pub struct JwtConfig {
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
-#[serde(tag = "type")]
 pub enum JwksSource {
-	// #[serde(rename = "remote")]
-	// Remote { url: String },
 	#[serde(rename = "local")]
-	Local { source: JwksLocalSource },
+	Local(JwksLocalSource),
 	#[serde(rename = "remote")]
 	Remote(JwksRemoteSource),
 }
@@ -199,7 +195,6 @@ pub struct JwksRemoteSource {
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
-#[serde(tag = "type", content = "data")]
 pub enum JwksLocalSource {
 	#[serde(rename = "file")]
 	File(String),

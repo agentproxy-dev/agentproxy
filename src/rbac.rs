@@ -74,7 +74,6 @@ impl From<&XdsRule> for Rule {
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
-#[serde(tag = "type")]
 pub enum ResourceType {
 	Tool { id: String },
 	Prompt { id: String },
@@ -113,7 +112,6 @@ impl ResourceType {
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
-#[serde(tag = "type")]
 pub enum Matcher {
 	Equals,
 }
@@ -126,7 +124,7 @@ impl From<&rule::Matcher> for Matcher {
 	}
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Identity {
 	claims: Option<Map<String, Value>>,

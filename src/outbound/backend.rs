@@ -12,7 +12,6 @@ pub trait BackendAuth: Send + Sync {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
-#[serde(tag = "type")]
 pub enum BackendAuthConfig {
 	#[default]
 	#[cfg(feature = "gcp")]

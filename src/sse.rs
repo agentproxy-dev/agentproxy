@@ -20,6 +20,7 @@ use axum_extra::{
 };
 use futures::{SinkExt, StreamExt, stream::Stream};
 use rmcp::model::ClientJsonRpcMessage;
+use rmcp::model::GetExtensions;
 use rmcp::serve_server;
 use serde_json::json;
 use std::collections::HashMap;
@@ -36,6 +37,7 @@ fn session_id() -> SessionId {
 #[derive(Clone)]
 pub struct App {
 	state: Arc<std::sync::RwLock<AppState>>,
+	connection_id: Arc<tokio::sync::RwLock<Option<String>>>,
 	txs:
 		Arc<tokio::sync::RwLock<HashMap<SessionId, tokio::sync::mpsc::Sender<ClientJsonRpcMessage>>>>,
 	metrics: Arc<relay::metrics::Metrics>,
@@ -53,6 +55,7 @@ impl App {
 			txs: Default::default(),
 			metrics,
 			authn,
+			connection_id: Arc::new(tokio::sync::RwLock::new(None)),
 		}
 	}
 	pub fn router(&self) -> Router {
@@ -125,7 +128,7 @@ pub struct PostEventQuery {
 async fn post_event_handler(
 	State(app): State<App>,
 	ConnectInfo(_connection): ConnectInfo<proxyprotocol::Address>,
-	_claims: Option<rbac::Claims>,
+	claims: Option<rbac::Claims>,
 	Query(PostEventQuery { session_id }): Query<PostEventQuery>,
 	Json(message): Json<ClientJsonRpcMessage>,
 ) -> Result<StatusCode, StatusCode> {
@@ -136,6 +139,18 @@ async fn post_event_handler(
 			.ok_or(StatusCode::NOT_FOUND)?
 			.clone()
 	};
+
+	// Add claims to the message for RBAC
+	// TODO: maybe do it here so we don't need to do this.
+	let mut message = message;
+	match &mut message {
+		ClientJsonRpcMessage::Request(req) => {
+			let claims = rbac::Identity::new(claims.map(|c| c.0), app.connection_id.read().await.clone());
+			req.request.extensions_mut().insert(claims);
+		},
+		_ => {},
+	}
+
 	if tx.send(message).await.is_err() {
 		tracing::error!("send message error");
 		return Err(StatusCode::GONE);
@@ -149,16 +164,17 @@ async fn post_event_handler(
 async fn sse_handler(
 	State(app): State<App>,
 	ConnectInfo(connection): ConnectInfo<proxyprotocol::Address>,
-	claims: Option<rbac::Claims>,
+	_claims: Option<rbac::Claims>, // We want to validate, but no RBAC
 ) -> Sse<impl Stream<Item = Result<Event, io::Error>>> {
 	// it's 4KB
 
 	let session = session_id();
 	tracing::info!(%session, ?connection, "sse connection");
-	let claims = rbac::Identity::new(
-		claims.map(|c| c.0),
-		connection.identity.map(|i| i.to_string()),
-	);
+	let connection_id = connection.identity.clone().map(|i| i.to_string());
+	{
+		let mut writable = app.connection_id.write().await;
+		*writable = connection_id;
+	}
 	use tokio_stream::wrappers::ReceiverStream;
 	use tokio_util::sync::PollSender;
 	let (from_client_tx, from_client_rx) = tokio::sync::mpsc::channel(64);
@@ -174,7 +190,7 @@ async fn sse_handler(
 			let stream = ReceiverStream::new(from_client_rx);
 			let sink = PollSender::new(to_client_tx).sink_map_err(std::io::Error::other);
 			let result = serve_server(
-				Relay::new(app.state.clone(), claims, app.metrics.clone()),
+				Relay::new(app.state.clone(), app.metrics.clone()),
 				(sink, stream),
 			)
 			.await

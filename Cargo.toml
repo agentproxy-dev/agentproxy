@@ -12,11 +12,11 @@ aws = ["dep:aws-config", "dep:aws-sdk-lambda", "dep:aws-smithy-runtime-api"]
 [dependencies]
 arcstr = { version = "1.2", features = ["serde"] }
 async-stream = "0.3"
-rmcp = { git = "https://github.com/modelcontextprotocol/rust-sdk", features = [
+rmcp = { git = "https://github.com/EItanya/rust-sdk", features = [
   "client",
   "transport-sse",
   "transport-child-process",
-], rev="d6a26fcd3140ffd7e460a890c21e6d57bbcb28d5" }
+], rev="8bdb044e86b92a380009ea1359c75fcf36f04c8c" }
 sse-stream = "0.1.3"
 tokio = { version = "1.42", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
@@ -52,6 +52,8 @@ openapiv3 = "2.0.0"
 reqwest = "0.12.14"
 itertools = "0.14"
 async-trait = "0.1"
+lazy_static = "1.4"
+
 pbjson = "0.7"
 pbjson-types = "0.7"
 
