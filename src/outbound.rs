@@ -1,4 +1,4 @@
-use openapiv3::Paths;
+use openapiv3::{OpenAPI, ReferenceOr, Schema, Parameter};
 use rmcp::model::JsonObject;
 use rmcp::model::Tool;
 use serde::{Deserialize, Serialize};
@@ -41,51 +41,90 @@ pub struct UpstreamOpenAPICall {
 	// todo: params
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
-pub struct OpenAPISchema {
-	// The crate OpenAPI type requires a lot more, we only need paths for now so use only a subset of it.
-	pub paths: Paths,
+#[derive(Debug, thiserror::Error)]
+pub enum ParseError {
+  #[error("missing components")]
+  MissingComponents,
+  #[error("missing component")]
+  MissingComponent,
+  #[error("missing reference")]
+  MissingReference,
+  #[error("unsupported reference")]
+  UnsupportedReference(String),
+  #[error("information requireds")]
+  InformationRequired(String),
+  #[error("serde error: {0}")]
+  SerdeError(#[from] serde_json::Error),
 }
 
-impl OpenAPISchema {
-  pub fn transform(&self) -> Vec<(Tool, UpstreamOpenAPICall)> {
-    parse_openapi_schema(&self)
+pub fn schema_to_tools(schema_bytes: &Vec<u8>) -> Result<Vec<(Tool, UpstreamOpenAPICall)>, ParseError> {
+  let schema: OpenAPI = serde_json::from_slice(schema_bytes).map_err(ParseError::SerdeError)?;
+  parse_openapi_schema(&schema)
+}
+
+fn resolve_schema<'a>(reference: &'a ReferenceOr<Schema>, doc: &'a OpenAPI) -> Result<&'a Schema, ParseError> {
+  match reference {
+    ReferenceOr::Reference { reference } => {
+      let reference = reference.strip_prefix("#/components/schemas/").ok_or(ParseError::MissingReference)?;
+      let components: &openapiv3::Components = doc.components.as_ref().ok_or(ParseError::MissingComponents)?;
+      let schema = components.schemas.get(reference).ok_or(ParseError::MissingComponent)?;
+      resolve_schema(schema, doc)
+    }
+    ReferenceOr::Item(schema) => Ok(schema),
   }
 }
 
-fn parse_openapi_schema(schema: &OpenAPISchema) -> Vec<(Tool, UpstreamOpenAPICall)> {
-	schema
+fn resolve_parameter<'a>(reference: &'a ReferenceOr<Parameter>, doc: &'a OpenAPI) -> Result<&'a Parameter, ParseError> {
+  match reference {
+    ReferenceOr::Reference { reference } => {
+      let reference = reference.strip_prefix("#/components/parameters/").ok_or(ParseError::MissingReference)?;
+      let components: &openapiv3::Components = doc.components.as_ref().ok_or(ParseError::MissingComponents)?;
+      let parameter = components.parameters.get(reference).ok_or(ParseError::MissingComponent)?;
+      resolve_parameter(parameter, doc)
+    }
+    ReferenceOr::Item(parameter) => Ok(parameter),
+  }
+}
+
+
+fn parse_openapi_schema(open_api: &OpenAPI) -> Result<Vec<(Tool, UpstreamOpenAPICall)>, ParseError> {
+	let tool_defs: Result<Vec<_>, _> =  open_api
 		.paths
 		.iter()
-		.flat_map(|(path, path_info)| {
-			let item = path_info.as_item().unwrap();
-			item
+		.map(|(path, path_info)| -> Result<Vec<(Tool, UpstreamOpenAPICall)>, ParseError> {
+			let item = path_info.as_item().ok_or(ParseError::UnsupportedReference(path.to_string()))?;
+			let items: Result<Vec<_>, _> = item
 				.iter()
-				.map(|(method, op)| {
-					let name = op.operation_id.clone().expect("TODO");
-					let props: Vec<_> = op
+				.map(|(method, op)| -> Result<(Tool, UpstreamOpenAPICall), ParseError> {
+					let name = op.operation_id.clone().ok_or(ParseError::InformationRequired(format!("operation_id is required for {}", path)))?;
+					let props: Result<Vec<_>, _>  = op
 						.parameters
 						.iter()
-						.map(|p| {
-							let item = dbg!(p).as_item().unwrap();
+						.map(|p| -> Result<(String, JsonObject, bool), ParseError> {
+              let item = resolve_parameter(p, open_api)?;
 							let p = dbg!(item.parameter_data_ref());
-							let mut schema = JsonObject::new();
-							if let openapiv3::ParameterSchemaOrContent::Schema(openapiv3::ReferenceOr::Item(s)) =
-								&p.format
-							{
-								schema = serde_json::to_value(s)
-									.expect("TODO")
-									.as_object()
-									.expect("TODO")
-									.clone();
-							}
+							let mut schema = match &p.format {
+                openapiv3::ParameterSchemaOrContent::Schema(reference) => {
+                  let resolved_schema = resolve_schema(reference, open_api)?;
+                  serde_json::to_value(resolved_schema)
+                    .map_err(ParseError::SerdeError)?
+                    .as_object()
+                    .ok_or(ParseError::UnsupportedReference(format!("parameter {} is not an object", p.name)))?
+                    .clone()
+                }
+                openapiv3::ParameterSchemaOrContent::Content(content) => {
+                  return Err(ParseError::UnsupportedReference(format!("content is not supported for parameters: {:?}", content)));
+                }
+              };
+              
 							if let Some(desc) = &p.description {
 								schema.insert("description".to_string(), json!(desc));
 							}
 
-							(p.name.clone(), schema, p.required)
+							Ok((p.name.clone(), schema, p.required))
 						})
 						.collect();
+          let props = props?;
 					let mut schema = JsonObject::new();
 					schema.insert("type".to_string(), json!("object"));
 					let required: Vec<String> = props
@@ -114,9 +153,18 @@ fn parse_openapi_schema(schema: &OpenAPISchema) -> Vec<(Tool, UpstreamOpenAPICal
 						method: method.to_string(),
 						path: path.clone(),
 					};
-					(tool, upstream)
+					Ok((tool, upstream))
 				})
-				.collect::<Vec<_>>()
+				.collect();
+      // Rust has a hard time with this...
+      let items = items?;
+      Ok(items)
 		})
-		.collect()
+		.collect();
+
+  match tool_defs {
+    Ok(tool_defs) => Ok(tool_defs.into_iter().flatten().collect()),
+    Err(e) => Err(e),
+  }
+
 }

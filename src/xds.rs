@@ -206,9 +206,7 @@ impl TryFrom<&XdsTarget> for outbound::Target {
 				tools: {
 					let struct_schema = openapi.schema.as_ref().ok_or(ParseError::MissingFields)?;
           let schema_bytes = resolve_local_data_source(struct_schema)?;
-					let schema: outbound::OpenAPISchema =
-						serde_json::from_slice(&schema_bytes).map_err(|_| ParseError::InvalidSchema)?;
-          schema.transform()
+          outbound::schema_to_tools(&schema_bytes).map_err(|_| ParseError::InvalidSchema)?
 				},
 			},
 		};
