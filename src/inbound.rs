@@ -10,7 +10,6 @@ use crate::sse::App as SseApp;
 use crate::xds;
 use serde::{Deserialize, Serialize};
 
-
 #[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
 #[allow(clippy::large_enum_variant)]
 pub enum Listener {
@@ -23,17 +22,17 @@ pub enum Listener {
 #[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
 
 pub struct SseListener {
-  host: String,
-  port: u32,
-  mode: Option<ListenerMode>,
-  authn: Option<Authn>,
-  tls: Option<TlsConfig>,
+	host: String,
+	port: u32,
+	mode: Option<ListenerMode>,
+	authn: Option<Authn>,
+	tls: Option<TlsConfig>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
 pub struct TlsConfig {
-  key_pem: Option<LocalDataSource>,
-  cert_pem: Option<LocalDataSource>,
+	key_pem: Option<LocalDataSource>,
+	cert_pem: Option<LocalDataSource>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
@@ -79,9 +78,10 @@ impl Listener {
 					})
 			},
 			Listener::Sse(sse_listener) => {
-				let listener = tokio::net::TcpListener::bind(format!("{}:{}", sse_listener.host, sse_listener.port))
-					.await
-					.unwrap();
+				let listener =
+					tokio::net::TcpListener::bind(format!("{}:{}", sse_listener.host, sse_listener.port))
+						.await
+						.unwrap();
 				let authenticator = match &sse_listener.authn {
 					Some(authn) => match authn {
 						Authn::Jwt(jwt) => Arc::new(tokio::sync::RwLock::new(Some(

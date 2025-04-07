@@ -11,10 +11,9 @@ pub use metrics::*;
 pub use types::*;
 
 use xds::mcp::kgateway_dev::rbac::Config as XdsRbac;
-use xds::mcp::kgateway_dev::target::{Target as XdsTarget, LocalDataSource};
-use xds::mcp::kgateway_dev::target::local_data_source::{Source as XdsSource};
+use xds::mcp::kgateway_dev::target::local_data_source::Source as XdsSource;
 use xds::mcp::kgateway_dev::target::target::Target as XdsTargetSpec;
-
+use xds::mcp::kgateway_dev::target::{LocalDataSource, Target as XdsTarget};
 
 use self::envoy::service::discovery::v3::DeltaDiscoveryRequest;
 use crate::rbac;
@@ -200,15 +199,9 @@ impl TryFrom<&XdsTarget> for outbound::Target {
 				args: stdio.args.clone(),
 				env: stdio.env.clone(),
 			},
-			XdsTargetSpec::Openapi(openapi) => outbound::TargetSpec::OpenAPI {
-				host: openapi.host.clone(),
-				port: openapi.port,
-				tools: {
-					let struct_schema = openapi.schema.as_ref().ok_or(ParseError::MissingFields)?;
-          let schema_bytes = resolve_local_data_source(struct_schema)?;
-          outbound::schema_to_tools(&schema_bytes).map_err(|_| ParseError::InvalidSchema)?
-				},
-			},
+			XdsTargetSpec::Openapi(openapi) => outbound::TargetSpec::OpenAPI(
+				outbound::OpenAPITarget::try_from(openapi).map_err(|_| ParseError::InvalidSchema)?,
+			),
 		};
 		Ok(outbound::Target {
 			name: value.name.clone(),
@@ -217,14 +210,20 @@ impl TryFrom<&XdsTarget> for outbound::Target {
 	}
 }
 
-pub fn resolve_local_data_source(local_data_source: &LocalDataSource) -> Result<Vec<u8>, ParseError> {
-  match local_data_source.source.as_ref().ok_or(ParseError::MissingFields)? {
-    XdsSource::FilePath(file_path) => {
-      let file = std::fs::read(file_path).map_err(|_| ParseError::MissingFields)?;
-      Ok(file)
-    }
-    XdsSource::Inline(inline) => Ok(inline.clone()),
-  }
+pub fn resolve_local_data_source(
+	local_data_source: &LocalDataSource,
+) -> Result<Vec<u8>, ParseError> {
+	match local_data_source
+		.source
+		.as_ref()
+		.ok_or(ParseError::MissingFields)?
+	{
+		XdsSource::FilePath(file_path) => {
+			let file = std::fs::read(file_path).map_err(|_| ParseError::MissingFields)?;
+			Ok(file)
+		},
+		XdsSource::Inline(inline) => Ok(inline.clone()),
+	}
 }
 
 #[derive(Clone, Serialize, Deserialize)]

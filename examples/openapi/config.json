@@ -1,0 +1,21 @@
+{
+  "type": "static",
+  "listener": {
+    "sse": {  
+      "host": "0.0.0.0",
+      "port": 3000
+    }
+  },
+  "targets": [
+    {
+      "name": "petstore",
+      "openapi": {
+        "host": "petstore3.swagger.io",
+        "port": 443,
+        "schema": {
+          "file_path": "examples/openapi/openapi.json"
+        }
+      }
+    }
+  ]
+}

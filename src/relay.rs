@@ -512,14 +512,22 @@ impl ConnectionPool {
 					.await?,
 				)
 			},
-			TargetSpec::OpenAPI { host, port, tools } => {
+			TargetSpec::OpenAPI(open_api) => {
 				tracing::info!("starting OpenAPI transport for target: {}", target.name);
 				let client = reqwest::Client::new();
 
+				let scheme = match open_api.port {
+					443 => "https",
+					_ => "http",
+				};
+				let url = format!(
+					"{}://{}:{}{}",
+					scheme, open_api.host, open_api.port, open_api.prefix
+				);
 				UpstreamTarget::OpenAPI(OpenAPIHandler {
-					host: format!("http://{}:{}", host, port),
+					host: url,
 					client,
-					tools: tools.clone(),
+					tools: open_api.tools.clone(),
 				})
 			},
 		};
