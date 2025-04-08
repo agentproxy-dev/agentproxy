@@ -206,10 +206,10 @@ fn parse_openapi_schema(
 							let mut final_schema = JsonSchema::default();
 
               // IF a body schema is present, add it to the final schema
-              if let Some(body) = op.request_body {
+              if let Some(body) = op.request_body.as_ref() {
                 let body = resolve_request_body(&body, open_api)?;
                 let media_type = body.content.get("application/json").ok_or(ParseError::MissingComponent)?;
-                let schema_ref = media_type.schema.ok_or(ParseError::MissingComponent)?;
+                let schema_ref = media_type.schema.as_ref().ok_or(ParseError::MissingComponent)?;
                 let schema = resolve_schema(&schema_ref, open_api)?;
                 let body_schema = serde_json::to_value(schema).map_err(ParseError::SerdeError)?;
                 if body.required {
@@ -218,7 +218,7 @@ fn parse_openapi_schema(
                 final_schema.properties.insert(BODY_NAME.clone(), body_schema);
               }
 
-              
+
               let mut param_schemas: HashMap<ParameterType, Vec<(String, JsonObject, bool)>> = HashMap::new();
 							let props: Result<(), _> = op
 								.parameters
@@ -247,17 +247,27 @@ fn parse_openapi_schema(
                   }
 								});
               
-							let props = props?;
-							let required: Vec<String> = props
-								.iter()
-								.flat_map(|(name, _, req)| if *req { Some(name.clone()) } else { None })
-								.collect();
-							schema.insert("required".to_string(), json!(required));
-							let mut schema_props = JsonObject::new();
-							for (name, s, _) in props {
-								schema_props.insert(name, json!(s));
-							}
-							schema.insert("properties".to_string(), json!(schema_props));
+              for (param_type, props) in param_schemas {
+                let mut sub_schema = JsonSchema::default();
+                sub_schema.required = props
+                  .iter()
+                  .flat_map(|(name, _, req)| if *req { Some(name.clone()) } else { None })
+                  .collect();
+                
+                if !sub_schema.required.is_empty() {
+                  final_schema.required.push(param_type.to_string());
+                }
+                let mut schema_props = JsonObject::new();
+                for (name, s, _) in props {
+                  schema_props.insert(name, json!(s));
+                }
+                final_schema.properties.insert(param_type.to_string(), json!(schema_props));
+              }
+
+              let final_json = serde_json::to_value(final_schema).map_err(ParseError::SerdeError)?;
+              let final_json = final_json.as_object().ok_or(ParseError::UnsupportedReference(format!(
+                "final schema is not an object",
+              )))?.clone();
 							let tool = Tool {
 								annotations: None,
 								name: Cow::Owned(name.clone()),
@@ -267,7 +277,7 @@ fn parse_openapi_schema(
 										.unwrap_or_else(|| op.summary.as_ref().unwrap_or(&name))
 										.to_string(),
 								)),
-								input_schema: Arc::new(schema),
+								input_schema: Arc::new(final_json),
 							};
 							let upstream = UpstreamOpenAPICall {
 								// method: Method::from_bytes(method.as_ref()).expect("todo"),
@@ -306,6 +316,16 @@ enum ParameterType {
   Path,
 }
 
+impl std::fmt::Display for ParameterType {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "{}", match self {
+      ParameterType::Header => "header",
+      ParameterType::Query => "query",
+      ParameterType::Path => "path",
+    })
+  }
+}
+
 fn build_schema_property(open_api: &OpenAPI, item: &Parameter) -> Result<(String, JsonObject, bool), ParseError> {
   let p = item.parameter_data_ref();
   let mut schema = match &p.format {
@@ -342,6 +362,7 @@ struct JsonSchema {
   #[serde(flatten)]
   r#type: String,
 }
+
 
 impl Default for JsonSchema {
   fn default() -> Self {
