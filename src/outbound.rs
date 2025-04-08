@@ -1,7 +1,7 @@
 use crate::xds::mcp::kgateway_dev::target::LocalDataSource;
 use crate::xds::mcp::kgateway_dev::target::local_data_source::Source as XdsSource;
 use crate::xds::mcp::kgateway_dev::target::target::OpenApiTarget as XdsOpenAPITarget;
-use openapiv3::{OpenAPI, Parameter, ReferenceOr, Schema};
+use openapiv3::{OpenAPI, Parameter, ReferenceOr, Schema, RequestBody};
 use rmcp::model::JsonObject;
 use rmcp::model::Tool;
 use serde::{Deserialize, Serialize};
@@ -144,6 +144,30 @@ fn resolve_parameter<'a>(
 	}
 }
 
+fn resolve_request_body<'a>(
+	reference: &'a ReferenceOr<RequestBody>,
+	doc: &'a OpenAPI,
+) -> Result<&'a RequestBody, ParseError> {
+  match reference {
+    ReferenceOr::Reference { reference } => {
+      let reference = reference
+        .strip_prefix("#/components/requestBodies/")
+        .ok_or(ParseError::MissingReference)?;
+      let components: &openapiv3::Components = doc
+        .components
+        .as_ref()
+        .ok_or(ParseError::MissingComponents)?;
+      let request_body = components
+        .request_bodies
+        .get(reference)
+        .ok_or(ParseError::MissingComponent)?;
+      resolve_request_body(request_body, doc)
+    },
+    ReferenceOr::Item(request_body) => Ok(request_body),
+  }
+}
+
+
 /// We need to rework this and I don't want to forget.
 ///
 /// We need to be able to handle data which can end up in multiple destinations:
@@ -177,42 +201,53 @@ fn parse_openapi_schema(
 									"operation_id is required for {}",
 									path
 								)))?;
-							let props: Result<Vec<_>, _> = op
+
+                            // Build the schema
+							let mut final_schema = JsonSchema::default();
+
+              // IF a body schema is present, add it to the final schema
+              if let Some(body) = op.request_body {
+                let body = resolve_request_body(&body, open_api)?;
+                let media_type = body.content.get("application/json").ok_or(ParseError::MissingComponent)?;
+                let schema_ref = media_type.schema.ok_or(ParseError::MissingComponent)?;
+                let schema = resolve_schema(&schema_ref, open_api)?;
+                let body_schema = serde_json::to_value(schema).map_err(ParseError::SerdeError)?;
+                if body.required {
+                  final_schema.required.push(BODY_NAME.clone());
+                }
+                final_schema.properties.insert(BODY_NAME.clone(), body_schema);
+              }
+
+              
+              let mut param_schemas: HashMap<ParameterType, Vec<(String, JsonObject, bool)>> = HashMap::new();
+							let props: Result<(), _> = op
 								.parameters
 								.iter()
-								.map(|p| -> Result<(String, JsonObject, bool), ParseError> {
-									let item = resolve_parameter(p, open_api)?;
-									let p = dbg!(item.parameter_data_ref());
-									let mut schema = match &p.format {
-										openapiv3::ParameterSchemaOrContent::Schema(reference) => {
-											let resolved_schema = resolve_schema(reference, open_api)?;
-											serde_json::to_value(resolved_schema)
-												.map_err(ParseError::SerdeError)?
-												.as_object()
-												.ok_or(ParseError::UnsupportedReference(format!(
-													"parameter {} is not an object",
-													p.name
-												)))?
-												.clone()
-										},
-										openapiv3::ParameterSchemaOrContent::Content(content) => {
-											return Err(ParseError::UnsupportedReference(format!(
-												"content is not supported for parameters: {:?}",
-												content
-											)));
-										},
-									};
-
-									if let Some(desc) = &p.description {
-										schema.insert("description".to_string(), json!(desc));
-									}
-
-									Ok((p.name.clone(), schema, p.required))
-								})
-								.collect();
+								.try_for_each(|p| -> Result<(), ParseError> {
+                  let item = resolve_parameter(p, open_api)?;
+                  let (name, schema, required) = build_schema_property(open_api, item)?;
+                  match item {
+                    Parameter::Header { parameter_data, .. } => {
+                      param_schemas.entry(ParameterType::Header).or_insert_with(Vec::new).push((name, schema, required));
+                      Ok(())
+                    },
+                    Parameter::Query { parameter_data, .. } => {
+                      param_schemas.entry(ParameterType::Query).or_insert_with(Vec::new).push((name, schema, required));
+                      Ok(())
+                    },
+                    Parameter::Path { parameter_data, .. } => {
+                      param_schemas.entry(ParameterType::Path).or_insert_with(Vec::new).push((name, schema, required));
+                      Ok(())
+                    },
+                    _ => {
+                      return Err(ParseError::UnsupportedReference(format!(
+                        "parameter type COOKIE is not supported",
+                      )));
+                    },
+                  }
+								});
+              
 							let props = props?;
-							let mut schema = JsonObject::new();
-							schema.insert("type".to_string(), json!("object"));
 							let required: Vec<String> = props
 								.iter()
 								.flat_map(|(name, _, req)| if *req { Some(name.clone()) } else { None })
@@ -256,7 +291,69 @@ fn parse_openapi_schema(
 	}
 }
 
-pub fn resolve_local_data_source(
+// Used to index the parameter types for the schema
+lazy_static::lazy_static! {
+  pub static ref BODY_NAME: String = "body".to_string();
+  pub static ref HEADER_NAME: String = "header".to_string();
+  pub static ref QUERY_NAME: String = "query".to_string();
+  pub static ref PATH_NAME: String = "path".to_string();
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum ParameterType {
+  Header,
+  Query,
+  Path,
+}
+
+fn build_schema_property(open_api: &OpenAPI, item: &Parameter) -> Result<(String, JsonObject, bool), ParseError> {
+  let p = item.parameter_data_ref();
+  let mut schema = match &p.format {
+    openapiv3::ParameterSchemaOrContent::Schema(reference) => {
+      let resolved_schema = resolve_schema(reference, open_api)?;
+      serde_json::to_value(resolved_schema)
+        .map_err(ParseError::SerdeError)?
+        .as_object()
+        .ok_or(ParseError::UnsupportedReference(format!(
+          "parameter {} is not an object",
+          p.name
+        )))?
+        .clone()
+    },
+    openapiv3::ParameterSchemaOrContent::Content(content) => {
+      return Err(ParseError::UnsupportedReference(format!(
+        "content is not supported for parameters: {:?}",
+        content
+      )));
+    },
+  };
+
+  if let Some(desc) = &p.description {
+    schema.insert("description".to_string(), json!(desc));
+  }
+
+  Ok((p.name.clone(), schema, p.required))
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct JsonSchema {
+  required: Vec<String>,
+  properties: JsonObject,
+  #[serde(flatten)]
+  r#type: String,
+}
+
+impl Default for JsonSchema {
+  fn default() -> Self {
+    Self {
+      required: vec![],
+      properties: JsonObject::new(),
+      r#type: "object".to_string(),
+    }
+  }
+}
+
+fn resolve_local_data_source(
 	local_data_source: &LocalDataSource,
 ) -> Result<Vec<u8>, ParseError> {
 	match local_data_source
@@ -277,6 +374,6 @@ fn test_parse_openapi_schema() {
 	let schema = include_bytes!("../examples/openapi/openapi.json");
 	let schema: OpenAPI = serde_json::from_slice(schema).unwrap();
 	let tools = parse_openapi_schema(&schema).unwrap();
-	println!("{:?}", tools);
+	assert_eq!(tools.len(), 19);
 }
 
