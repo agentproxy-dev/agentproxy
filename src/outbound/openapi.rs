@@ -1,6 +1,6 @@
 use crate::xds::mcp::kgateway_dev::target::LocalDataSource;
 use crate::xds::mcp::kgateway_dev::target::local_data_source::Source as XdsSource;
-use http::Method;
+use http::{Method, header::ACCEPT};
 use openapiv3::{OpenAPI, Parameter, ReferenceOr, RequestBody, Schema, SchemaKind, Type};
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use rmcp::model::JsonObject;
@@ -270,14 +270,14 @@ pub(crate) fn parse_openapi_schema(
 
 							let body: Option<(String, serde_json::Value, bool)> = match op.request_body.as_ref() {
 								Some(body) => {
-									let body = resolve_request_body(&body, open_api)?;
+									let body = resolve_request_body(body, open_api)?;
 									match body.content.get("application/json") {
 										Some(media_type) => {
 											let schema_ref = media_type
 												.schema
 												.as_ref()
 												.ok_or(ParseError::MissingReference("application/json".to_string()))?;
-											let schema = resolve_nested_schema(&schema_ref, open_api)?;
+											let schema = resolve_nested_schema(schema_ref, open_api)?;
 											let body_schema =
 												serde_json::to_value(schema).map_err(ParseError::SerdeError)?;
 											if body.required {
@@ -294,15 +294,12 @@ pub(crate) fn parse_openapi_schema(
 								None => None,
 							};
 
-							match body {
-								Some((name, schema, required)) => {
-									if required {
-										final_schema.required.push(name.clone());
-									}
-									final_schema.properties.insert(name.clone(), schema.clone());
-								},
-								None => {},
-							};
+							if let Some((name, schema, required)) = body {
+								if required {
+									final_schema.required.push(name.clone());
+								}
+								final_schema.properties.insert(name.clone(), schema.clone());
+							}
 
 							let mut param_schemas: HashMap<ParameterType, Vec<(String, JsonObject, bool)>> =
 								HashMap::new();
@@ -333,26 +330,27 @@ pub(crate) fn parse_openapi_schema(
 												.push((name, schema, required));
 											Ok(())
 										},
-										_ => {
-											return Err(ParseError::UnsupportedReference(format!(
-												"parameter type COOKIE is not supported",
-											)));
-										},
+										_ => Err(ParseError::UnsupportedReference(
+											"parameter type COOKIE is not supported".to_string(),
+										)),
 									}
 								})?;
 
 							for (param_type, props) in param_schemas {
-								let mut sub_schema = JsonSchema::default();
-								sub_schema.required = props
-									.iter()
-									.flat_map(|(name, _, req)| if *req { Some(name.clone()) } else { None })
-									.collect();
+								let sub_schema = JsonSchema {
+									required: props
+										.iter()
+										.flat_map(|(name, _, req)| if *req { Some(name.clone()) } else { None })
+										.collect(),
+									properties: props
+										.iter()
+										.map(|(name, s, _)| (name.clone(), json!(s)))
+										.collect(),
+									..Default::default()
+								};
 
 								if !sub_schema.required.is_empty() {
 									final_schema.required.push(param_type.to_string());
-								}
-								for (name, s, _) in props {
-									sub_schema.properties.insert(name, json!(s));
 								}
 								final_schema
 									.properties
@@ -363,9 +361,9 @@ pub(crate) fn parse_openapi_schema(
 								serde_json::to_value(final_schema).map_err(ParseError::SerdeError)?;
 							let final_json = final_json
 								.as_object()
-								.ok_or(ParseError::UnsupportedReference(format!(
-									"final schema is not an object",
-								)))?
+								.ok_or(ParseError::UnsupportedReference(
+									"final schema is not an object".to_string(),
+								))?
 								.clone();
 							let tool = Tool {
 								annotations: None,
@@ -496,7 +494,10 @@ pub(crate) fn resolve_local_data_source(
 
 #[derive(Debug)]
 pub struct Handler {
+	pub scheme: String,
 	pub host: String,
+	pub prefix: String,
+	pub port: u16,
 	pub client: reqwest::Client,
 	pub tools: Vec<(Tool, UpstreamOpenAPICall)>,
 }
@@ -571,7 +572,11 @@ impl Handler {
 			}
 		}
 
-		let base_url = format!("{}{}", self.host, path);
+		let base_url = format!(
+			"{}://{}:{}{}{}",
+			self.scheme, self.host, self.port, self.prefix, path
+		);
+
 		// Prepare query parameters for reqwest, filtering out non-string values.
 		let query_params_reqwest: Vec<(String, String)> = query_params
 			.into_iter()
@@ -591,6 +596,7 @@ impl Handler {
 
 		// --- Header Construction ---
 		let mut headers = HeaderMap::new();
+		headers.insert(ACCEPT, HeaderValue::from_str("application/json").unwrap());
 		// Build the header map, ensuring keys and values are valid.
 		for (key, value) in &header_params {
 			if let Some(s_val) = value.as_str() {
@@ -626,7 +632,7 @@ impl Handler {
 
 		// --- Request Building ---
 		// Parse the HTTP method.
-		let method = Method::from_bytes(info.method.as_bytes()).map_err(|e| {
+		let method = Method::from_bytes(info.method.to_uppercase().as_bytes()).map_err(|e| {
 			anyhow::anyhow!(
 				"Invalid HTTP method '{}' for tool '{}': {}",
 				info.method,
@@ -636,7 +642,9 @@ impl Handler {
 		})?;
 
 		// Start building the request with method and URL.
-		let mut request_builder = self.client.request(method, &base_url);
+		tracing::info!("base_url: {}", base_url);
+		let url = reqwest::Url::parse(&base_url)?;
+		let mut request_builder = self.client.request(method, url);
 
 		// Add query parameters if any exist.
 		if !query_params_reqwest.is_empty() {
@@ -652,6 +660,8 @@ impl Handler {
 		if let Some(body_val) = body_value {
 			request_builder = request_builder.json(&body_val);
 		}
+
+		tracing::info!("Sending request: {:?}", request_builder);
 
 		// --- Send Request & Get Response ---
 		let response = request_builder.send().await?;
@@ -693,17 +703,12 @@ fn test_parse_openapi_schema() {
 #[cfg(test)]
 mod tests {
 	use super::*; // Import items from parent module
-	use crate::xds::mcp::kgateway_dev::target::LocalDataSource;
-	use crate::xds::mcp::kgateway_dev::target::local_data_source::Source as XdsSource;
-	use crate::xds::mcp::kgateway_dev::target::target::OpenApiTarget as XdsOpenAPITarget;
-	use openapiv3::OpenAPI;
 	use reqwest::Client;
-	use rmcp::model::{JsonObject, Tool};
+	use rmcp::model::Tool;
 	use serde_json::json;
 	use std::borrow::Cow;
-	use std::collections::HashMap;
 	use std::sync::Arc;
-	use wiremock::matchers::{body_json, header, method, path, path_regex, query_param};
+	use wiremock::matchers::{body_json, header, method, path, query_param};
 	use wiremock::{Mock, MockServer, ResponseTemplate};
 
 	// Helper to create a handler and mock server for tests
@@ -794,8 +799,13 @@ mod tests {
 			path: "/users".to_string(),
 		};
 
+		let parsed = reqwest::Url::parse(&host).unwrap();
+
 		let handler = Handler {
-			host,
+			scheme: parsed.scheme().to_string(),
+			host: parsed.host().unwrap().to_string(),
+			prefix: "".to_string(),
+			port: parsed.port().unwrap_or(8080),
 			client,
 			tools: vec![
 				(test_tool_get, upstream_call_get),

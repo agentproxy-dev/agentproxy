@@ -529,14 +529,13 @@ impl ConnectionPool {
 					443 => "https",
 					_ => "http",
 				};
-				let url = format!(
-					"{}://{}:{}{}",
-					scheme, open_api.host, open_api.port, open_api.prefix
-				);
 				UpstreamTarget::OpenAPI(openapi::Handler {
-					host: url,
+					host: open_api.host.clone(),
 					client,
 					tools: open_api.tools.clone(),
+					scheme: scheme.to_string(),
+					prefix: open_api.prefix.clone(),
+					port: open_api.port,
 				})
 			},
 		};

@@ -85,7 +85,7 @@ impl Listener {
 				let authenticator = match &sse_listener.authn {
 					Some(authn) => match authn {
 						Authn::Jwt(jwt) => Arc::new(tokio::sync::RwLock::new(Some(
-							authn::JwtAuthenticator::new(&jwt).await.unwrap(),
+							authn::JwtAuthenticator::new(jwt).await.unwrap(),
 						))),
 					},
 					None => Arc::new(tokio::sync::RwLock::new(None)),

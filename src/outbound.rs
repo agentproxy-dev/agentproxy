@@ -33,7 +33,7 @@ pub enum TargetSpec {
 pub struct OpenAPITarget {
 	pub host: String,
 	pub prefix: String,
-	pub port: u32,
+	pub port: u16,
 	pub tools: Vec<(Tool, openapi::UpstreamOpenAPICall)>,
 }
 
@@ -49,8 +49,8 @@ impl TryFrom<XdsOpenAPITarget> for OpenAPITarget {
 		let prefix = openapi::get_server_prefix(&schema)?;
 		Ok(OpenAPITarget {
 			host: value.host.clone(),
-			prefix: prefix,
-			port: value.port,
+			prefix,
+			port: value.port as u16, // TODO: check if this is correct
 			tools,
 		})
 	}

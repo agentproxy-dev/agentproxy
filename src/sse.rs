@@ -143,12 +143,9 @@ async fn post_event_handler(
 	// Add claims to the message for RBAC
 	// TODO: maybe do it here so we don't need to do this.
 	let mut message = message;
-	match &mut message {
-		ClientJsonRpcMessage::Request(req) => {
-			let claims = rbac::Identity::new(claims.map(|c| c.0), app.connection_id.read().await.clone());
-			req.request.extensions_mut().insert(claims);
-		},
-		_ => {},
+	if let ClientJsonRpcMessage::Request(req) = &mut message {
+		let claims = rbac::Identity::new(claims.map(|c| c.0), app.connection_id.read().await.clone());
+		req.request.extensions_mut().insert(claims);
 	}
 
 	if tx.send(message).await.is_err() {
