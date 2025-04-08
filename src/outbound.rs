@@ -43,7 +43,8 @@ impl TryFrom<XdsOpenAPITarget> for OpenAPITarget {
 	fn try_from(value: XdsOpenAPITarget) -> Result<Self, Self::Error> {
 		let schema = value.schema.ok_or(openapi::ParseError::MissingSchema)?;
 		let schema_bytes = openapi::resolve_local_data_source(&schema)?;
-		let schema: OpenAPI = serde_json::from_slice(&schema_bytes).map_err(openapi::ParseError::SerdeError)?;
+		let schema: OpenAPI =
+			serde_json::from_slice(&schema_bytes).map_err(openapi::ParseError::SerdeError)?;
 		let tools = openapi::parse_openapi_schema(&schema)?;
 		let prefix = openapi::get_server_prefix(&schema)?;
 		Ok(OpenAPITarget {

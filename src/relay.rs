@@ -1,7 +1,7 @@
 use crate::backend::BackendAuth;
 use crate::metrics::Recorder;
-use crate::outbound::{Target, TargetSpec};
 use crate::outbound::openapi;
+use crate::outbound::{Target, TargetSpec};
 use crate::rbac;
 use crate::xds::XdsStore;
 use http::HeaderName;
@@ -491,7 +491,10 @@ impl ConnectionPool {
 						let auth_value = HeaderValue::from_str(token.as_str())?;
 						upstream_headers.insert(AUTHORIZATION, auth_value);
 						for (key, value) in headers {
-							upstream_headers.insert(HeaderName::from_bytes(key.as_bytes())?, HeaderValue::from_str(value)?);
+							upstream_headers.insert(
+								HeaderName::from_bytes(key.as_bytes())?,
+								HeaderValue::from_str(value)?,
+							);
 						}
 						let client = reqwest::Client::builder()
 							.default_headers(upstream_headers)
