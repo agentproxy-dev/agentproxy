@@ -1,11 +1,11 @@
 use crate::backend::BackendAuth;
 use crate::metrics::Recorder;
 use crate::outbound::{Target, TargetSpec};
-use crate::outbound::openapi::UpstreamOpenAPICall;
+use crate::outbound::openapi;
 use crate::rbac;
 use crate::xds::XdsStore;
 use http::HeaderName;
-use http::{HeaderMap, HeaderValue, Method, header::AUTHORIZATION};
+use http::{HeaderMap, HeaderValue, header::AUTHORIZATION};
 use itertools::Itertools;
 use rmcp::RoleClient;
 use rmcp::serve_client;
@@ -530,7 +530,7 @@ impl ConnectionPool {
 					"{}://{}:{}{}",
 					scheme, open_api.host, open_api.port, open_api.prefix
 				);
-				UpstreamTarget::OpenAPI(OpenAPIHandler {
+				UpstreamTarget::OpenAPI(openapi::Handler {
 					host: url,
 					client,
 					tools: open_api.tools.clone(),
@@ -549,7 +549,7 @@ impl ConnectionPool {
 #[derive(Debug)]
 enum UpstreamTarget {
 	Mcp(RunningService<RoleClient, ()>),
-	OpenAPI(OpenAPIHandler),
+	OpenAPI(openapi::Handler),
 }
 
 enum UpstreamError {
@@ -701,45 +701,5 @@ impl UpstreamTarget {
 				})
 			},
 		}
-	}
-}
-
-#[derive(Debug)]
-struct OpenAPIHandler {
-	host: String,
-	client: reqwest::Client,
-	tools: Vec<(Tool, UpstreamOpenAPICall)>,
-}
-
-impl OpenAPIHandler {
-	#[instrument(
-    level = "debug",
-    skip_all,
-    fields(
-        name=%name,
-    ),
-  )]
-	async fn call_tool(&self, name: &str, args: Option<JsonObject>) -> Result<String, anyhow::Error> {
-		let (_, info) = self
-			.tools
-			.iter()
-			.find(|(t, _info)| t.name == name)
-			.ok_or_else(|| anyhow::anyhow!("tool {} not found", name))?;
-		let body = self
-			.client
-			.request(
-				Method::from_bytes(info.method.as_bytes()).unwrap(),
-				format!("{}{}", self.host, &info.path),
-			)
-			.json(args.as_ref().unwrap())
-			.send()
-			.await?
-			.text()
-			.await?;
-		Ok(body)
-	}
-
-	fn tools(&self) -> Vec<Tool> {
-		self.tools.clone().into_iter().map(|(t, _)| t).collect()
 	}
 }

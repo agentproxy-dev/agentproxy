@@ -79,3 +79,8 @@ bench = false
 name = "mcp-proxy"
 path = "src/main.rs"
 bench = false
+
+[dev-dependencies]
+serde_json = "1.0"
+tokio = "1.42"
+wiremock = "0.6.3"
