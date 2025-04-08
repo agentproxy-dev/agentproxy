@@ -105,7 +105,7 @@ impl ProxyStateUpdateMutator {
         fields(name=%target.name),
     )]
 	pub fn insert_target(&self, state: &mut XdsStore, target: XdsTarget) -> anyhow::Result<()> {
-		let target = outbound::Target::try_from(&target)
+		let target = outbound::Target::try_from(target)
 			.map_err(|e| anyhow::anyhow!("failed to parse target: {e}"))?;
 		// TODO: This is a hack
 		// TODO: Separate connection/LB from insertion
@@ -183,15 +183,16 @@ pub enum ParseError {
 	InvalidSchema,
 }
 
-impl TryFrom<&XdsTarget> for outbound::Target {
+impl TryFrom<XdsTarget> for outbound::Target {
 	type Error = ParseError;
-	fn try_from(value: &XdsTarget) -> Result<Self, Self::Error> {
-		let target = value.target.as_ref().ok_or(ParseError::MissingFields)?;
+	fn try_from(value: XdsTarget) -> Result<Self, Self::Error> {
+		let target = value.target.ok_or(ParseError::MissingFields)?;
 		let spec = match target {
 			XdsTargetSpec::Sse(sse) => outbound::TargetSpec::Sse {
 				host: sse.host.clone(),
 				port: sse.port,
 				path: sse.path.clone(),
+				headers: sse.headers.clone(),
 				backend_auth: None,
 			},
 			XdsTargetSpec::Stdio(stdio) => outbound::TargetSpec::Stdio {

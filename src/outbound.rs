@@ -23,6 +23,7 @@ pub enum TargetSpec {
 		host: String,
 		port: u32,
 		path: String,
+		headers: HashMap<String, String>,
 		backend_auth: Option<backend::BackendAuthConfig>,
 	},
 	Stdio {
@@ -41,12 +42,12 @@ pub struct OpenAPITarget {
 	pub tools: Vec<(Tool, UpstreamOpenAPICall)>,
 }
 
-impl TryFrom<&XdsOpenAPITarget> for OpenAPITarget {
+impl TryFrom<XdsOpenAPITarget> for OpenAPITarget {
 	type Error = ParseError;
 
-	fn try_from(value: &XdsOpenAPITarget) -> Result<Self, Self::Error> {
-		let schema = value.schema.as_ref().ok_or(ParseError::MissingSchema)?;
-		let schema_bytes = resolve_local_data_source(schema)?;
+	fn try_from(value: XdsOpenAPITarget) -> Result<Self, Self::Error> {
+		let schema = value.schema.ok_or(ParseError::MissingSchema)?;
+		let schema_bytes = resolve_local_data_source(&schema)?;
 		let schema: OpenAPI = serde_json::from_slice(&schema_bytes).map_err(ParseError::SerdeError)?;
 		let tools = parse_openapi_schema(&schema)?;
 		let prefix = get_server_prefix(&schema)?;
@@ -143,6 +144,17 @@ fn resolve_parameter<'a>(
 	}
 }
 
+/// We need to rework this and I don't want to forget.
+///
+/// We need to be able to handle data which can end up in multiple destinations:
+/// 1. Headers
+/// 2. Body
+/// 3. Query Params
+/// 4. Templated Path Params
+/// 
+/// To support this we should create a nested JSON schema which has each of them.
+/// That way the client code can properly separate the objects passed by the client.
+/// 
 fn parse_openapi_schema(
 	open_api: &OpenAPI,
 ) -> Result<Vec<(Tool, UpstreamOpenAPICall)>, ParseError> {
@@ -259,3 +271,12 @@ pub fn resolve_local_data_source(
 		XdsSource::Inline(inline) => Ok(inline.clone()),
 	}
 }
+
+#[test]
+fn test_parse_openapi_schema() {
+	let schema = include_bytes!("../examples/openapi/openapi.json");
+	let schema: OpenAPI = serde_json::from_slice(schema).unwrap();
+	let tools = parse_openapi_schema(&schema).unwrap();
+	println!("{:?}", tools);
+}
+

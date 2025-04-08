@@ -3,6 +3,7 @@ use crate::metrics::Recorder;
 use crate::outbound::{Target, TargetSpec, UpstreamOpenAPICall};
 use crate::rbac;
 use crate::xds::XdsStore;
+use http::HeaderName;
 use http::{HeaderMap, HeaderValue, Method, header::AUTHORIZATION};
 use itertools::Itertools;
 use rmcp::RoleClient;
@@ -468,6 +469,7 @@ impl ConnectionPool {
 				port,
 				path,
 				backend_auth,
+				headers,
 			} => {
 				tracing::trace!("starting sse transport for target: {}", target.name);
 				let path = match path.as_str() {
@@ -484,11 +486,14 @@ impl ConnectionPool {
 					Some(backend_auth) => {
 						let backend_auth = backend_auth.build().await;
 						let token = backend_auth.get_token().await?;
-						let mut headers = HeaderMap::new();
-						let auth_value = HeaderValue::from_str(token.as_str()).unwrap();
-						headers.insert(AUTHORIZATION, auth_value);
+						let mut upstream_headers = HeaderMap::new();
+						let auth_value = HeaderValue::from_str(token.as_str())?;
+						upstream_headers.insert(AUTHORIZATION, auth_value);
+						for (key, value) in headers {
+							upstream_headers.insert(HeaderName::from_bytes(key.as_bytes())?, HeaderValue::from_str(value)?);
+						}
 						let client = reqwest::Client::builder()
-							.default_headers(headers)
+							.default_headers(upstream_headers)
 							.build()
 							.unwrap();
 						let client = ReqwestSseClient::new_with_client(url.as_str(), client).await?;

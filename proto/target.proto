@@ -26,7 +26,10 @@ message Target {
     string host = 1;
     // The port of the target.
     uint32 port = 2;
+    // The path of the target.
     string path = 3;
+    // The headers of the target.
+    map<string, string> headers = 4;
   }
 
   message StdioTarget {
