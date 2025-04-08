@@ -1,6 +1,7 @@
 use crate::backend::BackendAuth;
 use crate::metrics::Recorder;
-use crate::outbound::{Target, TargetSpec, UpstreamOpenAPICall};
+use crate::outbound::{Target, TargetSpec};
+use crate::outbound::openapi::UpstreamOpenAPICall;
 use crate::rbac;
 use crate::xds::XdsStore;
 use http::HeaderName;
