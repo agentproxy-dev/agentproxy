@@ -1,7 +1,11 @@
 use axum::extract::connect_info::Connected;
 use axum::serve::IncomingStream;
+use std::io;
 use std::net::SocketAddr;
+use std::time::Duration;
+use tls_listener::TlsListener;
 use tokio::net::TcpListener;
+use tokio_rustls::TlsAcceptor;
 
 impl Connected<IncomingStream<'_, Listener>> for Address {
 	fn connect_info(target: IncomingStream<'_, Listener>) -> Self {
@@ -51,6 +55,106 @@ impl axum::serve::Listener for Listener {
 			identity: None,
 		})
 	}
+}
+
+#[derive(Clone)]
+pub struct AxumTlsAcceptor(TlsAcceptor);
+
+impl AxumTlsAcceptor {
+	pub fn new(acceptor: TlsAcceptor) -> Self {
+		Self(acceptor)
+	}
+}
+
+impl tls_listener::AsyncTls<tokio::net::TcpStream> for AxumTlsAcceptor {
+	type Stream = tokio_rustls::server::TlsStream<tokio::net::TcpStream>;
+	type Error = std::io::Error;
+	type AcceptFuture = tokio_rustls::Accept<tokio::net::TcpStream>;
+
+	fn accept(&self, stream: tokio::net::TcpStream) -> Self::AcceptFuture {
+		self.0.accept(stream)
+	}
+}
+
+// We use a wrapper type to bridge axum's `Listener` trait to our `TlsListener` type.
+pub struct AxumTlsListener {
+	inner: TlsListener<tokio::net::TcpListener, AxumTlsAcceptor>,
+	local_addr: SocketAddr,
+	proxy_protocol: bool,
+}
+
+impl AxumTlsListener {
+	pub fn new(
+		inner: TlsListener<tokio::net::TcpListener, AxumTlsAcceptor>,
+		local_addr: SocketAddr,
+		proxy_protocol: bool,
+	) -> Self {
+		Self {
+			inner,
+			local_addr,
+			proxy_protocol,
+		}
+	}
+}
+
+impl Connected<IncomingStream<'_, AxumTlsListener>> for Address {
+	fn connect_info(target: IncomingStream<'_, AxumTlsListener>) -> Self {
+		target.remote_addr().clone()
+	}
+}
+
+impl axum::serve::Listener for AxumTlsListener {
+	type Io = tokio_rustls::server::TlsStream<tokio::net::TcpStream>;
+	type Addr = Address;
+
+	async fn accept(&mut self) -> (Self::Io, Self::Addr) {
+		loop {
+			// To change the TLS certificate dynamically, you could `select!` on this call with a
+			// channel receiver, and call `self.inner.replace_acceptor` in the other branch.
+			match TlsListener::accept(&mut self.inner).await {
+				Ok((mut io, addr)) => {
+					break {
+						let addr = if !self.proxy_protocol {
+							Address {
+								addr,
+								identity: None,
+							}
+						} else {
+							let header = protocol::parse(&mut io).await.expect("TODO");
+							Address {
+								addr,
+								identity: header.identity,
+							}
+						};
+						(io, addr)
+					};
+				},
+				Err(tls_listener::Error::ListenerError(e)) if !is_connection_error(&e) => {
+					// See https://github.com/tokio-rs/axum/blob/da3539cb0e5eed381361b2e688a776da77c52cd6/axum/src/serve/listener.rs#L145-L157
+					// for the rationale.
+					tokio::time::sleep(Duration::from_secs(1)).await
+				},
+				Err(_) => continue,
+			}
+		}
+	}
+
+	fn local_addr(&self) -> io::Result<Self::Addr> {
+		Ok(Address {
+			addr: self.local_addr,
+			identity: None,
+		})
+	}
+}
+
+// Taken from https://github.com/tokio-rs/axum/blob/da3539cb0e5eed381361b2e688a776da77c52cd6/axum/src/serve/listener.rs#L160-L167
+fn is_connection_error(e: &io::Error) -> bool {
+	matches!(
+		e.kind(),
+		io::ErrorKind::ConnectionRefused
+			| io::ErrorKind::ConnectionAborted
+			| io::ErrorKind::ConnectionReset
+	)
 }
 
 mod protocol {

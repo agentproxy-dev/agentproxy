@@ -15,11 +15,8 @@ use crate::sse::App as SseApp;
 use crate::xds;
 use rmcp::serve_server;
 use serde::{Deserialize, Serialize};
-use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::Duration;
-use tls_listener::TlsListener;
 use tokio_rustls::{
 	TlsAcceptor,
 	rustls::ServerConfig,
@@ -90,7 +87,7 @@ pub struct TlsConfig {
 
 // TODO: Implement Serialize for TlsConfig
 impl Serialize for TlsConfig {
-	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
 	where
 		S: serde::Serializer,
 	{
@@ -133,60 +130,6 @@ fn rustls_server_config(
 	config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
 
 	Ok(Arc::new(config))
-}
-
-#[derive(Clone)]
-struct AxumTlsAcceptor(TlsAcceptor);
-
-impl tls_listener::AsyncTls<tokio::net::TcpStream> for AxumTlsAcceptor {
-	type Stream = tokio_rustls::server::TlsStream<tokio::net::TcpStream>;
-	type Error = std::io::Error;
-	type AcceptFuture = tokio_rustls::Accept<tokio::net::TcpStream>;
-
-	fn accept(&self, stream: tokio::net::TcpStream) -> Self::AcceptFuture {
-		self.0.accept(stream)
-	}
-}
-
-// We use a wrapper type to bridge axum's `Listener` trait to our `TlsListener` type.
-struct AxumTlsListener {
-	inner: TlsListener<tokio::net::TcpListener, AxumTlsAcceptor>,
-	local_addr: SocketAddr,
-}
-
-impl axum::serve::Listener for AxumTlsListener {
-	type Io = tokio_rustls::server::TlsStream<tokio::net::TcpStream>;
-	type Addr = SocketAddr;
-
-	async fn accept(&mut self) -> (Self::Io, Self::Addr) {
-		loop {
-			// To change the TLS certificate dynamically, you could `select!` on this call with a
-			// channel receiver, and call `self.inner.replace_acceptor` in the other branch.
-			match self.inner.accept().await {
-				Ok(tuple) => break tuple,
-				Err(tls_listener::Error::ListenerError(e)) if !is_connection_error(&e) => {
-					// See https://github.com/tokio-rs/axum/blob/da3539cb0e5eed381361b2e688a776da77c52cd6/axum/src/serve/listener.rs#L145-L157
-					// for the rationale.
-					tokio::time::sleep(Duration::from_secs(1)).await
-				},
-				Err(_) => continue,
-			}
-		}
-	}
-
-	fn local_addr(&self) -> io::Result<Self::Addr> {
-		Ok(self.local_addr)
-	}
-}
-
-// Taken from https://github.com/tokio-rs/axum/blob/da3539cb0e5eed381361b2e688a776da77c52cd6/axum/src/serve/listener.rs#L160-L167
-fn is_connection_error(e: &io::Error) -> bool {
-	matches!(
-		e.kind(),
-		io::ErrorKind::ConnectionRefused
-			| io::ErrorKind::ConnectionAborted
-			| io::ErrorKind::ConnectionReset
-	)
 }
 
 #[derive(Debug)]
@@ -253,13 +196,19 @@ impl Listener {
 				match &sse_listener.tls {
 					Some(tls) => {
 						let tls_acceptor = TlsAcceptor::from(tls.inner.clone());
-						let axum_tls_acceptor = AxumTlsAcceptor(tls_acceptor);
-						let tls_listener = AxumTlsListener {
-							inner: tls_listener::TlsListener::new(axum_tls_acceptor, listener),
-							local_addr: socket_addr,
-						};
+						let axum_tls_acceptor = proxyprotocol::AxumTlsAcceptor::new(tls_acceptor);
+						let tls_listener = proxyprotocol::AxumTlsListener::new(
+							tls_listener::TlsListener::new(axum_tls_acceptor, listener),
+							socket_addr,
+							Some(&ListenerMode::Proxy) == sse_listener.mode.as_ref(),
+						);
+
+						let svc: axum::extract::connect_info::IntoMakeServiceWithConnectInfo<
+							axum::Router,
+							proxyprotocol::Address,
+						> = router.into_make_service_with_connect_info::<proxyprotocol::Address>();
 						run_set.spawn(async move {
-							axum::serve(tls_listener, router.into_make_service())
+							axum::serve(tls_listener, svc)
 								.with_graceful_shutdown(async move {
 									child_token.cancelled().await;
 								})

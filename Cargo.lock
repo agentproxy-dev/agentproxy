@@ -2027,6 +2027,7 @@ dependencies = [
  "reqwest",
  "rmcp",
  "rustc_version",
+ "rustls 0.23.25",
  "serde",
  "serde_json",
  "serde_yaml",

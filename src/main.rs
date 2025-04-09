@@ -18,6 +18,7 @@ use mcp_proxy::signal;
 use mcp_proxy::xds;
 use mcp_proxy::xds::ProxyStateUpdater;
 use mcp_proxy::xds::XdsStore as ProxyState;
+
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
@@ -52,6 +53,11 @@ async fn main() -> Result<()> {
 	let mut registry = Registry::default();
 
 	let args = Args::parse();
+
+	// TODO: Do this better
+	rustls::crypto::ring::default_provider()
+		.install_default()
+		.expect("failed to install ring provider");
 
 	let cfg: Config = match (args.file, args.config) {
 		(Some(filename), None) => {

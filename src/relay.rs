@@ -479,7 +479,7 @@ impl ConnectionPool {
 				};
 				let scheme = match port {
 					443 => "https",
-					_ => "http",
+					_ => "https",
 				};
 
 				let url = format!("{}://{}:{}{}", scheme, host, port, path);

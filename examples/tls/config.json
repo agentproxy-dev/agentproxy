@@ -1,0 +1,28 @@
+{
+  "type": "static",
+  "listener": {
+    "sse": {
+      "address": "0.0.0.0",
+      "port": 3000,
+      "tls": {
+        "cert_pem": {
+          "file_path": "examples/tls/certs/cert.pem"
+        },
+        "key_pem": {
+          "file_path": "examples/tls/certs/key.pem"
+        }
+      }
+    }
+  },
+  "targets": [
+    {
+      "name": "everything",
+      "stdio": {
+        "cmd": "npx",
+        "args": [
+          "@modelcontextprotocol/server-everything"
+        ]
+      }
+    }
+  ]
+}

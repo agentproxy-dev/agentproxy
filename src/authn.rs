@@ -2,10 +2,9 @@ use crate::proto::mcpproxy::dev::common;
 use crate::proto::mcpproxy::dev::listener::listener::sse_listener;
 use jsonwebtoken::jwk::Jwk;
 use jsonwebtoken::{DecodingKey, Validation, decode, decode_header};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use serde_json::Value;
 use serde_json::map::Map;
-use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
@@ -27,7 +26,7 @@ pub struct JwtAuthenticator {
 }
 
 impl Serialize for JwtAuthenticator {
-	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
 	where
 		S: serde::Serializer,
 	{
@@ -107,7 +106,7 @@ impl JwtAuthenticator {
 		let (jwk, remote): (Jwk, Option<JwksRemoteSource>) = match &value.jwks {
 			Some(sse_listener::authn::jwt_config::Jwks::LocalJwks(local)) => match &local.source {
 				Some(common::local_data_source::Source::Inline(jwk)) => {
-					let jwk: Jwk = serde_json::from_slice(&jwk).map_err(JwkError::JwksParseError)?;
+					let jwk: Jwk = serde_json::from_slice(jwk).map_err(JwkError::JwksParseError)?;
 					(jwk, None)
 				},
 				Some(common::local_data_source::Source::FilePath(path)) => {
@@ -178,13 +177,23 @@ pub async fn sync_jwks_loop(
 	authn: Arc<RwLock<Option<JwtAuthenticator>>>,
 	ct: CancellationToken,
 ) -> Result<(), JwkError> {
+	let interval: Duration = authn
+		.read()
+		.await
+		.as_ref()
+		.map_or(Duration::from_secs(10), |authn| {
+			authn
+				.remote
+				.as_ref()
+				.map_or(Duration::from_secs(10), |remote| remote.refresh_interval)
+		});
 	loop {
 		tokio::select! {
 			_ = ct.cancelled() => {
 				tracing::info!("cancelled sync_jwks_loop");
 				return Ok(());
 			},
-			_ = tokio::time::sleep(Duration::from_secs(10)) => {
+			_ = tokio::time::sleep(interval) => {
 				let mut authenticator = authn.write().await;
 				match authenticator.as_mut() {
 					Some(authenticator) => match authenticator.sync_jwks().await {
