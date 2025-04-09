@@ -48,6 +48,4 @@ pub async fn run_local_client(
 	}
 
 	cfg.listener.listen(state_ref, metrics).await
-
-	// serve_static_listener(cfg.listener.clone(), state_ref, metrics).await
 }

@@ -1,14 +1,15 @@
 use std::sync::Arc;
 
-use rmcp::serve_server;
-use tracing::info;
-
 use crate::authn;
 use crate::proxyprotocol;
 use crate::relay;
+use crate::signal;
 use crate::sse::App as SseApp;
 use crate::xds;
+use rmcp::serve_server;
 use serde::{Deserialize, Serialize};
+use tokio_util::sync::CancellationToken;
+use tracing::info;
 
 #[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
 #[allow(clippy::large_enum_variant)]
@@ -94,10 +95,19 @@ impl Listener {
 				let mut run_set: tokio::task::JoinSet<Result<(), anyhow::Error>> =
 					tokio::task::JoinSet::new();
 				let clone = authenticator.clone();
+				let ct = CancellationToken::new();
+				let child_token = ct.child_token();
 				run_set.spawn(async move {
-					authn::sync_jwks_loop(clone)
+					authn::sync_jwks_loop(clone, child_token)
 						.await
 						.map_err(|e| anyhow::anyhow!("error syncing jwks: {:?}", e))
+				});
+
+				run_set.spawn(async move {
+					let sig = signal::Shutdown::new();
+					sig.wait().await;
+					ct.cancel();
+					Ok(())
 				});
 
 				let app = SseApp::new(state.clone(), metrics, authenticator);
@@ -113,6 +123,10 @@ impl Listener {
 				info!("serving sse on {}:{}", sse_listener.host, sse_listener.port);
 				run_set.spawn(async move {
 					axum::serve(listener, svc)
+						.with_graceful_shutdown(async {
+							let sig = signal::Shutdown::new();
+							sig.wait().await;
+						})
 						.await
 						.map_err(ServingError::Sse)
 						.inspect_err(|e| {

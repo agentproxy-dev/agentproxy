@@ -11,6 +11,7 @@ use tracing_subscriber::{self, EnvFilter};
 use mcp_proxy::admin::App as AdminApp;
 use mcp_proxy::metrics::App as MetricsApp;
 use mcp_proxy::relay;
+use mcp_proxy::signal;
 use mcp_proxy::xds;
 use mcp_proxy::xds::ProxyStateUpdater;
 use mcp_proxy::xds::XdsStore as ProxyState;
@@ -181,16 +182,22 @@ async fn start_metrics_service(registry: Arc<Registry>) -> Result<(), std::io::E
 	let listener = tokio::net::TcpListener::bind("127.0.0.1:9091").await?;
 	let app = MetricsApp::new(registry);
 	let router = app.router();
-	axum::serve(listener, router).await
+	axum::serve(listener, router)
+		.with_graceful_shutdown(async {
+			let sig = signal::Shutdown::new();
+			sig.wait().await;
+		})
+		.await
 }
 
 async fn start_admin_service(state: Arc<RwLock<ProxyState>>) -> Result<(), std::io::Error> {
 	let listener = tokio::net::TcpListener::bind("127.0.0.1:19000").await?;
 	let app = AdminApp::new(state);
 	let router = app.router();
-	axum::serve(listener, router).await
+	axum::serve(listener, router)
+		.with_graceful_shutdown(async {
+			let sig = signal::Shutdown::new();
+			sig.wait().await;
+		})
+		.await
 }
-/*
-Listener(1) -> Relay(1) -> Target(1-n)
-Listener(1) -> Relay(1) -> Target(1-n)
- */

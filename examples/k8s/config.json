@@ -1,0 +1,19 @@
+{
+  "type": "static",
+  "listener": {
+    "sse": {  
+      "host": "0.0.0.0",
+      "port": 3000
+    }
+  },
+  "targets": [
+    {
+      "name": "everything_remote",
+      "sse": {
+        "host": "everything",
+        "port": 3000,
+        "path": "/sse"
+      }
+    }
+  ]
+}

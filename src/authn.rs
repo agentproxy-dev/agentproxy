@@ -8,6 +8,8 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
+use tokio_util::sync::CancellationToken;
+
 #[derive(Debug)]
 pub enum AuthError {
 	InvalidToken(jsonwebtoken::errors::Error),
@@ -81,24 +83,34 @@ impl JwtAuthenticator {
 	}
 }
 
-pub async fn sync_jwks_loop(authn: Arc<RwLock<Option<JwtAuthenticator>>>) -> Result<(), JwkError> {
+pub async fn sync_jwks_loop(
+	authn: Arc<RwLock<Option<JwtAuthenticator>>>,
+	ct: CancellationToken,
+) -> Result<(), JwkError> {
 	loop {
-		let mut authenticator = authn.write().await;
-		match authenticator.as_mut() {
-			Some(authenticator) => match authenticator.sync_jwks().await {
-				Ok(_) => {
-					tracing::trace!("synced jwks");
-				},
-				Err(e) => {
-					tracing::error!("error syncing jwks: {:?}", e);
-				},
+		tokio::select! {
+			_ = ct.cancelled() => {
+				tracing::info!("cancelled sync_jwks_loop");
+				return Ok(());
 			},
-			None => {
-				tracing::trace!("no authenticator, skipping sync");
-			},
+			_ = tokio::time::sleep(Duration::from_secs(10)) => {
+				let mut authenticator = authn.write().await;
+				match authenticator.as_mut() {
+					Some(authenticator) => match authenticator.sync_jwks().await {
+						Ok(_) => {
+							tracing::trace!("synced jwks");
+						},
+						Err(e) => {
+							tracing::error!("error syncing jwks: {:?}", e);
+						},
+					},
+					None => {
+						tracing::trace!("no authenticator, skipping sync");
+					},
+				}
+				drop(authenticator);
+			}
 		}
-		drop(authenticator);
-		tokio::time::sleep(Duration::from_secs(10)).await;
 	}
 }
 

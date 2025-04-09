@@ -1,0 +1,119 @@
+# Deployment Manifest for the MCP Proxy
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-proxy
+  labels:
+    app: mcp-proxy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mcp-proxy
+  template:
+    metadata:
+      labels:
+        app: mcp-proxy
+    spec:
+      containers:
+        - name: mcp-proxy
+          image: ghcr.io/mcp-proxy/mcp-proxy:latest
+          args:
+            - -f
+            - /etc/mcp-proxy/config.json
+          ports:
+            - containerPort: 3000
+          volumeMounts:
+            - name: mcp-proxy-config
+              mountPath: /etc/mcp-proxy/config.json
+              subPath: config.json
+      volumes:
+        - name: mcp-proxy-config
+          configMap:
+            name: mcp-proxy-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-proxy
+spec:
+  selector:
+    app: mcp-proxy
+  ports:
+    - protocol: TCP
+      port: 3000
+      targetPort: 3000
+---
+# Deployment Manifest for the MCP Proxy
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: everything
+  labels:
+    app: everything
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: everything
+  template:
+    metadata:
+      labels:
+        app: everything
+    spec:
+      containers:
+        - name: everything
+          image: ghcr.io/mcp-proxy/mcp-proxy:latest-ext
+          args:
+            - -f
+            - /etc/mcp-proxy/config.json
+          ports:
+            - containerPort: 3000
+          volumeMounts:
+            - name: everything-config
+              mountPath: /etc/mcp-proxy/config.json
+              subPath: config.json
+      volumes:
+        - name: everything-config
+          configMap:
+            name: everything-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: everything
+spec:
+  selector:
+    app: everything
+  ports:
+    - protocol: TCP
+      port: 3000
+      targetPort: 3000
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: everything-config
+data:
+  config.json: |
+    {
+      "type": "static",
+      "listener": {
+        "sse": {
+          "host": "0.0.0.0",
+          "port": 3000
+        }
+      },
+      "targets": [
+        {
+          "name": "everything",
+          "stdio": {
+            "cmd": "npx",
+            "args": [
+              "@modelcontextprotocol/server-everything"
+            ]
+          }
+        }
+      ]
+    }
+

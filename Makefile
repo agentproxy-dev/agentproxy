@@ -14,6 +14,10 @@ KIND_CLUSTER_NAME ?= mcp-proxy
 docker:
 	$(DOCKER_BUILDER) build $(DOCKER_BUILD_ARGS) -t $(IMAGE_FULL_NAME) .
 
+.PHONY: docker-ext
+docker-ext: docker
+	$(DOCKER_BUILDER) build $(DOCKER_BUILD_ARGS) -t $(IMAGE_FULL_NAME)-ext -f Dockerfile.ext .
+
 # build
 .PHONY: build
 build:
