@@ -2,16 +2,14 @@
   "type": "static",
   "listener": {
     "sse": {
-      "host": "0.0.0.0",
+      "address": "0.0.0.0",
       "port": 3000,
       "authn": {
         "jwt": {
           "issuer": ["me"],
           "audience": ["me.com"],
-          "jwks": {
-            "local": {
-              "file": "manifests/jwt/pub-key"
-            }
+          "local_jwks": {
+            "file_path": "manifests/jwt/pub-key"
           }
         }
       }

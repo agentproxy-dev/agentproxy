@@ -1,4 +1,4 @@
-FROM docker.io/library/rust:1.85.1-slim-bookworm AS builder 
+FROM docker.io/library/rust:1.86.0-slim-bookworm AS builder 
 
 ARG TARGETARCH
 

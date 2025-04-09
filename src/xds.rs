@@ -12,6 +12,7 @@ pub use types::*;
 
 use crate::proto::mcpproxy::dev::common::LocalDataSource;
 use crate::proto::mcpproxy::dev::common::local_data_source::Source as XdsSource;
+use crate::proto::mcpproxy::dev::listener::Listener as XdsListener;
 use crate::proto::mcpproxy::dev::rbac::Config as XdsRbac;
 use crate::proto::mcpproxy::dev::target::Target as XdsTarget;
 use crate::proto::mcpproxy::dev::target::target::Target as XdsTargetSpec;
@@ -330,5 +331,5 @@ impl XdsStore {
 pub struct Config {
 	pub xds_address: String,
 	pub metadata: HashMap<String, String>,
-	pub listener: inbound::Listener,
+	pub listener: XdsListener,
 }

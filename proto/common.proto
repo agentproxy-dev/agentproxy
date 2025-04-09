@@ -1,5 +1,6 @@
 syntax = "proto3";
 
+import "google/protobuf/duration.proto";
 package mcpproxy.dev.common;
 
 message LocalDataSource {
@@ -7,4 +8,13 @@ message LocalDataSource {
     string file_path = 1;
     bytes inline = 2;
   }
+}
+
+message RemoteDataSource {
+  string url = 1;
+  uint32 port = 2;
+  string path = 3;
+  map<string, string> headers = 4;
+  google.protobuf.Duration initial_timeout = 5;
+  google.protobuf.Duration refresh_interval = 6;
 }

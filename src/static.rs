@@ -1,8 +1,9 @@
 use std::sync::Arc;
 use tracing::{debug, info, trace};
 
-use crate::inbound::Listener;
+use crate::inbound;
 use crate::outbound;
+use crate::proto::mcpproxy::dev::listener::Listener as XdsListener;
 use crate::proto::mcpproxy::dev::target::Target as XdsTarget;
 use crate::rbac;
 use crate::relay;
@@ -16,7 +17,7 @@ pub struct StaticConfig {
 	#[serde(default)]
 	pub policies: Vec<rbac::Rule>,
 	#[serde(default)]
-	pub listener: Listener,
+	pub listener: XdsListener,
 }
 
 pub async fn run_local_client(
@@ -47,5 +48,9 @@ pub async fn run_local_client(
 		info!(%num_targets, %num_policies, "local config initialized");
 	}
 
-	cfg.listener.listen(state_ref, metrics).await
+	let listener = inbound::Listener::from_xds(cfg.listener.clone())
+		.await
+		.unwrap();
+
+	listener.listen(state_ref, metrics).await
 }

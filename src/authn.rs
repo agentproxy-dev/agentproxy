@@ -1,3 +1,5 @@
+use crate::proto::mcpproxy::dev::common;
+use crate::proto::mcpproxy::dev::listener::listener::sse_listener;
 use jsonwebtoken::jwk::Jwk;
 use jsonwebtoken::{DecodingKey, Validation, decode, decode_header};
 use serde::{Deserialize, Serialize};
@@ -15,12 +17,32 @@ pub enum AuthError {
 	InvalidToken(jsonwebtoken::errors::Error),
 }
 
+#[derive(Clone)]
 pub struct JwtAuthenticator {
 	key: Arc<RwLock<MutableKey>>,
 	issuer: Option<HashSet<String>>,
 	audience: Option<HashSet<String>>,
 
 	remote: Option<JwksRemoteSource>,
+}
+
+impl Serialize for JwtAuthenticator {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: serde::Serializer,
+	{
+		todo!()
+	}
+}
+
+impl std::fmt::Debug for JwtAuthenticator {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(
+			f,
+			"JwtAuthenticator {{ issuer: {:?}, audience: {:?} }}",
+			self.issuer, self.audience
+		)
+	}
 }
 
 #[derive(Debug)]
@@ -30,39 +52,108 @@ pub enum JwkError {
 	JwksParseError(serde_json::Error),
 	InvalidJWK(jsonwebtoken::errors::Error),
 	UnsupportedAlgorithm,
+	InvalidConfig(String),
+}
+
+#[derive(Clone)]
+struct JwksRemoteSource {
+	client: reqwest::Client,
+	url: String,
+	refresh_interval: Duration,
+}
+
+fn duration_from_pb(duration: Option<pbjson_types::Duration>, default: Duration) -> Duration {
+	match duration {
+		Some(duration) => {
+			Duration::from_secs(duration.seconds as u64) + Duration::from_nanos(duration.nanos as u64)
+		},
+		None => default,
+	}
+}
+
+impl JwksRemoteSource {
+	fn from_xds(remote: &common::RemoteDataSource) -> Result<Self, JwkError> {
+		let url = format!("{}:{}", remote.url, remote.port);
+		let url = format!("{}/{}", url, remote.path);
+		let client = reqwest::ClientBuilder::new()
+			.timeout(duration_from_pb(
+				remote.initial_timeout,
+				Duration::from_secs(10),
+			))
+			.build()
+			.map_err(JwkError::JwksFetchError)?;
+		Ok(Self {
+			client,
+			url,
+			refresh_interval: duration_from_pb(remote.refresh_interval, Duration::from_secs(10)),
+		})
+	}
+
+	async fn fetch_jwks(&self) -> Result<Jwk, JwkError> {
+		let response = self
+			.client
+			.get(&self.url)
+			.send()
+			.await
+			.map_err(JwkError::JwksFetchError)?;
+		let jwk: Jwk = serde_json::from_str(&response.text().await.map_err(JwkError::JwksFetchError)?)
+			.map_err(JwkError::JwksParseError)?;
+		Ok(jwk)
+	}
 }
 
 impl JwtAuthenticator {
-	pub async fn new(value: &JwtConfig) -> Result<Self, JwkError> {
+	pub async fn new(value: &sse_listener::authn::JwtConfig) -> Result<Self, JwkError> {
 		let (jwk, remote): (Jwk, Option<JwksRemoteSource>) = match &value.jwks {
-			JwksSource::Local(source) => match source {
-				JwksLocalSource::Inline(jwk) => {
-					let jwk: Jwk = serde_json::from_str(jwk).map_err(JwkError::JwksParseError)?;
+			Some(sse_listener::authn::jwt_config::Jwks::LocalJwks(local)) => match &local.source {
+				Some(common::local_data_source::Source::Inline(jwk)) => {
+					let jwk: Jwk = serde_json::from_slice(&jwk).map_err(JwkError::JwksParseError)?;
 					(jwk, None)
 				},
-				JwksLocalSource::File(path) => {
+				Some(common::local_data_source::Source::FilePath(path)) => {
 					let file = std::fs::File::open(path).map_err(JwkError::JwksFileError)?;
 					let jwk: Jwk = serde_json::from_reader(file).map_err(JwkError::JwksParseError)?;
 					(jwk, None)
 				},
+				_ => {
+					return Err(JwkError::InvalidConfig(
+						"invalid local JWKS source".to_string(),
+					));
+				},
 			},
-			JwksSource::Remote(remote) => {
-				let jwk = fetch_jwks(remote).await?;
+			Some(sse_listener::authn::jwt_config::Jwks::RemoteJwks(remote)) => {
+				let remote = JwksRemoteSource::from_xds(remote)?;
+				let jwk = remote.fetch_jwks().await?;
 				(jwk, Some(remote.clone()))
+			},
+			_ => {
+				return Err(JwkError::InvalidConfig("no JWKS provided".to_string()));
 			},
 		};
 		if !jwk.is_supported() {
 			tracing::error!("unsupported algorithm");
 			return Err(JwkError::UnsupportedAlgorithm);
 		}
+		let issuer = match value.issuer.len() {
+			0 => None,
+			_ => Some(HashSet::<String>::from_iter(
+				value.issuer.iter().map(|s| s.to_string()),
+			)),
+		};
+		let audience = match value.audience.len() {
+			0 => None,
+			_ => Some(HashSet::<String>::from_iter(
+				value.audience.iter().map(|s| s.to_string()),
+			)),
+		};
 		Ok(JwtAuthenticator {
 			key: Arc::new(RwLock::new(
 				DecodingKey::from_jwk(&jwk)
 					.map_err(JwkError::InvalidJWK)?
 					.into(),
 			)),
-			issuer: value.issuer.clone(),
-			audience: value.audience.clone(),
+			issuer,
+			audience,
 			remote,
 		})
 	}
@@ -70,7 +161,7 @@ impl JwtAuthenticator {
 	pub async fn sync_jwks(&mut self) -> Result<(), JwkError> {
 		match &self.remote {
 			Some(remote) => {
-				let jwk = fetch_jwks(remote).await?;
+				let jwk = remote.fetch_jwks().await?;
 				self
 					.key
 					.write()
@@ -114,27 +205,6 @@ pub async fn sync_jwks_loop(
 	}
 }
 
-async fn fetch_jwks(remote: &JwksRemoteSource) -> Result<Jwk, JwkError> {
-	let url = format!("{}:{}", remote.url, remote.port);
-	let url = format!(
-		"{}/{}",
-		url,
-		remote.path.clone().unwrap_or("jwks".to_string())
-	);
-	let client = reqwest::ClientBuilder::new()
-		.timeout(remote.initial_timeout.unwrap_or(Duration::from_secs(10)))
-		.build()
-		.map_err(JwkError::JwksFetchError)?;
-	let response = client
-		.get(url)
-		.send()
-		.await
-		.map_err(JwkError::JwksFetchError)?;
-	let jwk: Jwk = serde_json::from_str(&response.text().await.map_err(JwkError::JwksFetchError)?)
-		.map_err(JwkError::JwksParseError)?;
-	Ok(jwk)
-}
-
 // MutableKey is a wrapper around DecodingKey that allows us to update the key atomically
 pub struct MutableKey {
 	key: DecodingKey,
@@ -173,43 +243,4 @@ impl JwtAuthenticator {
 		tracing::info!("token data: {:?}", token_data);
 		Ok(crate::rbac::Claims::new(token_data.claims))
 	}
-}
-
-#[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
-pub enum Authn {
-	#[serde(rename = "jwt")]
-	Jwt(JwtConfig),
-}
-
-#[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
-pub struct JwtConfig {
-	pub issuer: Option<HashSet<String>>,
-	pub audience: Option<HashSet<String>>,
-	pub jwks: JwksSource,
-}
-
-#[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
-pub enum JwksSource {
-	#[serde(rename = "local")]
-	Local(JwksLocalSource),
-	#[serde(rename = "remote")]
-	Remote(JwksRemoteSource),
-}
-
-#[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
-pub struct JwksRemoteSource {
-	pub url: String,
-	pub port: u16,
-	pub path: Option<String>,
-	pub headers: Option<HashMap<String, String>>,
-	pub initial_timeout: Option<Duration>,
-	pub refresh_interval: Option<Duration>,
-}
-
-#[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
-pub enum JwksLocalSource {
-	#[serde(rename = "file")]
-	File(String),
-	#[serde(rename = "inline")]
-	Inline(String),
 }
