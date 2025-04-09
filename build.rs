@@ -58,6 +58,7 @@ fn main() -> Result<(), anyhow::Error> {
 			for line in String::from_utf8(output.stdout).unwrap().lines() {
 				// Each line looks like `mcp-proxy.dev.buildGitRevision=abc`
 				if let Some((key, value)) = line.split_once('=') {
+          #[allow(clippy::double_ended_iterator_last)]
 					let key = key.split('.').last().unwrap();
 					println!("cargo:rustc-env=MCPGW_BUILD_{key}={value}");
 				} else {

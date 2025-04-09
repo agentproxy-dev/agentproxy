@@ -57,7 +57,7 @@ impl Listener {
 		metrics: Arc<relay::metrics::Metrics>,
 	) -> Result<(), ServingError> {
 		match self {
-			Listener::Stdio {} => {
+			Listener::Stdio => {
 				let relay = serve_server(
 					// TODO: This is a hack
 					relay::Relay::new(state.clone(), metrics),

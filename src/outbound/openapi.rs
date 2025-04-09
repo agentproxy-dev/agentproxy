@@ -1,5 +1,3 @@
-use crate::proto::mcpproxy::dev::common::LocalDataSource;
-use crate::proto::mcpproxy::dev::common::local_data_source::Source as XdsSource;
 use http::{Method, header::ACCEPT};
 use openapiv3::{OpenAPI, Parameter, ReferenceOr, RequestBody, Schema, SchemaKind, Type};
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
@@ -475,22 +473,6 @@ impl Default for JsonSchema {
 			properties: JsonObject::new(),
 			r#type: "object".to_string(),
 		}
-	}
-}
-
-pub(crate) fn resolve_local_data_source(
-	local_data_source: &LocalDataSource,
-) -> Result<Vec<u8>, ParseError> {
-	match local_data_source
-		.source
-		.as_ref()
-		.ok_or(ParseError::MissingFields)?
-	{
-		XdsSource::FilePath(file_path) => {
-			let file = std::fs::read(file_path).map_err(|_| ParseError::MissingFields)?;
-			Ok(file)
-		},
-		XdsSource::Inline(inline) => Ok(inline.clone()),
 	}
 }
 

@@ -1,5 +1,6 @@
 pub mod mcpproxy {
 	pub mod dev {
+		#[allow(clippy::all)]
 		pub mod rbac {
 			tonic::include_proto!("mcpproxy.dev.rbac");
 			include!(concat!(env!("OUT_DIR"), "/mcpproxy.dev.rbac.serde.rs"));
@@ -15,6 +16,7 @@ pub mod mcpproxy {
 			include!(concat!(env!("OUT_DIR"), "/mcpproxy.dev.listener.serde.rs"));
 		}
 
+		#[allow(clippy::all)]
 		pub mod common {
 			tonic::include_proto!("mcpproxy.dev.common");
 			include!(concat!(env!("OUT_DIR"), "/mcpproxy.dev.common.serde.rs"));
