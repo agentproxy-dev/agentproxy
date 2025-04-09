@@ -20,13 +20,10 @@
       "key": "sub",
       "value": "me",
       "resource": {
-        "tool": {
-          "id": "everything:echo"
-        }
+        "type": "TOOL",
+        "id": "everything:echo"
       },
-      "matcher": {
-        "equals": {}
-      }
+      "matcher": "EQUALS"
     }
   ],
   "targets": [

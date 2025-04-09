@@ -2,10 +2,9 @@ use std::sync::Arc;
 use tracing::{debug, info, trace};
 
 use crate::inbound;
-use crate::outbound;
 use crate::proto::mcpproxy::dev::listener::Listener as XdsListener;
 use crate::proto::mcpproxy::dev::target::Target as XdsTarget;
-use crate::rbac;
+use crate::proto::mcpproxy::dev::rbac::{Config as XdsRuleSet, Rule as XdsRule};
 use crate::relay;
 use crate::xds::XdsStore as ProxyState;
 
@@ -15,7 +14,7 @@ pub struct StaticConfig {
 	#[serde(default)]
 	pub targets: Vec<XdsTarget>,
 	#[serde(default)]
-	pub policies: Vec<rbac::Rule>,
+	pub policies: Vec<XdsRule>,
 	#[serde(default)]
 	pub listener: XdsListener,
 }
@@ -41,10 +40,15 @@ pub async fn run_local_client(
 			trace!("inserting target {}", &target.name);
 			state
 				.targets
-				.insert(outbound::Target::try_from(target).unwrap());
+				.insert(target)
+				.expect("failed to insert target into store");
 		}
-		let rule_set = rbac::RuleSet::new("test".to_string(), "test".to_string(), cfg.policies.clone());
-		state.policies.insert(rule_set);
+    let rule_set = XdsRuleSet{
+      name: "test".to_string(),
+      namespace: "test".to_string(),
+      rules: cfg.policies.clone(),
+    };
+		state.policies.insert(rule_set).expect("failed to insert rule set into store");
 		info!(%num_targets, %num_policies, "local config initialized");
 	}
 

@@ -1,6 +1,5 @@
 use crate::proto::mcpproxy::dev::rbac::rule;
 use crate::proto::mcpproxy::dev::rbac::{Config as XdsRuleSet, Rule as XdsRule};
-use itertools::{self, Itertools};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use serde_json::map::Map;
@@ -36,13 +35,17 @@ impl RuleSet {
 	}
 }
 
-impl From<&XdsRuleSet> for RuleSet {
-	fn from(value: &XdsRuleSet) -> Self {
-		Self {
+impl TryFrom<&XdsRuleSet> for RuleSet {
+	type Error = anyhow::Error;
+	fn try_from(value: &XdsRuleSet) -> Result<Self, Self::Error> {
+		let rules = value.rules.iter().map(|rule| -> Result<Rule, anyhow::Error> {
+			Rule::try_from(rule)
+		}).collect::<Result<Vec<Rule>, anyhow::Error>>()?;
+		Ok(Self {
 			name: value.name.clone(),
 			namespace: value.namespace.clone(),
-			rules: value.rules.iter().map_into().collect(),
-		}
+			rules,
+		})
 	}
 }
 
@@ -61,14 +64,17 @@ pub struct Rule {
 	resource: ResourceType,
 }
 
-impl From<&XdsRule> for Rule {
-	fn from(value: &XdsRule) -> Self {
-		Rule {
+impl TryFrom<&XdsRule> for Rule {
+	type Error = anyhow::Error;
+	fn try_from(value: &XdsRule) -> Result<Self, Self::Error> {
+		let matcher = Matcher::from(&value.matcher.try_into()?);
+		let resource = value.resource.as_ref().unwrap().try_into()?;
+		Ok(Rule {
 			key: value.key.clone(),
 			value: value.value.clone(),
-			matcher: Matcher::from(&value.matcher.try_into().unwrap()),
-			resource: value.resource.as_ref().unwrap().try_into().unwrap(),
-		}
+			matcher,
+			resource,
+		})
 	}
 }
 

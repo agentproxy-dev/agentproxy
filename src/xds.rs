@@ -106,11 +106,9 @@ impl ProxyStateUpdateMutator {
         fields(name=%target.name),
     )]
 	pub fn insert_target(&self, state: &mut XdsStore, target: XdsTarget) -> anyhow::Result<()> {
-		let target = outbound::Target::try_from(target)
-			.map_err(|e| anyhow::anyhow!("failed to parse target: {e}"))?;
 		// TODO: This is a hack
 		// TODO: Separate connection/LB from insertion
-		state.targets.insert(target);
+		state.targets.insert(target)?;
 		Ok(())
 	}
 
@@ -130,8 +128,7 @@ impl ProxyStateUpdateMutator {
         skip_all,
     )]
 	pub fn insert_rbac(&self, state: &mut XdsStore, rbac: XdsRbac) -> anyhow::Result<()> {
-		let rule_set = rbac::RuleSet::from(&rbac);
-		state.policies.insert(rule_set);
+		state.policies.insert(rbac)?;
 		Ok(())
 	}
 
@@ -231,6 +228,8 @@ pub fn resolve_local_data_source(
 #[derive(Clone, Serialize, Deserialize)]
 pub struct TargetStore {
 	by_name: HashMap<String, outbound::Target>,
+
+  by_name_protos: HashMap<String, XdsTarget>,
 }
 
 impl Default for TargetStore {
@@ -243,21 +242,31 @@ impl TargetStore {
 	pub fn new() -> Self {
 		Self {
 			by_name: HashMap::new(),
+			by_name_protos: HashMap::new(),
 		}
 	}
 
 	pub fn remove(&mut self, name: &str) {
 		// TODO: Drain connections from target
 		self.by_name.remove(name);
+		self.by_name_protos.remove(name);
 	}
 
-	pub fn insert(&mut self, target: outbound::Target) {
-		self.by_name.insert(target.name.clone(), target);
+	pub fn insert(&mut self, target: XdsTarget) -> anyhow::Result<()> {
+    let target_name = target.name.clone();
+		let outbound_target = outbound::Target::try_from(target.clone())?;
+		self.by_name.insert(target_name.clone(), outbound_target);
+		self.by_name_protos.insert(target_name, target);
+		Ok(())
 	}
 
 	pub fn get(&self, name: &str) -> Option<&outbound::Target> {
 		self.by_name.get(name)
 	}
+
+  pub fn get_proto(&self, name: &str) -> Option<&XdsTarget> {
+    self.by_name_protos.get(name)
+  }
 
 	pub fn iter(&self) -> impl Iterator<Item = (String, &outbound::Target)> {
 		self
@@ -268,18 +277,21 @@ impl TargetStore {
 
 	pub fn clear(&mut self) {
 		self.by_name.clear();
+		self.by_name_protos.clear();
 	}
 }
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct PolicyStore {
 	by_name: HashMap<String, rbac::RuleSet>,
+  by_name_protos: HashMap<String, XdsRbac>,
 }
 
 impl PolicyStore {
 	pub fn new() -> Self {
 		Self {
 			by_name: HashMap::new(),
+			by_name_protos: HashMap::new(),
 		}
 	}
 }
@@ -291,8 +303,12 @@ impl Default for PolicyStore {
 }
 
 impl PolicyStore {
-	pub fn insert(&mut self, policy: rbac::RuleSet) {
-		self.by_name.insert(policy.to_key(), policy);
+	pub fn insert(&mut self, policy: XdsRbac) -> anyhow::Result<()> {
+		let policy_name = policy.name.clone();
+		let rule_set = rbac::RuleSet::try_from(&policy)?;
+		self.by_name.insert(policy_name.clone(), rule_set);
+		self.by_name_protos.insert(policy_name, policy);
+		Ok(())
 	}
 
 	pub fn remove(&mut self, name: &str) {
