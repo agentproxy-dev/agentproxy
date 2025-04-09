@@ -159,14 +159,7 @@ jobs:
       with:
         repo-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Build
-      run: | 
-        # if workflow_dispatch is used, use the version input
-        if [ -n "${{ github.event.inputs.version }}" ]; then
-          export VERSION=${{ github.event.inputs.version }}
-        else
-          export VERSION=$(echo "$GITHUB_REF" | cut -c12-)
-        fi
-        make build
+      run: make build
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
