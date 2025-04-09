@@ -114,6 +114,38 @@ jobs:
         run: |
           docker buildx imagetools inspect ${{ env.REGISTRY_IMAGE }}:${{ steps.meta.outputs.version }}
 
+  ext-image:
+    needs:
+      - push-image
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+    - name: Login to GitHub Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v3
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build and push
+      env:
+        DOCKER_BUILD_ARGS: "--push --platform linux/amd64,linux/arm64"
+        DOCKER_BUILDER: "docker buildx"
+      run: |
+        # if workflow_dispatch is used, use the version input
+        if [ -n "${{ github.event.inputs.version }}" ]; then
+          export VERSION=${{ github.event.inputs.version }}
+        else
+          export VERSION=$(echo "$GITHUB_REF" | cut -c12-)
+        fi
+        make docker-ext
   build:
     runs-on: ${{ matrix.os }}
     strategy:
@@ -127,7 +159,14 @@ jobs:
       with:
         repo-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Build
-      run: make build
+      run: | 
+        # if workflow_dispatch is used, use the version input
+        if [ -n "${{ github.event.inputs.version }}" ]; then
+          export VERSION=${{ github.event.inputs.version }}
+        else
+          export VERSION=$(echo "$GITHUB_REF" | cut -c12-)
+        fi
+        make build
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
@@ -135,7 +174,7 @@ jobs:
         path: target/release/mcp-proxy
   release:
     needs:
-    - push-image
+    - ext-image
     - build
     runs-on: ubuntu-latest
     permissions:

@@ -15,7 +15,7 @@ docker:
 	$(DOCKER_BUILDER) build $(DOCKER_BUILD_ARGS) -t $(IMAGE_FULL_NAME) .
 
 .PHONY: docker-ext
-docker-ext: docker
+docker-ext:
 	$(DOCKER_BUILDER) build $(DOCKER_BUILD_ARGS) -t $(IMAGE_FULL_NAME)-ext -f Dockerfile.ext .
 
 # build
