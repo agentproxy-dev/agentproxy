@@ -1,5 +1,5 @@
-use crate::xds::mcp::kgateway_dev::target::LocalDataSource;
-use crate::xds::mcp::kgateway_dev::target::local_data_source::Source as XdsSource;
+use crate::proto::mcpproxy::dev::common::LocalDataSource;
+use crate::proto::mcpproxy::dev::common::local_data_source::Source as XdsSource;
 use http::{Method, header::ACCEPT};
 use openapiv3::{OpenAPI, Parameter, ReferenceOr, RequestBody, Schema, SchemaKind, Type};
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
@@ -38,6 +38,8 @@ pub enum ParseError {
 	InformationRequired(String),
 	#[error("serde error: {0}")]
 	SerdeError(#[from] serde_json::Error),
+	#[error("io error: {0}")]
+	IoError(#[from] std::io::Error),
 }
 
 pub(crate) fn get_server_prefix(server: &OpenAPI) -> Result<String, ParseError> {

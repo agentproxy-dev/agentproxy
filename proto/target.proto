@@ -1,15 +1,8 @@
 syntax = "proto3";
 
-package mcp.kgateway.dev.target.v1alpha1;
+package mcpproxy.dev.target;
 
-// import "google/protobuf/struct.proto";
-
-message LocalDataSource {
-  oneof source {
-    string file_path = 1;
-    bytes inline = 2;
-  }
-}
+import "common.proto";
 
 message Target {
   // The name of the target.
@@ -47,7 +40,7 @@ message Target {
     // The port of the target.
     uint32 port = 2;
     // The schema of the target.
-    LocalDataSource schema = 3;
+    mcpproxy.dev.common.LocalDataSource schema = 3;
   }
 }
 

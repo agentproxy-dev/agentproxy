@@ -3,10 +3,10 @@ use tracing::{debug, info, trace};
 
 use crate::inbound::Listener;
 use crate::outbound;
+use crate::proto::mcpproxy::dev::target::Target as XdsTarget;
 use crate::rbac;
 use crate::relay;
 use crate::xds::XdsStore as ProxyState;
-use crate::xds::mcp::kgateway_dev::target::Target as XdsTarget;
 
 #[derive(Default, Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

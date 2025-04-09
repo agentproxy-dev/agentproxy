@@ -10,13 +10,13 @@ use tracing_subscriber::{self, EnvFilter};
 
 use mcp_proxy::admin::App as AdminApp;
 use mcp_proxy::metrics::App as MetricsApp;
+use mcp_proxy::proto::mcpproxy::dev::rbac::Config as XdsRbac;
+use mcp_proxy::proto::mcpproxy::dev::target::Target as XdsTarget;
 use mcp_proxy::relay;
 use mcp_proxy::signal;
 use mcp_proxy::xds;
 use mcp_proxy::xds::ProxyStateUpdater;
 use mcp_proxy::xds::XdsStore as ProxyState;
-use mcp_proxy::xds::types::mcp::kgateway_dev::rbac::Config as XdsRbac;
-use mcp_proxy::xds::types::mcp::kgateway_dev::target::Target as XdsTarget;
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {

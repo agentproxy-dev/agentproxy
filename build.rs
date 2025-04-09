@@ -12,6 +12,7 @@ fn main() -> Result<(), anyhow::Error> {
 		"proto/rbac.proto",
 		"proto/target.proto",
 		"proto/listener.proto",
+		"proto/common.proto",
 	]
 	.iter()
 	.map(|name| std::env::current_dir().unwrap().join(name))
@@ -83,9 +84,10 @@ fn main() -> Result<(), anyhow::Error> {
 	pbjson_build::Builder::new()
 		.register_descriptors(&descriptor_set)?
 		.build(&[
-			".mcp.kgateway.dev.target.v1alpha1",
-			".mcp.kgateway.dev.rbac.v1alpha1",
-			".mcp.kgateway.dev.listener.v1alpha1",
+			".mcpproxy.dev.target",
+			".mcpproxy.dev.rbac",
+			".mcpproxy.dev.listener",
+			".mcpproxy.dev.common",
 		])?;
 
 	Ok(())

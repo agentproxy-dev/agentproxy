@@ -1,19 +1,15 @@
 syntax = "proto3";
 
-package mcp.kgateway.dev.listener.v1alpha1;
+package mcpproxy.dev.listener;
 
-message LocalDataSource {
-  oneof source {
-    string file_path = 1;
-    bytes inline = 2;
-  }
-}
+import "common.proto";
+
 
 message Listener {
   message SseListener { 
     message TlsConfig {
-      LocalDataSource key_pem = 1;
-      LocalDataSource cert_pem = 2;
+      mcpproxy.dev.common.LocalDataSource key_pem = 1;
+      mcpproxy.dev.common.LocalDataSource cert_pem = 2;
     }
     string address = 1;
     uint32 port = 2;

@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package mcpproxy.dev.common;
+
+message LocalDataSource {
+  oneof source {
+    string file_path = 1;
+    bytes inline = 2;
+  }
+}

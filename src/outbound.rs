@@ -1,4 +1,5 @@
-use crate::xds::mcp::kgateway_dev::target::target::OpenApiTarget as XdsOpenAPITarget;
+use crate::proto;
+use crate::proto::mcpproxy::dev::target::target::OpenApiTarget as XdsOpenAPITarget;
 use openapiv3::OpenAPI;
 use rmcp::model::Tool;
 use serde::{Deserialize, Serialize};
@@ -42,7 +43,8 @@ impl TryFrom<XdsOpenAPITarget> for OpenAPITarget {
 
 	fn try_from(value: XdsOpenAPITarget) -> Result<Self, Self::Error> {
 		let schema = value.schema.ok_or(openapi::ParseError::MissingSchema)?;
-		let schema_bytes = openapi::resolve_local_data_source(&schema)?;
+		let schema_bytes =
+			proto::resolve_local_data_source(&schema.source.ok_or(openapi::ParseError::MissingFields)?)?;
 		let schema: OpenAPI =
 			serde_json::from_slice(&schema_bytes).map_err(openapi::ParseError::SerdeError)?;
 		let tools = openapi::parse_openapi_schema(&schema)?;

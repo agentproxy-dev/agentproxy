@@ -10,15 +10,15 @@ pub use client::*;
 pub use metrics::*;
 pub use types::*;
 
-use xds::mcp::kgateway_dev::rbac::Config as XdsRbac;
-use xds::mcp::kgateway_dev::target::local_data_source::Source as XdsSource;
-use xds::mcp::kgateway_dev::target::target::Target as XdsTargetSpec;
-use xds::mcp::kgateway_dev::target::{LocalDataSource, Target as XdsTarget};
+use crate::proto::mcpproxy::dev::common::LocalDataSource;
+use crate::proto::mcpproxy::dev::common::local_data_source::Source as XdsSource;
+use crate::proto::mcpproxy::dev::rbac::Config as XdsRbac;
+use crate::proto::mcpproxy::dev::target::Target as XdsTarget;
+use crate::proto::mcpproxy::dev::target::target::Target as XdsTargetSpec;
 
 use self::envoy::service::discovery::v3::DeltaDiscoveryRequest;
 use crate::rbac;
 use crate::strng::Strng;
-use crate::xds;
 use std::collections::HashMap;
 
 use crate::inbound;
@@ -27,7 +27,7 @@ use serde::{Deserialize, Serialize};
 
 pub mod client;
 pub mod metrics;
-pub mod types;
+mod types;
 
 struct DisplayStatus<'a>(&'a tonic::Status);
 

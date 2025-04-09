@@ -5,6 +5,7 @@ pub mod inbound;
 pub mod metrics;
 pub mod outbound;
 pub use outbound::backend;
+pub mod proto;
 pub mod proxyprotocol;
 pub mod rbac;
 pub mod relay;
