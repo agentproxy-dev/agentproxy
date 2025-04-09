@@ -1,4 +1,5 @@
-FROM ghcr.io/mcp-proxy/mcp-proxy:latest as source
+ARG VERSION="latest"
+FROM ghcr.io/mcp-proxy/mcp-proxy:${VERSION} as source
 
 FROM ghcr.io/astral-sh/uv:0.6.5-debian-slim AS final
 

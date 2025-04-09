@@ -136,7 +136,6 @@ jobs:
 
     - name: Build and push
       env:
-        DOCKER_BUILD_ARGS: "--push --platform linux/amd64,linux/arm64"
         DOCKER_BUILDER: "docker buildx"
       run: |
         # if workflow_dispatch is used, use the version input
@@ -145,7 +144,7 @@ jobs:
         else
           export VERSION=$(echo "$GITHUB_REF" | cut -c12-)
         fi
-        make docker-ext
+        make docker-ext DOCKER_BUILD_ARGS="--push --platform linux/amd64,linux/arm64 --build-arg VERSION=$VERSION"
   build:
     runs-on: ${{ matrix.os }}
     strategy:
