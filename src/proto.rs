@@ -25,6 +25,23 @@ pub mod aidp {
         include!(concat!(env!("OUT_DIR"), "/aidp.dev.mcp.listener.serde.rs"));
       }
     }
+    pub mod a2a {
+      #[allow(clippy::all)]
+      pub mod listener {
+        tonic::include_proto!("aidp.dev.a2a.listener");
+        include!(concat!(env!("OUT_DIR"), "/aidp.dev.a2a.listener.serde.rs"));
+      }
+      #[allow(clippy::all)]
+      pub mod target {
+        tonic::include_proto!("aidp.dev.a2a.target");
+        include!(concat!(env!("OUT_DIR"), "/aidp.dev.a2a.target.serde.rs"));
+      }
+      #[allow(clippy::all)]
+      pub mod rbac {
+        tonic::include_proto!("aidp.dev.a2a.rbac");
+        include!(concat!(env!("OUT_DIR"), "/aidp.dev.a2a.rbac.serde.rs"));
+      }
+    }
 	}
 }
 
