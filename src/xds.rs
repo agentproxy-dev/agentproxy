@@ -10,11 +10,11 @@ pub use client::*;
 pub use metrics::*;
 pub use types::*;
 
+use crate::proto::aidp::dev::common::BackendAuth as XdsAuth;
+use crate::proto::aidp::dev::common::backend_auth::Auth as XdsAuthSpec;
 use crate::proto::aidp::dev::mcp::listener::Listener as XdsListener;
 use crate::proto::aidp::dev::mcp::rbac::Config as XdsRbac;
 use crate::proto::aidp::dev::mcp::target::Target as XdsTarget;
-use crate::proto::aidp::dev::common::BackendAuth as XdsAuth;
-use crate::proto::aidp::dev::common::backend_auth::Auth as XdsAuthSpec;
 use crate::proto::aidp::dev::mcp::target::target::Target as XdsTargetSpec;
 
 use self::envoy::service::discovery::v3::DeltaDiscoveryRequest;
