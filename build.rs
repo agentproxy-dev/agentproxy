@@ -8,10 +8,13 @@ fn main() -> Result<(), anyhow::Error> {
 	// Tell cargo to expect this (https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html).
 	println!("cargo::rustc-check-cfg=cfg(fuzzing)");
 	let proto_files = [
+		"proto/a2a/listener.proto",
+		"proto/a2a/target.proto",
+		"proto/a2a/rbac.proto",
+		"proto/mcp/listener.proto",
+		"proto/mcp/target.proto",
+		"proto/mcp/rbac.proto",
 		"proto/xds.proto",
-		"proto/rbac.proto",
-		"proto/target.proto",
-		"proto/listener.proto",
 		"proto/common.proto",
 	]
 	.iter()
@@ -85,10 +88,13 @@ fn main() -> Result<(), anyhow::Error> {
 	pbjson_build::Builder::new()
 		.register_descriptors(&descriptor_set)?
 		.build(&[
-			".mcpproxy.dev.target",
-			".mcpproxy.dev.rbac",
-			".mcpproxy.dev.listener",
-			".mcpproxy.dev.common",
+			".aidp.dev.a2a.target",
+			".aidp.dev.a2a.rbac",
+			".aidp.dev.a2a.listener",
+			".aidp.dev.mcp.target",
+			".aidp.dev.mcp.rbac",
+			".aidp.dev.mcp.listener",
+			".aidp.dev.common",
 		])?;
 
 	Ok(())

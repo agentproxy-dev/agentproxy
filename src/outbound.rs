@@ -1,5 +1,5 @@
 use crate::proto;
-use crate::proto::mcpproxy::dev::target::target::OpenApiTarget as XdsOpenAPITarget;
+use crate::proto::aidp::dev::mcp::target::target::OpenApiTarget as XdsOpenAPITarget;
 use openapiv3::OpenAPI;
 use rmcp::model::Tool;
 use serde::Serialize;

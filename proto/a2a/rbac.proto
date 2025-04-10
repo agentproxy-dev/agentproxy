@@ -1,0 +1,48 @@
+syntax = "proto3";
+
+package aidp.dev.a2a.rbac;
+
+// A rule that defines a resource type and a key-value pair 
+//that can be used to match against a resource.
+message Rule {
+
+
+  // The types of matchers which are supported.
+  enum Matcher {
+    // The value must be equal to the value in the claims.
+    EQUALS = 0;
+  }
+
+  message Resource {
+    // The type of resource that the rule applies to.
+    enum ResourceType {
+      TASK = 0;
+    }
+
+    string id = 1;
+    // The type of resource that the rule applies to.
+    ResourceType type = 2;
+  }
+
+  // The key to use when finding the value in the claims.
+  string key = 1;
+
+  // The value to use when matching the value in the claims.
+  string value = 2;
+
+  // The resource ID to use when matching the resource.
+  Resource resource = 4;
+
+  // The type of matcher to apply to the value once it is retrieved.
+  Matcher matcher = 5;
+}
+
+// A configuration that defines a set of RBAC rules for a given listener
+message Config {
+  // The name of the RBAC configuration.
+  string name = 1;
+  // The namespace of the RBAC configuration.
+  string namespace = 2;
+  // The rules that compose the RBAC configuration.
+  repeated Rule rules = 3;
+}

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use crate::proto::mcpproxy::dev::rbac::Config as Rbac;
-use crate::proto::mcpproxy::dev::target::Target;
+use crate::proto::aidp::dev::mcp::rbac::Config as Rbac;
+use crate::proto::aidp::dev::mcp::target::Target;
 use crate::xds::XdsStore;
 use axum::{
 	Json, Router,

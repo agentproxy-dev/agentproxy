@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package mcpproxy.dev.target;
+package aidp.dev.mcp.target;
 
 import "common.proto";
 import "google/protobuf/empty.proto";
@@ -15,12 +15,6 @@ message Target {
     StdioTarget stdio = 4;
   }
 
-  message Auth {
-    oneof auth {
-      google.protobuf.Empty passthrough = 1;
-    }
-  }
-
 
   message SseTarget {
     // The host of the target.
@@ -32,7 +26,7 @@ message Target {
     // The headers of the target.
     map<string, string> headers = 4;
 
-    Auth auth = 5;
+    aidp.dev.common.BackendAuth auth = 5;
   }
 
   message StdioTarget {
@@ -50,9 +44,9 @@ message Target {
     // The port of the target.
     uint32 port = 2;
     // The schema of the target.
-    mcpproxy.dev.common.LocalDataSource schema = 3;
+    aidp.dev.common.LocalDataSource schema = 3;
 
-    Auth auth = 4;
+    aidp.dev.common.BackendAuth auth = 4;
   }
 }
 

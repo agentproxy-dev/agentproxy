@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package mcpproxy.dev.rbac;
+package aidp.dev.mcp.rbac;
 
 // A rule that defines a resource type and a key-value pair 
 //that can be used to match against a resource.

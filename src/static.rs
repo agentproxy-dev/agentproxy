@@ -2,9 +2,9 @@ use std::sync::Arc;
 use tracing::{debug, info, trace};
 
 use crate::inbound;
-use crate::proto::mcpproxy::dev::listener::Listener as XdsListener;
-use crate::proto::mcpproxy::dev::rbac::{Config as XdsRuleSet, Rule as XdsRule};
-use crate::proto::mcpproxy::dev::target::Target as XdsTarget;
+use crate::proto::aidp::dev::mcp::listener::Listener as XdsListener;
+use crate::proto::aidp::dev::mcp::rbac::{Config as XdsRuleSet, Rule as XdsRule};
+use crate::proto::aidp::dev::mcp::target::Target as XdsTarget;
 use crate::relay;
 use crate::trcng;
 use crate::xds::XdsStore as ProxyState;

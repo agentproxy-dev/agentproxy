@@ -1,5 +1,5 @@
-use crate::proto::mcpproxy::dev::common;
-use crate::proto::mcpproxy::dev::listener::listener::sse_listener;
+use crate::proto::aidp::dev::common;
+use crate::proto::aidp::dev::mcp::listener::listener::sse_listener;
 use jsonwebtoken::jwk::Jwk;
 use jsonwebtoken::{DecodingKey, Validation, decode, decode_header};
 use secrecy::SecretString;
