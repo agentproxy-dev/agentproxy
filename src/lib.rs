@@ -16,3 +16,5 @@ pub mod strng;
 pub mod trcng;
 pub mod version;
 pub mod xds;
+pub mod a2a;
+pub mod a2a_relay;
