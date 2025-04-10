@@ -209,10 +209,8 @@ async fn sse_handler(
 				tokio::select! {
 					removed = rx.recv() => {
 						tracing::info!("removed: {}", removed.clone().unwrap());
-						match removed.unwrap() {
-							name => {
-								relay.remove_target(&name).await.unwrap();
-							}
+						if let Ok(name) = removed {
+							relay.remove_target(&name).await.unwrap();
 						}
 					}
 					_ = app.ct.cancelled() => {

@@ -244,9 +244,9 @@ impl TargetStore {
 		&mut self,
 		name: &str,
 	) -> Result<usize, tokio::sync::broadcast::error::SendError<String>> {
-    if let Some((_target, ct)) = self.by_name.remove(name) {
-      ct.cancel();
-    }
+		if let Some((_target, ct)) = self.by_name.remove(name) {
+			ct.cancel();
+		}
 		self.by_name_protos.remove(name);
 		self.broadcast_tx.send(name.to_string())
 	}

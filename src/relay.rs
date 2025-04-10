@@ -237,7 +237,7 @@ impl ServerHandler for Relay {
 		let uri = request.uri.to_string();
 		let (service_name, resource) = uri.split_once(':').unwrap();
 		let mut pool = self.pool.write().await;
-		let service_arc = pool.get_or_create(service_name).await.map_err(|e| {
+		let service_arc = pool.get_or_create(service_name).await.map_err(|_e| {
 			McpError::invalid_request(format!("Service {} not found", service_name), None)
 		})?;
 		let req = ReadResourceRequestParam {
@@ -284,7 +284,7 @@ impl ServerHandler for Relay {
 		let prompt_name = request.name.to_string();
 		let (service_name, prompt) = prompt_name.split_once(':').unwrap();
 		let mut pool = self.pool.write().await;
-		let svc = pool.get_or_create(service_name).await.map_err(|e| {
+		let svc = pool.get_or_create(service_name).await.map_err(|_e| {
 			McpError::invalid_request(format!("Service {} not found", service_name), None)
 		})?;
 		let req = GetPromptRequestParam {
@@ -385,7 +385,7 @@ impl ServerHandler for Relay {
 			.split_once(':')
 			.ok_or(McpError::invalid_request("invalid tool name", None))?;
 		let mut pool = self.pool.write().await;
-		let svc = pool.get_or_create(service_name).await.map_err(|e| {
+		let svc = pool.get_or_create(service_name).await.map_err(|_e| {
 			McpError::invalid_request(format!("Service {} not found", service_name), None)
 		})?;
 		let req = CallToolRequestParam {
