@@ -7,8 +7,10 @@ use axum::{
 	Json, Router,
 	extract::{Path, State},
 	http::StatusCode,
+	response::{IntoResponse, Response},
 	routing::get,
 };
+use serde::{Deserialize, Serialize};
 use tracing::error;
 #[derive(Clone)]
 pub struct App {
@@ -53,14 +55,33 @@ impl App {
 /// GET /listener/:name  Get a listener by name
 /// POST /listeners  Create/update a listener
 /// DELETE /listeners/:name  Delete a listener
+///
 
-async fn targets_list_handler(State(app): State<App>) -> Result<String, StatusCode> {
+#[derive(Debug, Serialize, Deserialize)]
+struct ErrorResponse {
+	message: String,
+}
+
+impl IntoResponse for ErrorResponse {
+	fn into_response(self) -> Response {
+		(StatusCode::INTERNAL_SERVER_ERROR, Json(self)).into_response()
+	}
+}
+
+async fn targets_list_handler(
+	State(app): State<App>,
+) -> Result<String, (StatusCode, impl IntoResponse)> {
 	let targets = app.state.read().await.targets.clone();
 	match serde_json::to_string(&targets) {
 		Ok(json_targets) => Ok(json_targets),
 		Err(e) => {
 			error!("error serializing targets: {:?}", e);
-			Err(StatusCode::INTERNAL_SERVER_ERROR)
+			Err((
+				StatusCode::INTERNAL_SERVER_ERROR,
+				ErrorResponse {
+					message: "error serializing targets".to_string(),
+				},
+			))
 		},
 	}
 }
@@ -68,45 +89,70 @@ async fn targets_list_handler(State(app): State<App>) -> Result<String, StatusCo
 async fn targets_get_handler(
 	State(app): State<App>,
 	Path(name): Path<String>,
-) -> Result<Json<Target>, StatusCode> {
+) -> Result<Json<Target>, (StatusCode, impl IntoResponse)> {
 	let state = app.state.read().await;
 	let target = state.targets.get_proto(&name);
 	match target {
 		Some(target) => Ok(Json(target.clone())),
-		None => Err(StatusCode::NOT_FOUND),
+		None => Err((
+			StatusCode::NOT_FOUND,
+			ErrorResponse {
+				message: "target not found".to_string(),
+			},
+		)),
 	}
 }
 
 async fn targets_delete_handler(
 	State(app): State<App>,
 	Path(name): Path<String>,
-) -> Result<(), StatusCode> {
+) -> Result<(), (StatusCode, impl IntoResponse)> {
 	let mut state = app.state.write().await;
-	state.targets.remove(&name);
-	Ok(())
+	match state.targets.remove(&name) {
+		Ok(_) => Ok(()),
+		Err(e) => {
+			error!("error removing target from store: {:?}", e);
+			Err((
+				StatusCode::INTERNAL_SERVER_ERROR,
+				ErrorResponse {
+					message: "error removing target from store".to_string(),
+				},
+			))
+		},
+	}
 }
 
 async fn targets_create_handler(
 	State(app): State<App>,
 	Json(target): Json<Target>,
-) -> Result<(), StatusCode> {
+) -> Result<(), (StatusCode, impl IntoResponse)> {
 	let mut state = app.state.write().await;
 	match state.targets.insert(target) {
 		Ok(_) => Ok(()),
 		Err(e) => {
 			error!("error inserting target into store: {:?}", e);
-			Err(StatusCode::INTERNAL_SERVER_ERROR)
+			Err((
+				StatusCode::INTERNAL_SERVER_ERROR,
+				ErrorResponse {
+					message: "error inserting target into store".to_string(),
+				},
+			))
 		},
 	}
 }
 
-async fn rbac_handler(State(app): State<App>) -> Result<String, StatusCode> {
+async fn rbac_handler(State(app): State<App>) -> Result<String, (StatusCode, impl IntoResponse)> {
 	let rbac = app.state.read().await.policies.clone();
 	match serde_json::to_string(&rbac) {
 		Ok(json_rbac) => Ok(json_rbac),
 		Err(e) => {
 			error!("error serializing rbac: {:?}", e);
-			Err(StatusCode::INTERNAL_SERVER_ERROR)
+			Err((
+				StatusCode::INTERNAL_SERVER_ERROR,
+				ErrorResponse {
+					message: "error serializing rbac".to_string(),
+				},
+			))
 		},
 	}
 }
@@ -126,13 +172,18 @@ async fn rbac_get_handler(
 async fn rbac_create_handler(
 	State(app): State<App>,
 	Json(rbac): Json<Rbac>,
-) -> Result<(), StatusCode> {
+) -> Result<(), (StatusCode, impl IntoResponse)> {
 	let mut state = app.state.write().await;
 	match state.policies.insert(rbac) {
 		Ok(_) => Ok(()),
 		Err(e) => {
 			error!("error inserting rbac into store: {:?}", e);
-			Err(StatusCode::INTERNAL_SERVER_ERROR)
+			Err((
+				StatusCode::INTERNAL_SERVER_ERROR,
+				ErrorResponse {
+					message: "error inserting rbac into store".to_string(),
+				},
+			))
 		},
 	}
 }
@@ -140,19 +191,26 @@ async fn rbac_create_handler(
 async fn rbac_delete_handler(
 	State(app): State<App>,
 	Path(name): Path<String>,
-) -> Result<(), StatusCode> {
+) -> Result<(), (StatusCode, impl IntoResponse)> {
 	let mut state = app.state.write().await;
 	state.policies.remove(&name);
-	Ok(())
+	Ok::<_, (StatusCode, String)>(())
 }
 
-async fn listener_handler(State(app): State<App>) -> Result<String, StatusCode> {
+async fn listener_handler(
+	State(app): State<App>,
+) -> Result<String, (StatusCode, impl IntoResponse)> {
 	let listener = app.state.read().await.listener.clone();
 	match serde_json::to_string(&listener) {
 		Ok(json_listener) => Ok(json_listener),
 		Err(e) => {
 			error!("error serializing listener: {:?}", e);
-			Err(StatusCode::INTERNAL_SERVER_ERROR)
+			Err((
+				StatusCode::INTERNAL_SERVER_ERROR,
+				ErrorResponse {
+					message: "error serializing listener".to_string(),
+				},
+			))
 		},
 	}
 }

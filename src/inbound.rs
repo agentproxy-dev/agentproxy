@@ -10,7 +10,6 @@ use crate::proto::mcpproxy::dev::listener::{
 };
 use crate::proxyprotocol;
 use crate::relay;
-use crate::signal;
 use crate::sse::App as SseApp;
 use crate::xds;
 use rmcp::service::serve_server_with_ct;
@@ -243,13 +242,6 @@ impl Listener {
 						});
 					},
 				}
-
-				run_set.spawn(async move {
-					let sig = signal::Shutdown::new();
-					sig.wait().await;
-					ct.cancel();
-					Ok(())
-				});
 
 				while let Some(res) = run_set.join_next().await {
 					match res {

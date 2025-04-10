@@ -244,12 +244,9 @@ impl TargetStore {
 		&mut self,
 		name: &str,
 	) -> Result<usize, tokio::sync::broadcast::error::SendError<String>> {
-		match self.by_name.remove(name) {
-			Some((_target, ct)) => {
-				ct.cancel();
-			},
-			None => {},
-		};
+    if let Some((_target, ct)) = self.by_name.remove(name) {
+      ct.cancel();
+    }
 		self.by_name_protos.remove(name);
 		self.broadcast_tx.send(name.to_string())
 	}
@@ -302,10 +299,19 @@ impl TargetStore {
 	}
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Deserialize)]
 pub struct PolicyStore {
 	by_name: HashMap<String, rbac::RuleSet>,
 	by_name_protos: HashMap<String, XdsRbac>,
+}
+
+impl Serialize for PolicyStore {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: serde::Serializer,
+	{
+		self.by_name_protos.serialize(serializer)
+	}
 }
 
 impl PolicyStore {

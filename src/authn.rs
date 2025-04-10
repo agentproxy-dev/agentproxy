@@ -16,22 +16,14 @@ pub enum AuthError {
 	InvalidToken(jsonwebtoken::errors::Error),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Serialize)]
 pub struct JwtAuthenticator {
+	#[serde(skip_serializing)]
 	key: Arc<RwLock<MutableKey>>,
 	issuer: Option<HashSet<String>>,
 	audience: Option<HashSet<String>>,
 
 	remote: Option<JwksRemoteSource>,
-}
-
-impl Serialize for JwtAuthenticator {
-	fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
-	where
-		S: serde::Serializer,
-	{
-		todo!()
-	}
 }
 
 impl std::fmt::Debug for JwtAuthenticator {
@@ -54,8 +46,9 @@ pub enum JwkError {
 	InvalidConfig(String),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Serialize)]
 struct JwksRemoteSource {
+	#[serde(skip_serializing)]
 	client: reqwest::Client,
 	url: String,
 	refresh_interval: Duration,

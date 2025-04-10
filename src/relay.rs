@@ -421,8 +421,6 @@ impl ServerHandler for Relay {
 mod pool {
 	use rmcp::service::serve_client_with_ct;
 
-	use crate::proto::mcpproxy::dev::target;
-
 	use super::*;
 
 	pub(crate) struct ConnectionPool {
