@@ -42,7 +42,7 @@ pub async fn run_local_client(
 				.insert(target)
 				.expect("failed to insert target into store");
 		}
-		if cfg.policies.len() > 0 {
+		if !cfg.policies.is_empty() {
 			let rule_set = XdsRuleSet {
 				name: "test".to_string(),
 				namespace: "test".to_string(),

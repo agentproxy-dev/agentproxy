@@ -3,7 +3,7 @@ use crate::metrics::Recorder;
 use crate::outbound::openapi;
 use crate::outbound::{Target, TargetSpec};
 use crate::rbac;
-use crate::trc;
+use crate::trcng;
 use crate::xds::XdsStore;
 use http::HeaderName;
 use http::{HeaderMap, HeaderValue, header::AUTHORIZATION};
@@ -176,8 +176,8 @@ impl ServerHandler for Relay {
 			.extensions
 			.get::<Context>()
 			.unwrap_or(&DEFAULT_CONTEXT);
-		let tracer = trc::get_tracer();
-		let _span = trc::get_tracer()
+		let tracer = trcng::get_tracer();
+		let _span = trcng::get_tracer()
 			.span_builder("list_prompts")
 			.with_kind(SpanKind::Server)
 			.start_with_context(tracer, context);
@@ -328,8 +328,8 @@ impl ServerHandler for Relay {
 			.extensions
 			.get::<Context>()
 			.unwrap_or(&DEFAULT_CONTEXT);
-		let tracer = trc::get_tracer();
-		let _span = trc::get_tracer()
+		let tracer = trcng::get_tracer();
+		let _span = trcng::get_tracer()
 			.span_builder("list_tools")
 			.with_kind(SpanKind::Server)
 			.start_with_context(tracer, context);
@@ -392,8 +392,8 @@ impl ServerHandler for Relay {
 			.extensions
 			.get::<Context>()
 			.unwrap_or(&DEFAULT_CONTEXT);
-		let tracer = trc::get_tracer();
-		let _span = trc::get_tracer()
+		let tracer = trcng::get_tracer();
+		let _span = trcng::get_tracer()
 			.span_builder("call_tool")
 			.with_kind(SpanKind::Server)
 			.start_with_context(tracer, span_context);

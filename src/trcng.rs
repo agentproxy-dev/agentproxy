@@ -1,26 +1,20 @@
 use http::HeaderMap;
 use opentelemetry::{
-	Context, InstrumentationScope, KeyValue,
+	Context, KeyValue,
 	baggage::BaggageExt,
 	global::{self, BoxedTracer},
-	logs::LogRecord,
 	propagation::TextMapCompositePropagator,
-	trace::{FutureExt, Span, SpanKind, TraceContextExt, Tracer},
+	trace::Span,
 };
-use opentelemetry_http::{Bytes, HeaderExtractor};
+use opentelemetry_http::HeaderExtractor;
 use opentelemetry_otlp::SpanExporter;
-use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_sdk::Resource;
 use opentelemetry_sdk::{
 	error::OTelSdkResult,
-	logs::{LogProcessor, SdkLogRecord, SdkLoggerProvider},
 	propagation::{BaggagePropagator, TraceContextPropagator},
 	trace::{SdkTracerProvider, SpanProcessor},
 };
-use std::{convert::Infallible, net::SocketAddr, sync::OnceLock};
-use tokio::net::TcpListener;
-use tracing::info;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use std::sync::OnceLock;
 
 pub fn get_tracer() -> &'static BoxedTracer {
 	static TRACER: OnceLock<BoxedTracer> = OnceLock::new();
@@ -35,11 +29,7 @@ pub fn extract_context_from_request(req: &HeaderMap) -> Context {
 fn get_resource() -> Resource {
 	static RESOURCE: OnceLock<Resource> = OnceLock::new();
 	RESOURCE
-		.get_or_init(|| {
-			Resource::builder()
-				.with_service_name("basic-otlp-example-grpc")
-				.build()
-		})
+		.get_or_init(|| Resource::builder().with_service_name("mcp-proxy").build())
 		.clone()
 }
 

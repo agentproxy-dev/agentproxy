@@ -15,7 +15,7 @@ use mcp_proxy::proto::mcpproxy::dev::rbac::Config as XdsRbac;
 use mcp_proxy::proto::mcpproxy::dev::target::Target as XdsTarget;
 use mcp_proxy::relay;
 use mcp_proxy::signal;
-use mcp_proxy::trc;
+use mcp_proxy::trcng;
 use mcp_proxy::xds;
 use mcp_proxy::xds::ProxyStateUpdater;
 use mcp_proxy::xds::XdsStore as ProxyState;
@@ -135,7 +135,7 @@ async fn main() -> Result<()> {
 					.map_err(|e| anyhow::anyhow!("error serving admin: {:?}", e))
 			});
 
-			let provider = trc::init_tracer();
+			let provider = trcng::init_tracer();
 
 			// Wait for all servers to finish? I think this does what I want :shrug:
 			while let Some(result) = run_set.join_next().await {
@@ -199,7 +199,7 @@ async fn main() -> Result<()> {
 					.map_err(|e| anyhow::anyhow!("error serving metrics: {:?}", e))
 			});
 
-			let provider = trc::init_tracer();
+			let provider = trcng::init_tracer();
 
 			// Wait for all servers to finish? I think this does what I want :shrug:
 			while let Some(result) = run_set.join_next().await {
