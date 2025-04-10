@@ -13,7 +13,7 @@ use crate::relay;
 use crate::signal;
 use crate::sse::App as SseApp;
 use crate::xds;
-use rmcp::serve_server;
+use rmcp::service::serve_server_with_ct;
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -22,7 +22,6 @@ use tokio_rustls::{
 	rustls::ServerConfig,
 	rustls::pki_types::{CertificateDer, PrivateKeyDer, pem::PemObject},
 };
-use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 #[derive(Clone, Serialize, Debug)]
@@ -141,15 +140,16 @@ pub enum ServingError {
 impl Listener {
 	pub async fn listen(
 		&self,
-		state: Arc<std::sync::RwLock<xds::XdsStore>>,
+		state: Arc<tokio::sync::RwLock<xds::XdsStore>>,
 		metrics: Arc<relay::metrics::Metrics>,
+		ct: tokio_util::sync::CancellationToken,
 	) -> Result<(), ServingError> {
 		match self {
 			Listener::Stdio => {
-				let relay = serve_server(
-					// TODO: This is a hack
+				let relay = serve_server_with_ct(
 					relay::Relay::new(state.clone(), metrics),
 					(tokio::io::stdin(), tokio::io::stdout()),
+					ct,
 				)
 				.await
 				.inspect_err(|e| {
@@ -175,7 +175,7 @@ impl Listener {
 				let mut run_set: tokio::task::JoinSet<Result<(), anyhow::Error>> =
 					tokio::task::JoinSet::new();
 				let clone = authenticator.clone();
-				let ct = CancellationToken::new();
+
 				let child_token = ct.child_token();
 				run_set.spawn(async move {
 					authn::sync_jwks_loop(clone, child_token)
@@ -188,7 +188,8 @@ impl Listener {
 					.parse()
 					.unwrap();
 				let listener = tokio::net::TcpListener::bind(socket_addr).await.unwrap();
-				let app = SseApp::new(state.clone(), metrics, authenticator);
+				let child_token = ct.child_token();
+				let app = SseApp::new(state.clone(), metrics, authenticator, child_token);
 				let router = app.router();
 
 				info!("serving sse on {}:{}", sse_listener.host, sse_listener.port);

@@ -36,19 +36,21 @@ fn session_id() -> SessionId {
 
 #[derive(Clone)]
 pub struct App {
-	state: Arc<std::sync::RwLock<AppState>>,
+	state: Arc<tokio::sync::RwLock<AppState>>,
 	connection_id: Arc<tokio::sync::RwLock<Option<String>>>,
 	txs:
 		Arc<tokio::sync::RwLock<HashMap<SessionId, tokio::sync::mpsc::Sender<ClientJsonRpcMessage>>>>,
 	metrics: Arc<relay::metrics::Metrics>,
 	authn: Arc<RwLock<Option<authn::JwtAuthenticator>>>,
+	ct: tokio_util::sync::CancellationToken,
 }
 
 impl App {
 	pub fn new(
-		state: Arc<std::sync::RwLock<AppState>>,
+		state: Arc<tokio::sync::RwLock<AppState>>,
 		metrics: Arc<relay::metrics::Metrics>,
 		authn: Arc<RwLock<Option<authn::JwtAuthenticator>>>,
+		ct: tokio_util::sync::CancellationToken,
 	) -> Self {
 		Self {
 			state,
@@ -56,6 +58,7 @@ impl App {
 			metrics,
 			authn,
 			connection_id: Arc::new(tokio::sync::RwLock::new(None)),
+			ct,
 		}
 	}
 	pub fn router(&self) -> Router {
@@ -184,25 +187,44 @@ async fn sse_handler(
 	{
 		let session = session.clone();
 		tokio::spawn(async move {
+			let relay = Relay::new(app.state.clone(), app.metrics.clone());
 			let stream = ReceiverStream::new(from_client_rx);
 			let sink = PollSender::new(to_client_tx).sink_map_err(std::io::Error::other);
-			let result = serve_server(
-				Relay::new(app.state.clone(), app.metrics.clone()),
-				(sink, stream),
-			)
-			.await
-			.inspect_err(|e| {
-				tracing::error!("serving error: {:?}", e);
-			});
+			let result = serve_server(relay.clone(), (sink, stream))
+				.await
+				.inspect_err(|e| {
+					tracing::error!("serving error: {:?}", e);
+				});
 
 			if let Err(e) = result {
 				tracing::error!(error = ?e, "initialize error");
 				app.txs.write().await.remove(&session);
 				return;
 			}
-			let _running_result = result.unwrap().waiting().await.inspect_err(|e| {
-				tracing::error!(error = ?e, "running error");
-			});
+			let state = app.state.read().await;
+			let mut rx: tokio::sync::broadcast::Receiver<String> = state.targets.subscribe();
+			drop(state);
+			loop {
+				// Add a listener drain channel here.
+				tokio::select! {
+					removed = rx.recv() => {
+						tracing::info!("removed: {}", removed.clone().unwrap());
+						match removed.unwrap() {
+							name => {
+								relay.remove_target(&name).await.unwrap();
+							}
+						}
+					}
+					_ = app.ct.cancelled() => {
+						tracing::info!("cancelled");
+						result.unwrap().cancel().await.unwrap();
+						break;
+					}
+				};
+			}
+			// let _running_result = result.unwrap().waiting().await.inspect_err(|e| {
+			// 	tracing::error!(error = ?e, "running error");
+			// });
 			app.txs.write().await.remove(&session);
 		});
 	}

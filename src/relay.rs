@@ -8,7 +8,6 @@ use http::HeaderName;
 use http::{HeaderMap, HeaderValue, header::AUTHORIZATION};
 use itertools::Itertools;
 use rmcp::RoleClient;
-use rmcp::serve_client;
 use rmcp::service::RunningService;
 use rmcp::transport::child_process::TokioChildProcess;
 use rmcp::transport::sse::{ReqwestSseClient, SseTransport};
@@ -31,17 +30,40 @@ lazy_static::lazy_static! {
 
 #[derive(Clone)]
 pub struct Relay {
-	state: Arc<std::sync::RwLock<XdsStore>>,
-	pool: Arc<RwLock<ConnectionPool>>,
+	state: Arc<tokio::sync::RwLock<XdsStore>>,
+	pool: Arc<RwLock<pool::ConnectionPool>>,
 	metrics: Arc<metrics::Metrics>,
 }
 
 impl Relay {
-	pub fn new(state: Arc<std::sync::RwLock<XdsStore>>, metrics: Arc<metrics::Metrics>) -> Self {
+	pub fn new(state: Arc<tokio::sync::RwLock<XdsStore>>, metrics: Arc<metrics::Metrics>) -> Self {
 		Self {
 			state: state.clone(),
-			pool: Arc::new(RwLock::new(ConnectionPool::new(state.clone()))),
+			pool: Arc::new(RwLock::new(pool::ConnectionPool::new(state.clone()))),
 			metrics,
+		}
+	}
+}
+
+impl Relay {
+	pub async fn remove_target(&self, name: &str) -> Result<(), tokio::task::JoinError> {
+		tracing::info!("removing target: {}", name);
+		let mut pool = self.pool.write().await;
+		match pool.remove(name).await {
+			Some(target_arc) => {
+				// Try this a few times?
+				let target = Arc::into_inner(target_arc).unwrap();
+				match target {
+					UpstreamTarget::Mcp(m) => {
+						m.cancel().await?;
+					},
+					_ => {
+						todo!()
+					},
+				}
+				Ok(())
+			},
+			None => Ok(()),
 		}
 	}
 }
@@ -75,12 +97,15 @@ impl ServerHandler for Relay {
 		request: Option<PaginatedRequestParam>,
 		_context: RequestContext<RoleServer>,
 	) -> std::result::Result<ListResourcesResult, McpError> {
-		let pool = self.pool.read().await;
-		let all = pool.iter().await.map(|(_name, svc)| {
-			let svc = svc.clone();
+		let mut pool = self.pool.write().await;
+		let connections = pool
+			.list()
+			.await
+			.map_err(|e| McpError::internal_error(format!("Failed to list connections: {}", e), None))?;
+		let all = connections.into_iter().map(|(_name, svc)| {
 			let request = request.clone();
 			async move {
-				match svc.as_ref().read().await.list_resources(request).await {
+				match svc.list_resources(request).await {
 					Ok(r) => Ok(r.resources),
 					Err(e) => Err(e),
 				}
@@ -105,18 +130,15 @@ impl ServerHandler for Relay {
 		request: Option<PaginatedRequestParam>,
 		_context: RequestContext<RoleServer>,
 	) -> std::result::Result<ListResourceTemplatesResult, McpError> {
-		let pool = self.pool.read().await;
-		let all = pool.iter().await.map(|(_name, svc)| {
-			let svc = svc.clone();
+		let mut pool = self.pool.write().await;
+		let connections = pool
+			.list()
+			.await
+			.map_err(|e| McpError::internal_error(format!("Failed to list connections: {}", e), None))?;
+		let all = connections.into_iter().map(|(_name, svc)| {
 			let request = request.clone();
 			async move {
-				match svc
-					.as_ref()
-					.read()
-					.await
-					.list_resource_templates(request)
-					.await
-				{
+				match svc.list_resource_templates(request).await {
 					Ok(r) => Ok(r.resource_templates),
 					Err(e) => Err(e),
 				}
@@ -147,12 +169,15 @@ impl ServerHandler for Relay {
 		request: Option<PaginatedRequestParam>,
 		_context: RequestContext<RoleServer>,
 	) -> std::result::Result<ListPromptsResult, McpError> {
-		let pool = self.pool.read().await;
-		let all = pool.iter().await.map(|(_name, svc)| {
-			let svc = svc.clone();
+		let mut pool = self.pool.write().await;
+		let connections = pool
+			.list()
+			.await
+			.map_err(|e| McpError::internal_error(format!("Failed to list connections: {}", e), None))?;
+		let all = connections.into_iter().map(|(_name, svc)| {
 			let request = request.clone();
 			async move {
-				match svc.as_ref().read().await.list_prompts(request).await {
+				match svc.list_prompts(request).await {
 					Ok(r) => Ok(
 						r.prompts
 							.into_iter()
@@ -197,7 +222,7 @@ impl ServerHandler for Relay {
 		request: ReadResourceRequestParam,
 		_context: RequestContext<RoleServer>,
 	) -> std::result::Result<ReadResourceResult, McpError> {
-		if !self.state.read().unwrap().policies.validate(
+		if !self.state.read().await.policies.validate(
 			&rbac::ResourceType::Resource {
 				id: request.uri.to_string(),
 			},
@@ -211,8 +236,10 @@ impl ServerHandler for Relay {
 
 		let uri = request.uri.to_string();
 		let (service_name, resource) = uri.split_once(':').unwrap();
-		let pool = self.pool.read().await;
-		let service = pool.get(service_name).await.unwrap();
+		let mut pool = self.pool.write().await;
+		let service_arc = pool.get_or_create(service_name).await.map_err(|e| {
+			McpError::invalid_request(format!("Service {} not found", service_name), None)
+		})?;
 		let req = ReadResourceRequestParam {
 			uri: resource.to_string(),
 		};
@@ -224,7 +251,7 @@ impl ServerHandler for Relay {
 			},
 			(),
 		);
-		match service.as_ref().read().await.read_resource(req).await {
+		match service_arc.read_resource(req).await {
 			Ok(r) => Ok(r),
 			Err(e) => Err(e.into()),
 		}
@@ -242,7 +269,7 @@ impl ServerHandler for Relay {
 		request: GetPromptRequestParam,
 		_context: RequestContext<RoleServer>,
 	) -> std::result::Result<GetPromptResult, McpError> {
-		if !self.state.read().unwrap().policies.validate(
+		if !self.state.read().await.policies.validate(
 			&rbac::ResourceType::Prompt {
 				id: request.name.to_string(),
 			},
@@ -256,8 +283,10 @@ impl ServerHandler for Relay {
 
 		let prompt_name = request.name.to_string();
 		let (service_name, prompt) = prompt_name.split_once(':').unwrap();
-		let pool = self.pool.read().await;
-		let service = pool.get(service_name).await.unwrap();
+		let mut pool = self.pool.write().await;
+		let svc = pool.get_or_create(service_name).await.map_err(|e| {
+			McpError::invalid_request(format!("Service {} not found", service_name), None)
+		})?;
 		let req = GetPromptRequestParam {
 			name: prompt.to_string(),
 			arguments: request.arguments,
@@ -270,7 +299,7 @@ impl ServerHandler for Relay {
 			},
 			(),
 		);
-		match service.as_ref().read().await.get_prompt(req).await {
+		match svc.get_prompt(req).await {
 			Ok(r) => Ok(r),
 			Err(e) => Err(e.into()),
 		}
@@ -285,18 +314,21 @@ impl ServerHandler for Relay {
 		// TODO: Use iterators
 		// TODO: Handle individual errors
 		// TODO: Do we want to handle pagination here, or just pass it through?
-		let pool = self.pool.read().await;
-		let all = pool.iter().await.map(|(name, svc)| {
-			let svc = svc.clone();
+		let mut pool = self.pool.write().await;
+		let connections = pool
+			.list()
+			.await
+			.map_err(|e| McpError::internal_error(format!("Failed to list connections: {}", e), None))?;
+		let all = connections.into_iter().map(|(_name, svc_arc)| {
 			let request = request.clone();
 			async move {
-				match svc.as_ref().read().await.list_tools(request).await {
+				match svc_arc.list_tools(request).await {
 					Ok(r) => Ok(
 						r.tools
 							.into_iter()
 							.map(|t| Tool {
 								annotations: None,
-								name: Cow::Owned(format!("{}:{}", name, t.name)),
+								name: Cow::Owned(format!("{}:{}", _name, t.name)),
 								description: t.description,
 								input_schema: t.input_schema,
 							})
@@ -337,7 +369,7 @@ impl ServerHandler for Relay {
 		request: CallToolRequestParam,
 		_context: RequestContext<RoleServer>,
 	) -> std::result::Result<CallToolResult, McpError> {
-		if !self.state.read().unwrap().policies.validate(
+		if !self.state.read().await.policies.validate(
 			&rbac::ResourceType::Tool {
 				id: request.name.to_string(),
 			},
@@ -352,11 +384,10 @@ impl ServerHandler for Relay {
 		let (service_name, tool) = tool_name
 			.split_once(':')
 			.ok_or(McpError::invalid_request("invalid tool name", None))?;
-		let pool = self.pool.read().await;
-		let service = pool
-			.get(service_name)
-			.await
-			.ok_or(McpError::invalid_request("invalid service name", None))?;
+		let mut pool = self.pool.write().await;
+		let svc = pool.get_or_create(service_name).await.map_err(|e| {
+			McpError::invalid_request(format!("Service {} not found", service_name), None)
+		})?;
 		let req = CallToolRequestParam {
 			name: Cow::Owned(tool.to_string()),
 			arguments: request.arguments,
@@ -370,7 +401,7 @@ impl ServerHandler for Relay {
 			(),
 		);
 
-		match service.as_ref().read().await.call_tool(req).await {
+		match svc.call_tool(req).await {
 			Ok(r) => Ok(r),
 			Err(e) => {
 				self.metrics.clone().record(
@@ -387,167 +418,206 @@ impl ServerHandler for Relay {
 	}
 }
 
-#[derive(Clone)]
-struct ConnectionPool {
-	state: Arc<std::sync::RwLock<XdsStore>>,
+mod pool {
+	use rmcp::service::serve_client_with_ct;
 
-	by_name: Arc<RwLock<HashMap<String, Arc<RwLock<UpstreamTarget>>>>>,
-}
+	use crate::proto::mcpproxy::dev::target;
 
-impl ConnectionPool {
-	fn new(state: Arc<std::sync::RwLock<XdsStore>>) -> Self {
-		Self {
-			state,
-			by_name: Arc::new(RwLock::new(HashMap::new())),
-		}
+	use super::*;
+
+	pub(crate) struct ConnectionPool {
+		state: Arc<tokio::sync::RwLock<XdsStore>>,
+		by_name: HashMap<String, Arc<UpstreamTarget>>,
 	}
 
-	async fn get(&self, name: &str) -> Option<Arc<RwLock<UpstreamTarget>>> {
-		tracing::trace!("getting connection for target: {}", name);
-		let by_name = self.by_name.read().await;
-		match by_name.get(name) {
-			Some(connection) => {
-				tracing::trace!("connection found for target: {}", name);
-				Some(connection.clone())
-			},
-			None => {
-				let target = { self.state.read().unwrap().targets.get(name).cloned() };
-				match target {
-					Some(target) => {
-						// We want write access to the by_name map, so we drop the read lock
-						// TODO: Fix this
-						drop(by_name);
-						match self.connect(&target).await {
-							Ok(connection) => Some(connection),
-							Err(e) => {
-								tracing::error!("Error connecting to target: {}", e);
-								None
-							},
-						}
-					},
-					None => {
-						tracing::error!("Target not found: {}", name);
-						// Need to demand it, but this should never happen
-						None
-					},
+	impl ConnectionPool {
+		pub(crate) fn new(state: Arc<tokio::sync::RwLock<XdsStore>>) -> Self {
+			Self {
+				state,
+				by_name: HashMap::new(),
+			}
+		}
+
+		pub(crate) async fn get_or_create(
+			&mut self,
+			name: &str,
+		) -> anyhow::Result<Arc<UpstreamTarget>> {
+			// Connect if it doesn't exist
+			if !self.by_name.contains_key(name) {
+				// Read target info and drop lock before calling connect
+				let target_info: Option<(Target, tokio_util::sync::CancellationToken)> = {
+					let state = self.state.read().await;
+					state
+						.targets
+						.get(name)
+						.map(|(target, ct)| (target.clone(), ct.clone()))
+				};
+
+				if let Some((target, ct)) = target_info {
+					// Now self is not immutably borrowed by state lock
+					self.connect(&ct, &target).await?;
+				} else {
+					// Handle target not found in state configuration
+					return Err(anyhow::anyhow!(
+						"Target configuration not found for {}",
+						name
+					));
 				}
-			},
+			}
+			let target = self.by_name.get(name).cloned();
+			Ok(target.ok_or(McpError::invalid_request(
+				format!("Service {} not found", name),
+				None,
+			))?)
 		}
-	}
 
-	async fn iter(&self) -> impl Iterator<Item = (String, Arc<RwLock<UpstreamTarget>>)> {
-		// Iterate through all state targets, and get the connection from the pool
-		// If the connection is not in the pool, connect to it and add it to the pool
-		let targets: Vec<(String, Target)> = {
-			let state = self.state.read().unwrap();
-			state
-				.targets
-				.iter()
-				.map(|(name, target)| (name.clone(), target.clone()))
-				.collect()
-		};
-		let x = targets.iter().map(|(name, _target)| async move {
-			let connection = self.get(name).await.unwrap();
-			(name.clone(), connection)
-		});
+		pub(crate) async fn remove(&mut self, name: &str) -> Option<Arc<UpstreamTarget>> {
+			self.by_name.remove(name)
+		}
 
-		let x = futures::future::join_all(x).await;
-		x.into_iter()
-	}
+		pub(crate) async fn list(&mut self) -> anyhow::Result<Vec<(String, Arc<UpstreamTarget>)>> {
+			// Iterate through all state targets, and get the connection from the pool
+			// If the connection is not in the pool, connect to it and add it to the pool
+			// 1. Get target configurations (name, Target, CancellationToken) from the state's TargetStore
+			let targets_config: Vec<(String, (Target, tokio_util::sync::CancellationToken))> = {
+				let state = self.state.read().await;
+				// Iterate the underlying HashMap directly to get the full tuple
+				state
+					.targets
+					.iter()
+					.map(|(name, target)| (name.clone(), target.clone()))
+					.collect()
+			};
 
-	#[instrument(
-    level = "debug",
-    skip_all,
-    fields(
-        name=%target.name,
-    ),
-  )]
-	async fn connect(&self, target: &Target) -> Result<Arc<RwLock<UpstreamTarget>>, anyhow::Error> {
-		tracing::trace!("connecting to target: {}", target.name);
-		let transport: UpstreamTarget = match &target.spec {
-			TargetSpec::Sse {
-				host,
-				port,
-				path,
-				backend_auth,
-				headers,
-			} => {
-				tracing::trace!("starting sse transport for target: {}", target.name);
-				let path = match path.as_str() {
-					"" => "/sse",
-					_ => path,
-				};
-				let scheme = match port {
-					443 => "https",
-					_ => "https",
-				};
+			// 2. Identify targets needing connection without holding lock or borrowing self mutably yet
+			let mut connections_to_make = Vec::new();
+			for (name, (target, ct)) in &targets_config {
+				if !self.by_name.contains_key(name) {
+					connections_to_make.push((name.clone(), target.clone(), ct.clone()));
+				}
+			}
 
-				let url = format!("{}://{}:{}{}", scheme, host, port, path);
-				let transport = match backend_auth.clone() {
-					Some(backend_auth) => {
-						let backend_auth = backend_auth.build().await;
-						let token = backend_auth.get_token().await?;
-						let mut upstream_headers = HeaderMap::new();
-						let auth_value = HeaderValue::from_str(token.as_str())?;
-						upstream_headers.insert(AUTHORIZATION, auth_value);
-						for (key, value) in headers {
-							upstream_headers.insert(
-								HeaderName::from_bytes(key.as_bytes())?,
-								HeaderValue::from_str(value)?,
-							);
-						}
-						let client = reqwest::Client::builder()
-							.default_headers(upstream_headers)
-							.build()
-							.unwrap();
-						let client = ReqwestSseClient::new_with_client(url.as_str(), client).await?;
-						SseTransport::start_with_client(client).await?
-					},
-					None => {
-						let client = ReqwestSseClient::new(url.as_str())?;
-						SseTransport::start_with_client(client).await?
-					},
-				};
+			// 3. Connect the missing ones (self is borrowed mutably here)
+			for (name, target, ct) in connections_to_make {
+				tracing::debug!("Connecting missing target: {}", name);
+				self.connect(&ct, &target).await.map_err(|e| {
+					tracing::error!("Failed to connect target {}: {}", name, e);
+					e // Propagate error
+				})?;
+			}
+			tracing::debug!("Finished connecting missing targets.");
 
-				UpstreamTarget::Mcp(serve_client((), transport).await?)
-			},
-			TargetSpec::Stdio { cmd, args, env: _ } => {
-				tracing::trace!("starting stdio transport for target: {}", target.name);
-				UpstreamTarget::Mcp(
-					serve_client(
-						(),
-						TokioChildProcess::new(Command::new(cmd).args(args)).unwrap(),
+			// 4. Collect all required connections from the pool
+			let results = targets_config
+				.into_iter()
+				.filter_map(|(name, _)| self.by_name.get(&name).map(|arc| (name, arc.clone())))
+				.collect();
+
+			Ok(results)
+		}
+
+		#[instrument(
+      level = "debug",
+      skip_all,
+      fields(
+          name=%target.name,
+      ),
+    )]
+		pub(crate) async fn connect(
+			&mut self,
+			ct: &tokio_util::sync::CancellationToken,
+			target: &Target,
+		) -> Result<(), anyhow::Error> {
+			// Already connected
+			if let Some(_transport) = self.by_name.get(&target.name) {
+				return Ok(());
+			}
+			tracing::trace!("connecting to target: {}", target.name);
+			let transport: UpstreamTarget = match &target.spec {
+				TargetSpec::Sse {
+					host,
+					port,
+					path,
+					backend_auth,
+					headers,
+				} => {
+					tracing::trace!("starting sse transport for target: {}", target.name);
+					let path = match path.as_str() {
+						"" => "/sse",
+						_ => path,
+					};
+					let scheme = match port {
+						443 => "https",
+						_ => "https",
+					};
+
+					let url = format!("{}://{}:{}{}", scheme, host, port, path);
+					let transport = match backend_auth.clone() {
+						Some(backend_auth) => {
+							let backend_auth = backend_auth.build().await;
+							let token = backend_auth.get_token().await?;
+							let mut upstream_headers = HeaderMap::new();
+							let auth_value = HeaderValue::from_str(token.as_str())?;
+							upstream_headers.insert(AUTHORIZATION, auth_value);
+							for (key, value) in headers {
+								upstream_headers.insert(
+									HeaderName::from_bytes(key.as_bytes())?,
+									HeaderValue::from_str(value)?,
+								);
+							}
+							let client = reqwest::Client::builder()
+								.default_headers(upstream_headers)
+								.build()
+								.unwrap();
+							let client = ReqwestSseClient::new_with_client(url.as_str(), client).await?;
+							SseTransport::start_with_client(client).await?
+						},
+						None => {
+							let client = ReqwestSseClient::new(url.as_str())?;
+							SseTransport::start_with_client(client).await?
+						},
+					};
+
+					UpstreamTarget::Mcp(serve_client_with_ct((), transport, ct.child_token()).await?)
+				},
+				TargetSpec::Stdio { cmd, args, env: _ } => {
+					tracing::trace!("starting stdio transport for target: {}", target.name);
+					UpstreamTarget::Mcp(
+						serve_client_with_ct(
+							(),
+							TokioChildProcess::new(Command::new(cmd).args(args)).unwrap(),
+							ct.child_token(),
+						)
+						.await?,
 					)
-					.await?,
-				)
-			},
-			TargetSpec::OpenAPI(open_api) => {
-				tracing::info!("starting OpenAPI transport for target: {}", target.name);
-				let client = reqwest::Client::new();
+				},
+				TargetSpec::OpenAPI(open_api) => {
+					tracing::info!("starting OpenAPI transport for target: {}", target.name);
+					let client = reqwest::Client::new();
 
-				let scheme = match open_api.port {
-					443 => "https",
-					_ => "http",
-				};
-				UpstreamTarget::OpenAPI(openapi::Handler {
-					host: open_api.host.clone(),
-					client,
-					tools: open_api.tools.clone(),
-					scheme: scheme.to_string(),
-					prefix: open_api.prefix.clone(),
-					port: open_api.port,
-				})
-			},
-		};
-		let connection = Arc::new(RwLock::new(transport));
-		// We need to drop this lock quick
-		let mut by_name = self.by_name.write().await;
-		by_name.insert(target.name.clone(), connection.clone());
-		Ok(connection)
+					let scheme = match open_api.port {
+						443 => "https",
+						_ => "http",
+					};
+					UpstreamTarget::OpenAPI(openapi::Handler {
+						host: open_api.host.clone(),
+						client,
+						tools: open_api.tools.clone(),
+						scheme: scheme.to_string(),
+						prefix: open_api.prefix.clone(),
+						port: open_api.port,
+					})
+				},
+			};
+			self
+				.by_name
+				.insert(target.name.clone(), Arc::new(transport));
+			Ok(())
+		}
 	}
 }
 
-/// UpstreamTarget defines a source for MCP information.
+// UpstreamTarget defines a source for MCP information.
 #[derive(Debug)]
 enum UpstreamTarget {
 	Mcp(RunningService<RoleClient, ()>),

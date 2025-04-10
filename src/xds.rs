@@ -1,7 +1,7 @@
 use std::error::Error as StdErr;
 use std::fmt;
 use std::fmt::Formatter;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing::Level;
 use tracing::{error, instrument, warn};
@@ -10,8 +10,6 @@ pub use client::*;
 pub use metrics::*;
 pub use types::*;
 
-use crate::proto::mcpproxy::dev::common::LocalDataSource;
-use crate::proto::mcpproxy::dev::common::local_data_source::Source as XdsSource;
 use crate::proto::mcpproxy::dev::listener::Listener as XdsListener;
 use crate::proto::mcpproxy::dev::rbac::Config as XdsRbac;
 use crate::proto::mcpproxy::dev::target::Target as XdsTarget;
@@ -84,13 +82,13 @@ pub struct ProxyStateUpdateMutator {}
 
 #[derive(Clone)]
 pub struct ProxyStateUpdater {
-	state: Arc<RwLock<XdsStore>>,
+	state: Arc<tokio::sync::RwLock<XdsStore>>,
 	updater: ProxyStateUpdateMutator,
 }
 
 impl ProxyStateUpdater {
 	/// Creates a new updater for the given stores. Will prefetch certs when workloads are updated.
-	pub fn new(state: Arc<RwLock<XdsStore>>) -> Self {
+	pub fn new(state: Arc<tokio::sync::RwLock<XdsStore>>) -> Self {
 		Self {
 			state,
 			updater: ProxyStateUpdateMutator {},
@@ -106,8 +104,6 @@ impl ProxyStateUpdateMutator {
         fields(name=%target.name),
     )]
 	pub fn insert_target(&self, state: &mut XdsStore, target: XdsTarget) -> anyhow::Result<()> {
-		// TODO: This is a hack
-		// TODO: Separate connection/LB from insertion
 		state.targets.insert(target)?;
 		Ok(())
 	}
@@ -118,8 +114,9 @@ impl ProxyStateUpdateMutator {
         skip_all,
         fields(name=%xds_name),
     )]
-	pub fn remove_target(&self, state: &mut XdsStore, xds_name: &Strng) {
-		state.targets.remove(xds_name);
+	pub fn remove_target(&self, state: &mut XdsStore, xds_name: &Strng) -> anyhow::Result<()> {
+		state.targets.remove(xds_name)?;
+		Ok(())
 	}
 
 	#[instrument(
@@ -146,11 +143,11 @@ impl ProxyStateUpdateMutator {
 #[async_trait::async_trait]
 impl Handler<XdsTarget> for ProxyStateUpdater {
 	async fn handle(&self, updates: Vec<XdsUpdate<XdsTarget>>) -> Result<(), Vec<RejectedConfig>> {
-		let mut state = self.state.write().unwrap();
+		let mut state = self.state.write().await;
 		let handle = |res: XdsUpdate<XdsTarget>| {
 			match res {
 				XdsUpdate::Update(w) => self.updater.insert_target(&mut state, w.resource)?,
-				XdsUpdate::Remove(name) => self.updater.remove_target(&mut state, &name),
+				XdsUpdate::Remove(name) => self.updater.remove_target(&mut state, &name)?,
 			}
 			Ok(())
 		};
@@ -161,7 +158,7 @@ impl Handler<XdsTarget> for ProxyStateUpdater {
 #[async_trait::async_trait]
 impl Handler<XdsRbac> for ProxyStateUpdater {
 	async fn handle(&self, updates: Vec<XdsUpdate<XdsRbac>>) -> Result<(), Vec<RejectedConfig>> {
-		let mut state = self.state.write().unwrap();
+		let mut state = self.state.write().await;
 		let handle = |res: XdsUpdate<XdsRbac>| {
 			match res {
 				XdsUpdate::Update(w) => self.updater.insert_rbac(&mut state, w.resource)?,
@@ -209,27 +206,22 @@ impl TryFrom<XdsTarget> for outbound::Target {
 	}
 }
 
-pub fn resolve_local_data_source(
-	local_data_source: &LocalDataSource,
-) -> Result<Vec<u8>, ParseError> {
-	match local_data_source
-		.source
-		.as_ref()
-		.ok_or(ParseError::MissingFields)?
-	{
-		XdsSource::FilePath(file_path) => {
-			let file = std::fs::read(file_path).map_err(|_| ParseError::MissingFields)?;
-			Ok(file)
-		},
-		XdsSource::Inline(inline) => Ok(inline.clone()),
-	}
+#[derive(Clone)]
+pub struct TargetStore {
+	by_name: HashMap<String, (outbound::Target, tokio_util::sync::CancellationToken)>,
+
+	by_name_protos: HashMap<String, XdsTarget>,
+
+	broadcast_tx: tokio::sync::broadcast::Sender<String>,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
-pub struct TargetStore {
-	by_name: HashMap<String, outbound::Target>,
-
-  by_name_protos: HashMap<String, XdsTarget>,
+impl Serialize for TargetStore {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: serde::Serializer,
+	{
+		self.by_name_protos.serialize(serializer)
+	}
 }
 
 impl Default for TargetStore {
@@ -240,51 +232,80 @@ impl Default for TargetStore {
 
 impl TargetStore {
 	pub fn new() -> Self {
+		let (tx, _rx) = tokio::sync::broadcast::channel(16);
 		Self {
 			by_name: HashMap::new(),
 			by_name_protos: HashMap::new(),
+			broadcast_tx: tx,
 		}
 	}
 
-	pub fn remove(&mut self, name: &str) {
-		// TODO: Drain connections from target
-		self.by_name.remove(name);
+	pub fn remove(
+		&mut self,
+		name: &str,
+	) -> Result<usize, tokio::sync::broadcast::error::SendError<String>> {
+		match self.by_name.remove(name) {
+			Some((_target, ct)) => {
+				ct.cancel();
+			},
+			None => {},
+		};
 		self.by_name_protos.remove(name);
+		self.broadcast_tx.send(name.to_string())
 	}
 
+	#[instrument(
+        level = Level::INFO,
+        name="insert_target",
+        skip_all,
+        fields(name=%target.name),
+    )]
 	pub fn insert(&mut self, target: XdsTarget) -> anyhow::Result<()> {
-    let target_name = target.name.clone();
+		let target_name = target.name.clone();
 		let outbound_target = outbound::Target::try_from(target.clone())?;
-		self.by_name.insert(target_name.clone(), outbound_target);
-		self.by_name_protos.insert(target_name, target);
+		let ct = tokio_util::sync::CancellationToken::new();
+		self
+			.by_name
+			.insert(target_name.clone(), (outbound_target, ct));
+		self.by_name_protos.insert(target_name.clone(), target);
+		tracing::info!("inserted target: {}", target_name);
 		Ok(())
 	}
 
-	pub fn get(&self, name: &str) -> Option<&outbound::Target> {
-		self.by_name.get(name)
+	pub fn get(
+		&self,
+		name: &str,
+	) -> Option<(&outbound::Target, &tokio_util::sync::CancellationToken)> {
+		self.by_name.get(name).map(|(target, ct)| (target, ct))
 	}
 
-  pub fn get_proto(&self, name: &str) -> Option<&XdsTarget> {
-    self.by_name_protos.get(name)
-  }
+	pub fn get_proto(&self, name: &str) -> Option<&XdsTarget> {
+		self.by_name_protos.get(name)
+	}
 
-	pub fn iter(&self) -> impl Iterator<Item = (String, &outbound::Target)> {
+	pub fn iter(
+		&self,
+	) -> impl Iterator<
+		Item = (
+			String,
+			&(outbound::Target, tokio_util::sync::CancellationToken),
+		),
+	> {
 		self
 			.by_name
 			.iter()
 			.map(|(name, target)| (name.clone(), target))
 	}
 
-	pub fn clear(&mut self) {
-		self.by_name.clear();
-		self.by_name_protos.clear();
+	pub fn subscribe(&self) -> tokio::sync::broadcast::Receiver<String> {
+		self.broadcast_tx.subscribe()
 	}
 }
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct PolicyStore {
 	by_name: HashMap<String, rbac::RuleSet>,
-  by_name_protos: HashMap<String, XdsRbac>,
+	by_name_protos: HashMap<String, XdsRbac>,
 }
 
 impl PolicyStore {
@@ -309,6 +330,10 @@ impl PolicyStore {
 		self.by_name.insert(policy_name.clone(), rule_set);
 		self.by_name_protos.insert(policy_name, policy);
 		Ok(())
+	}
+
+	pub fn get_proto(&self, name: &str) -> Option<&XdsRbac> {
+		self.by_name_protos.get(name)
 	}
 
 	pub fn remove(&mut self, name: &str) {

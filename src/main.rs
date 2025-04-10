@@ -90,6 +90,14 @@ async fn main() -> Result<()> {
 		},
 	};
 
+	let ct = tokio_util::sync::CancellationToken::new();
+	let ct_clone = ct.clone();
+	tokio::spawn(async move {
+		let sig = signal::Shutdown::new();
+		sig.wait().await;
+		ct_clone.cancel();
+	});
+
 	match cfg {
 		Config::Static(cfg) => {
 			let mut run_set = JoinSet::new();
@@ -98,28 +106,31 @@ async fn main() -> Result<()> {
 			let listener = inbound::Listener::from_xds(cfg_clone.listener.clone())
 				.await
 				.unwrap();
-			let state = Arc::new(RwLock::new(ProxyState::new(listener)));
+			let state = Arc::new(tokio::sync::RwLock::new(ProxyState::new(listener)));
 
 			let relay_metrics = relay::metrics::Metrics::new(&mut registry);
 
 			let state_2 = state.clone();
 			let cfg_clone = cfg.clone();
+			let ct_clone = ct.clone();
 			run_set.spawn(async move {
-				run_local_client(&cfg_clone, state_2, Arc::new(relay_metrics))
+				run_local_client(&cfg_clone, state_2, Arc::new(relay_metrics), ct_clone)
 					.await
 					.map_err(|e| anyhow::anyhow!("error running local client: {:?}", e))
 			});
 
 			// Add metrics listener
+			let ct_clone = ct.clone();
 			run_set.spawn(async move {
-				start_metrics_service(Arc::new(registry))
+				start_metrics_service(Arc::new(registry), ct_clone)
 					.await
 					.map_err(|e| anyhow::anyhow!("error serving metrics: {:?}", e))
 			});
 
 			// Add admin listener
+			let ct_clone = ct.clone();
 			run_set.spawn(async move {
-				start_admin_service(state.clone())
+				start_admin_service(state.clone(), ct_clone)
 					.await
 					.map_err(|e| anyhow::anyhow!("error serving admin: {:?}", e))
 			});
@@ -131,12 +142,13 @@ async fn main() -> Result<()> {
 			}
 		},
 		Config::Xds(cfg) => {
+			let ct = tokio_util::sync::CancellationToken::new();
 			let metrics = xds::metrics::Metrics::new(&mut registry);
 			let awaiting_ready = tokio::sync::watch::channel(()).0;
 			let listener = inbound::Listener::from_xds(cfg.listener.clone())
 				.await
 				.unwrap();
-			let state = Arc::new(RwLock::new(ProxyState::new(listener.clone())));
+			let state = Arc::new(tokio::sync::RwLock::new(ProxyState::new(listener.clone())));
 			let state_clone = state.clone();
 			let updater = ProxyStateUpdater::new(state_clone);
 			let cfg_clone = cfg.clone();
@@ -156,25 +168,27 @@ async fn main() -> Result<()> {
 			});
 
 			// Add admin listener
-
+			let ct_clone = ct.clone();
 			let state_3 = state.clone();
 			run_set.spawn(async move {
-				start_admin_service(state_3)
+				start_admin_service(state_3, ct_clone)
 					.await
 					.map_err(|e| anyhow::anyhow!("error serving admin: {:?}", e))
 			});
 
 			let relay_metrics = relay::metrics::Metrics::new(&mut registry);
+			let ct_clone = ct.clone();
 			run_set.spawn(async move {
 				listener
-					.listen(state.clone(), Arc::new(relay_metrics))
+					.listen(state.clone(), Arc::new(relay_metrics), ct_clone)
 					.await
 					.map_err(|e| anyhow::anyhow!("error serving static listener: {:?}", e))
 			});
 
 			// Add metrics listener
+			let ct_clone = ct.clone();
 			run_set.spawn(async move {
-				start_metrics_service(Arc::new(registry))
+				start_metrics_service(Arc::new(registry), ct_clone)
 					.await
 					.map_err(|e| anyhow::anyhow!("error serving metrics: {:?}", e))
 			});
@@ -190,26 +204,30 @@ async fn main() -> Result<()> {
 	Ok(())
 }
 
-async fn start_metrics_service(registry: Arc<Registry>) -> Result<(), std::io::Error> {
+async fn start_metrics_service(
+	registry: Arc<Registry>,
+	ct: tokio_util::sync::CancellationToken,
+) -> Result<(), std::io::Error> {
 	let listener = tokio::net::TcpListener::bind("127.0.0.1:9091").await?;
 	let app = MetricsApp::new(registry);
 	let router = app.router();
 	axum::serve(listener, router)
-		.with_graceful_shutdown(async {
-			let sig = signal::Shutdown::new();
-			sig.wait().await;
+		.with_graceful_shutdown(async move {
+			ct.cancelled().await;
 		})
 		.await
 }
 
-async fn start_admin_service(state: Arc<RwLock<ProxyState>>) -> Result<(), std::io::Error> {
+async fn start_admin_service(
+	state: Arc<tokio::sync::RwLock<ProxyState>>,
+	ct: tokio_util::sync::CancellationToken,
+) -> Result<(), std::io::Error> {
 	let listener = tokio::net::TcpListener::bind("127.0.0.1:19000").await?;
 	let app = AdminApp::new(state);
 	let router = app.router();
 	axum::serve(listener, router)
-		.with_graceful_shutdown(async {
-			let sig = signal::Shutdown::new();
-			sig.wait().await;
+		.with_graceful_shutdown(async move {
+			ct.cancelled().await;
 		})
 		.await
 }

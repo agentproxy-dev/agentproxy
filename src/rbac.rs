@@ -38,9 +38,11 @@ impl RuleSet {
 impl TryFrom<&XdsRuleSet> for RuleSet {
 	type Error = anyhow::Error;
 	fn try_from(value: &XdsRuleSet) -> Result<Self, Self::Error> {
-		let rules = value.rules.iter().map(|rule| -> Result<Rule, anyhow::Error> {
-			Rule::try_from(rule)
-		}).collect::<Result<Vec<Rule>, anyhow::Error>>()?;
+		let rules = value
+			.rules
+			.iter()
+			.map(|rule| -> Result<Rule, anyhow::Error> { Rule::try_from(rule) })
+			.collect::<Result<Vec<Rule>, anyhow::Error>>()?;
 		Ok(Self {
 			name: value.name.clone(),
 			namespace: value.namespace.clone(),
