@@ -84,12 +84,10 @@ impl OptionalFromRequestParts<App> for rbac::Claims {
 		let authn = state.authn.read().await;
 		match authn.as_ref() {
 			Some(authn) => {
-				tracing::info!("jwt");
 				let TypedHeader(Authorization(bearer)) = parts
 					.extract::<TypedHeader<Authorization<Bearer>>>()
 					.await
 					.map_err(AuthError::NoAuthHeaderPresent)?;
-				tracing::info!("bearer: {}", bearer.token());
 				let claims = authn.authenticate(bearer.token()).await;
 				match claims {
 					Ok(claims) => Ok(Some(claims)),
@@ -161,9 +159,9 @@ async fn post_event_handler(
 	// TODO: maybe do it here so we don't need to do this.
 	let mut message = message;
 	if let ClientJsonRpcMessage::Request(req) = &mut message {
-		let claims = rbac::Identity::new(claims.map(|c| c.0), app.connection_id.read().await.clone());
-		req.request.extensions_mut().insert(claims);
-		req.request.extensions_mut().insert(context);
+		let claims = rbac::Identity::new(claims, app.connection_id.read().await.clone());
+		let rq_ctx = relay::RqCtx::new(claims, context);
+		req.request.extensions_mut().insert(rq_ctx);
 	}
 
 	if tx.send(message).await.is_err() {

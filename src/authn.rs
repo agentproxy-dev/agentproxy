@@ -2,6 +2,7 @@ use crate::proto::mcpproxy::dev::common;
 use crate::proto::mcpproxy::dev::listener::listener::sse_listener;
 use jsonwebtoken::jwk::Jwk;
 use jsonwebtoken::{DecodingKey, Validation, decode, decode_header};
+use secrecy::SecretString;
 use serde::Serialize;
 use serde_json::Value;
 use serde_json::map::Map;
@@ -10,7 +11,6 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
-
 #[derive(Debug)]
 pub enum AuthError {
 	InvalidToken(jsonwebtoken::errors::Error),
@@ -243,6 +243,9 @@ impl JwtAuthenticator {
 		let token_data = decode::<Map<String, Value>>(token, &key.key, &validation)
 			.map_err(AuthError::InvalidToken)?;
 		tracing::info!("token data: {:?}", token_data);
-		Ok(crate::rbac::Claims::new(token_data.claims))
+		Ok(crate::rbac::Claims::new(
+			token_data.claims,
+			SecretString::new(token.into()),
+		))
 	}
 }

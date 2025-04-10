@@ -14,6 +14,7 @@ use crate::proto::mcpproxy::dev::listener::Listener as XdsListener;
 use crate::proto::mcpproxy::dev::rbac::Config as XdsRbac;
 use crate::proto::mcpproxy::dev::target::Target as XdsTarget;
 use crate::proto::mcpproxy::dev::target::target::Target as XdsTargetSpec;
+use crate::proto::mcpproxy::dev::target::target::auth::Auth as XdsAuth;
 
 use self::envoy::service::discovery::v3::DeltaDiscoveryRequest;
 use crate::rbac;
@@ -203,6 +204,16 @@ impl TryFrom<XdsTarget> for outbound::Target {
 			name: value.name.clone(),
 			spec,
 		})
+	}
+}
+
+impl TryFrom<XdsAuth> for outbound::backend::BackendAuthConfig {
+	type Error = ParseError;
+	fn try_from(value: XdsAuth) -> Result<Self, Self::Error> {
+		match value {
+			XdsAuth::Passthrough(_passthrough) => Ok(outbound::backend::BackendAuthConfig::Passthrough),
+			_ => Err(ParseError::InvalidSchema),
+		}
 	}
 }
 

@@ -3,6 +3,7 @@ syntax = "proto3";
 package mcpproxy.dev.target;
 
 import "common.proto";
+import "google/protobuf/empty.proto";
 
 message Target {
   // The name of the target.
@@ -14,6 +15,13 @@ message Target {
     StdioTarget stdio = 4;
   }
 
+  message Auth {
+    oneof auth {
+      google.protobuf.Empty passthrough = 1;
+    }
+  }
+
+
   message SseTarget {
     // The host of the target.
     string host = 1;
@@ -23,6 +31,8 @@ message Target {
     string path = 3;
     // The headers of the target.
     map<string, string> headers = 4;
+
+    Auth auth = 5;
   }
 
   message StdioTarget {
@@ -41,6 +51,8 @@ message Target {
     uint32 port = 2;
     // The schema of the target.
     mcpproxy.dev.common.LocalDataSource schema = 3;
+
+    Auth auth = 4;
   }
 }
 

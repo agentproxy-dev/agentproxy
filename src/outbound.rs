@@ -7,13 +7,13 @@ use std::collections::HashMap;
 pub mod backend;
 pub mod openapi;
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Debug)]
 pub struct Target {
 	pub name: String,
 	pub spec: TargetSpec,
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Debug)]
 pub enum TargetSpec {
 	Sse {
 		host: String,
