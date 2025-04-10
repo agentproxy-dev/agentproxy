@@ -1,6 +1,7 @@
 use crate::authn;
 use crate::relay;
 use crate::relay::Relay;
+use crate::trcng;
 use crate::xds::XdsStore as AppState;
 use crate::{proxyprotocol, rbac};
 use anyhow::Result;
@@ -20,11 +21,6 @@ use axum_extra::{
 	headers::{Authorization, authorization::Bearer},
 };
 use futures::{SinkExt, StreamExt, stream::Stream};
-use opentelemetry::{
-	Context,
-	global::{self},
-};
-use opentelemetry_http::HeaderExtractor;
 use rmcp::model::ClientJsonRpcMessage;
 use rmcp::model::GetExtensions;
 use rmcp::serve_server;
@@ -132,11 +128,6 @@ pub struct PostEventQuery {
 	pub session_id: String,
 }
 
-// Utility function to extract the context from the incoming request headers
-fn extract_context_from_request(headers: &HeaderMap) -> Context {
-	global::get_text_map_propagator(|propagator| propagator.extract(&HeaderExtractor(headers)))
-}
-
 async fn post_event_handler(
 	State(app): State<App>,
 	ConnectInfo(_connection): ConnectInfo<proxyprotocol::Address>,
@@ -153,7 +144,7 @@ async fn post_event_handler(
 			.clone()
 	};
 
-	let context = extract_context_from_request(&headers);
+	let context = trcng::extract_context_from_request(&headers);
 
 	// Add claims to the message for RBAC
 	// TODO: maybe do it here so we don't need to do this.
