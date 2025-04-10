@@ -7,6 +7,12 @@ use crate::xds::XdsStore;
 use http::HeaderName;
 use http::{HeaderMap, HeaderValue, header::AUTHORIZATION};
 use itertools::Itertools;
+use opentelemetry::trace::Tracer;
+use opentelemetry::{
+	Context,
+	global::{self, BoxedTracer},
+	trace::SpanKind,
+};
 use rmcp::RoleClient;
 use rmcp::service::RunningService;
 use rmcp::transport::child_process::TokioChildProcess;
@@ -17,15 +23,20 @@ use rmcp::{
 };
 use std::borrow::Cow;
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use tokio::process::Command;
 use tokio::sync::RwLock;
 use tracing::instrument;
-
 pub mod metrics;
 
 lazy_static::lazy_static! {
 	static ref DEFAULT_ID: rbac::Identity = rbac::Identity::default();
+	static ref DEFAULT_CONTEXT: Context = Context::new();
+}
+
+fn get_tracer() -> &'static BoxedTracer {
+	static TRACER: OnceLock<BoxedTracer> = OnceLock::new();
+	TRACER.get_or_init(|| global::tracer("mcp_proxy"))
 }
 
 #[derive(Clone)]
@@ -54,7 +65,7 @@ impl Relay {
 				// Try this a few times?
 				let target = Arc::into_inner(target_arc).unwrap();
 				match target {
-					UpstreamTarget::Mcp(m) => {
+					upstream::UpstreamTarget::Mcp(m) => {
 						m.cancel().await?;
 					},
 					_ => {
@@ -167,8 +178,18 @@ impl ServerHandler for Relay {
 	async fn list_prompts(
 		&self,
 		request: Option<PaginatedRequestParam>,
-		_context: RequestContext<RoleServer>,
+		context: RequestContext<RoleServer>,
 	) -> std::result::Result<ListPromptsResult, McpError> {
+		let context: &Context = context
+			.extensions
+			.get::<Context>()
+			.unwrap_or(&DEFAULT_CONTEXT);
+		let tracer = get_tracer();
+		let _span = get_tracer()
+			.span_builder("list_prompts")
+			.with_kind(SpanKind::Server)
+			.start_with_context(tracer, context);
+
 		let mut pool = self.pool.write().await;
 		let connections = pool
 			.list()
@@ -425,7 +446,7 @@ mod pool {
 
 	pub(crate) struct ConnectionPool {
 		state: Arc<tokio::sync::RwLock<XdsStore>>,
-		by_name: HashMap<String, Arc<UpstreamTarget>>,
+		by_name: HashMap<String, Arc<upstream::UpstreamTarget>>,
 	}
 
 	impl ConnectionPool {
@@ -439,7 +460,7 @@ mod pool {
 		pub(crate) async fn get_or_create(
 			&mut self,
 			name: &str,
-		) -> anyhow::Result<Arc<UpstreamTarget>> {
+		) -> anyhow::Result<Arc<upstream::UpstreamTarget>> {
 			// Connect if it doesn't exist
 			if !self.by_name.contains_key(name) {
 				// Read target info and drop lock before calling connect
@@ -469,11 +490,13 @@ mod pool {
 			))?)
 		}
 
-		pub(crate) async fn remove(&mut self, name: &str) -> Option<Arc<UpstreamTarget>> {
+		pub(crate) async fn remove(&mut self, name: &str) -> Option<Arc<upstream::UpstreamTarget>> {
 			self.by_name.remove(name)
 		}
 
-		pub(crate) async fn list(&mut self) -> anyhow::Result<Vec<(String, Arc<UpstreamTarget>)>> {
+		pub(crate) async fn list(
+			&mut self,
+		) -> anyhow::Result<Vec<(String, Arc<upstream::UpstreamTarget>)>> {
 			// Iterate through all state targets, and get the connection from the pool
 			// If the connection is not in the pool, connect to it and add it to the pool
 			// 1. Get target configurations (name, Target, CancellationToken) from the state's TargetStore
@@ -531,7 +554,7 @@ mod pool {
 				return Ok(());
 			}
 			tracing::trace!("connecting to target: {}", target.name);
-			let transport: UpstreamTarget = match &target.spec {
+			let transport: upstream::UpstreamTarget = match &target.spec {
 				TargetSpec::Sse {
 					host,
 					port,
@@ -576,11 +599,13 @@ mod pool {
 						},
 					};
 
-					UpstreamTarget::Mcp(serve_client_with_ct((), transport, ct.child_token()).await?)
+					upstream::UpstreamTarget::Mcp(
+						serve_client_with_ct((), transport, ct.child_token()).await?,
+					)
 				},
 				TargetSpec::Stdio { cmd, args, env: _ } => {
 					tracing::trace!("starting stdio transport for target: {}", target.name);
-					UpstreamTarget::Mcp(
+					upstream::UpstreamTarget::Mcp(
 						serve_client_with_ct(
 							(),
 							TokioChildProcess::new(Command::new(cmd).args(args)).unwrap(),
@@ -597,7 +622,7 @@ mod pool {
 						443 => "https",
 						_ => "http",
 					};
-					UpstreamTarget::OpenAPI(openapi::Handler {
+					upstream::UpstreamTarget::OpenAPI(openapi::Handler {
 						host: open_api.host.clone(),
 						client,
 						tools: open_api.tools.clone(),
@@ -613,13 +638,6 @@ mod pool {
 			Ok(())
 		}
 	}
-}
-
-// UpstreamTarget defines a source for MCP information.
-#[derive(Debug)]
-enum UpstreamTarget {
-	Mcp(RunningService<RoleClient, ()>),
-	OpenAPI(openapi::Handler),
 }
 
 enum UpstreamError {
@@ -679,97 +697,107 @@ impl From<UpstreamError> for ErrorData {
 	}
 }
 
-impl UpstreamTarget {
-	async fn list_tools(
-		&self,
-		request: Option<PaginatedRequestParam>,
-	) -> Result<ListToolsResult, UpstreamError> {
-		match self {
-			UpstreamTarget::Mcp(m) => Ok(m.list_tools(request).await?),
-			UpstreamTarget::OpenAPI(m) => Ok(ListToolsResult {
-				next_cursor: None,
-				tools: m.tools(),
-			}),
-		}
+mod upstream {
+	use super::*;
+	// UpstreamTarget defines a source for MCP information.
+	#[derive(Debug)]
+	pub(crate) enum UpstreamTarget {
+		Mcp(RunningService<RoleClient, ()>),
+		OpenAPI(openapi::Handler),
 	}
 
-	async fn get_prompt(
-		&self,
-		request: GetPromptRequestParam,
-	) -> Result<GetPromptResult, UpstreamError> {
-		match self {
-			UpstreamTarget::Mcp(m) => Ok(m.get_prompt(request).await?),
-			UpstreamTarget::OpenAPI(_) => Ok(GetPromptResult {
-				description: None,
-				messages: vec![],
-			}),
+	impl UpstreamTarget {
+		pub(crate) async fn list_tools(
+			&self,
+			request: Option<PaginatedRequestParam>,
+		) -> Result<ListToolsResult, UpstreamError> {
+			match self {
+				UpstreamTarget::Mcp(m) => Ok(m.list_tools(request).await?),
+				UpstreamTarget::OpenAPI(m) => Ok(ListToolsResult {
+					next_cursor: None,
+					tools: m.tools(),
+				}),
+			}
 		}
-	}
 
-	async fn list_prompts(
-		&self,
-		request: Option<PaginatedRequestParam>,
-	) -> Result<ListPromptsResult, UpstreamError> {
-		match self {
-			UpstreamTarget::Mcp(m) => Ok(m.list_prompts(request).await?),
-			UpstreamTarget::OpenAPI(_) => Ok(ListPromptsResult {
-				next_cursor: None,
-				prompts: vec![],
-			}),
+		pub(crate) async fn get_prompt(
+			&self,
+			request: GetPromptRequestParam,
+		) -> Result<GetPromptResult, UpstreamError> {
+			match self {
+				UpstreamTarget::Mcp(m) => Ok(m.get_prompt(request).await?),
+				UpstreamTarget::OpenAPI(_) => Ok(GetPromptResult {
+					description: None,
+					messages: vec![],
+				}),
+			}
 		}
-	}
 
-	async fn list_resources(
-		&self,
-		request: Option<PaginatedRequestParam>,
-	) -> Result<ListResourcesResult, UpstreamError> {
-		match self {
-			UpstreamTarget::Mcp(m) => Ok(m.list_resources(request).await?),
-			UpstreamTarget::OpenAPI(_) => Ok(ListResourcesResult {
-				next_cursor: None,
-				resources: vec![],
-			}),
+		pub(crate) async fn list_prompts(
+			&self,
+			request: Option<PaginatedRequestParam>,
+		) -> Result<ListPromptsResult, UpstreamError> {
+			match self {
+				UpstreamTarget::Mcp(m) => Ok(m.list_prompts(request).await?),
+				UpstreamTarget::OpenAPI(_) => Ok(ListPromptsResult {
+					next_cursor: None,
+					prompts: vec![],
+				}),
+			}
 		}
-	}
 
-	async fn list_resource_templates(
-		&self,
-		request: Option<PaginatedRequestParam>,
-	) -> Result<ListResourceTemplatesResult, UpstreamError> {
-		match self {
-			UpstreamTarget::Mcp(m) => Ok(m.list_resource_templates(request).await?),
-			UpstreamTarget::OpenAPI(_) => Ok(ListResourceTemplatesResult {
-				next_cursor: None,
-				resource_templates: vec![],
-			}),
+		pub(crate) async fn list_resources(
+			&self,
+			request: Option<PaginatedRequestParam>,
+		) -> Result<ListResourcesResult, UpstreamError> {
+			match self {
+				UpstreamTarget::Mcp(m) => Ok(m.list_resources(request).await?),
+				UpstreamTarget::OpenAPI(_) => Ok(ListResourcesResult {
+					next_cursor: None,
+					resources: vec![],
+				}),
+			}
 		}
-	}
 
-	async fn read_resource(
-		&self,
-		request: ReadResourceRequestParam,
-	) -> Result<ReadResourceResult, UpstreamError> {
-		match self {
-			UpstreamTarget::Mcp(m) => Ok(m.read_resource(request).await?),
-			UpstreamTarget::OpenAPI(_) => Ok(ReadResourceResult { contents: vec![] }),
+		pub(crate) async fn list_resource_templates(
+			&self,
+			request: Option<PaginatedRequestParam>,
+		) -> Result<ListResourceTemplatesResult, UpstreamError> {
+			match self {
+				UpstreamTarget::Mcp(m) => Ok(m.list_resource_templates(request).await?),
+				UpstreamTarget::OpenAPI(_) => Ok(ListResourceTemplatesResult {
+					next_cursor: None,
+					resource_templates: vec![],
+				}),
+			}
 		}
-	}
 
-	async fn call_tool(
-		&self,
-		request: CallToolRequestParam,
-	) -> Result<CallToolResult, UpstreamError> {
-		match self {
-			UpstreamTarget::Mcp(m) => Ok(m.call_tool(request).await?),
-			UpstreamTarget::OpenAPI(m) => {
-				let res = m
-					.call_tool(request.name.as_ref(), request.arguments)
-					.await?;
-				Ok(CallToolResult {
-					content: vec![Content::text(res)],
-					is_error: None,
-				})
-			},
+		pub(crate) async fn read_resource(
+			&self,
+			request: ReadResourceRequestParam,
+		) -> Result<ReadResourceResult, UpstreamError> {
+			match self {
+				UpstreamTarget::Mcp(m) => Ok(m.read_resource(request).await?),
+				UpstreamTarget::OpenAPI(_) => Ok(ReadResourceResult { contents: vec![] }),
+			}
+		}
+
+		pub(crate) async fn call_tool(
+			&self,
+			request: CallToolRequestParam,
+		) -> Result<CallToolResult, UpstreamError> {
+			match self {
+				UpstreamTarget::Mcp(m) => Ok(m.call_tool(request).await?),
+				UpstreamTarget::OpenAPI(m) => {
+					let res = m
+						.call_tool(request.name.as_ref(), request.arguments)
+						.await?;
+					Ok(CallToolResult {
+						content: vec![Content::text(res)],
+						is_error: None,
+					})
+				},
+			}
 		}
 	}
 }

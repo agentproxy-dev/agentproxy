@@ -8,6 +8,7 @@ use axum::extract::{ConnectInfo, OptionalFromRequestParts};
 use axum::{
 	Json, RequestPartsExt, Router,
 	extract::{Query, State},
+	http::header::HeaderMap,
 	http::{StatusCode, request::Parts},
 	response::sse::{Event, Sse},
 	response::{IntoResponse, Response},
@@ -19,6 +20,11 @@ use axum_extra::{
 	headers::{Authorization, authorization::Bearer},
 };
 use futures::{SinkExt, StreamExt, stream::Stream};
+use opentelemetry::{
+	Context,
+	global::{self},
+};
+use opentelemetry_http::HeaderExtractor;
 use rmcp::model::ClientJsonRpcMessage;
 use rmcp::model::GetExtensions;
 use rmcp::serve_server;
@@ -128,10 +134,16 @@ pub struct PostEventQuery {
 	pub session_id: String,
 }
 
+// Utility function to extract the context from the incoming request headers
+fn extract_context_from_request(headers: &HeaderMap) -> Context {
+	global::get_text_map_propagator(|propagator| propagator.extract(&HeaderExtractor(headers)))
+}
+
 async fn post_event_handler(
 	State(app): State<App>,
 	ConnectInfo(_connection): ConnectInfo<proxyprotocol::Address>,
 	claims: Option<rbac::Claims>,
+	headers: HeaderMap,
 	Query(PostEventQuery { session_id }): Query<PostEventQuery>,
 	Json(message): Json<ClientJsonRpcMessage>,
 ) -> Result<StatusCode, StatusCode> {
@@ -143,12 +155,15 @@ async fn post_event_handler(
 			.clone()
 	};
 
+	let context = extract_context_from_request(&headers);
+
 	// Add claims to the message for RBAC
 	// TODO: maybe do it here so we don't need to do this.
 	let mut message = message;
 	if let ClientJsonRpcMessage::Request(req) = &mut message {
 		let claims = rbac::Identity::new(claims.map(|c| c.0), app.connection_id.read().await.clone());
 		req.request.extensions_mut().insert(claims);
+		req.request.extensions_mut().insert(context);
 	}
 
 	if tx.send(message).await.is_err() {

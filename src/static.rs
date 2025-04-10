@@ -42,15 +42,17 @@ pub async fn run_local_client(
 				.insert(target)
 				.expect("failed to insert target into store");
 		}
-		let rule_set = XdsRuleSet {
-			name: "test".to_string(),
-			namespace: "test".to_string(),
-			rules: cfg.policies.clone(),
-		};
-		state
-			.policies
-			.insert(rule_set)
-			.expect("failed to insert rule set into store");
+		if cfg.policies.len() > 0 {
+			let rule_set = XdsRuleSet {
+				name: "test".to_string(),
+				namespace: "test".to_string(),
+				rules: cfg.policies.clone(),
+			};
+			state
+				.policies
+				.insert(rule_set)
+				.expect("failed to insert rule set into store");
+		}
 		info!(%num_targets, %num_policies, "local config initialized");
 	}
 
