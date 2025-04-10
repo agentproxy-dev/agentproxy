@@ -21,11 +21,10 @@ export function TargetsConfig({ targets, addTarget, removeTarget }: TargetsConfi
   const [isAddingTarget, setIsAddingTarget] = useState(false)
   const [serverType, setServerType] = useState<TargetType>("sse")
   const [serverName, setServerName] = useState("")
-  const [host, setHost] = useState("localhost")
-  const [port, setPort] = useState(3000)
-  const [path, setPath] = useState("/")
+  const [url, setUrl] = useState("")
   const [command, setCommand] = useState("npx")
   const [args, setArgs] = useState("")
+  const [targetToDelete, setTargetToDelete] = useState<number | null>(null)
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -41,16 +40,22 @@ export function TargetsConfig({ targets, addTarget, removeTarget }: TargetsConfi
         env: {},
       }
     } else if (serverType === "sse") {
-      targetConfig.sse = {
-        host,
-        port: port,
-        path: path,
-        headers: {},
+      try {
+        const urlObj = new URL(url)
+        targetConfig.sse = {
+          host: urlObj.hostname,
+          port: parseInt(urlObj.port || "80", 10),
+          path: urlObj.pathname + urlObj.search,
+          headers: {},
+        }
+      } catch (error) {
+        console.error("Invalid URL:", error)
+        return
       }
     } else if (serverType === "openapi") {
       targetConfig.openapi = {
-        host,
-        port: port,
+        host: url,
+        port: 80,
         schema: {
           file_path: "",
         },
@@ -64,9 +69,7 @@ export function TargetsConfig({ targets, addTarget, removeTarget }: TargetsConfi
 
   const resetForm = () => {
     setServerName("")
-    setHost("localhost")
-    setPort(3000)
-    setPath("/")
+    setUrl("")
     setCommand("npx")
     setArgs("")
   }
@@ -82,6 +85,21 @@ export function TargetsConfig({ targets, addTarget, removeTarget }: TargetsConfi
       default:
         return <Server className="h-4 w-4" />
     }
+  }
+
+  const handleDeleteTarget = (index: number) => {
+    setTargetToDelete(index)
+  }
+
+  const confirmDelete = () => {
+    if (targetToDelete !== null) {
+      removeTarget(targetToDelete)
+      setTargetToDelete(null)
+    }
+  }
+
+  const cancelDelete = () => {
+    setTargetToDelete(null)
   }
 
   return (
@@ -118,7 +136,7 @@ export function TargetsConfig({ targets, addTarget, removeTarget }: TargetsConfi
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => removeTarget(index)}
+                onClick={() => handleDeleteTarget(index)}
                 className="text-muted-foreground hover:text-destructive"
               >
                 <Trash2 className="h-4 w-4" />
@@ -173,37 +191,19 @@ export function TargetsConfig({ targets, addTarget, removeTarget }: TargetsConfi
                 </TabsList>
 
                 <TabsContent value="sse" className="space-y-4 pt-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="host">Host</Label>
-                      <Input
-                        id="host"
-                        value={host}
-                        onChange={(e) => setHost(e.target.value)}
-                        placeholder="localhost"
-                        required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="port">Port</Label>
-                      <Input
-                        id="port"
-                        type="number"
-                        value={port}
-                        onChange={(e) => setPort(parseInt(e.target.value))}
-                        placeholder="3000"
-                        required
-                      />
-                    </div>
-                  </div>
                   <div className="space-y-2">
-                    <Label htmlFor="path">Path</Label>
+                    <Label htmlFor="url">Server URL</Label>
                     <Input
-                      id="path"
-                      value={path}
-                      onChange={(e) => setPath(e.target.value)}
-                      placeholder="/"
+                      id="url"
+                      type="url"
+                      value={url}
+                      onChange={(e) => setUrl(e.target.value)}
+                      placeholder="http://localhost:3000/events"
+                      required
                     />
+                    <p className="text-sm text-muted-foreground">
+                      Enter the full URL including protocol, hostname, port, and path
+                    </p>
                   </div>
                 </TabsContent>
 
@@ -230,28 +230,16 @@ export function TargetsConfig({ targets, addTarget, removeTarget }: TargetsConfi
                 </TabsContent>
 
                 <TabsContent value="openapi" className="space-y-4 pt-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="openapi-host">Host</Label>
-                      <Input
-                        id="openapi-host"
-                        value={host}
-                        onChange={(e) => setHost(e.target.value)}
-                        placeholder="localhost"
-                        required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="openapi-port">Port</Label>
-                      <Input
-                        id="openapi-port"
-                        type="number"
-                        value={port}
-                        onChange={(e) => setPort(parseInt(e.target.value))}
-                        placeholder="3000"
-                        required
-                      />
-                    </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="openapi-url">Server URL</Label>
+                    <Input
+                      id="openapi-url"
+                      type="url"
+                      value={url}
+                      onChange={(e) => setUrl(e.target.value)}
+                      placeholder="http://localhost:3000"
+                      required
+                    />
                   </div>
                 </TabsContent>
               </Tabs>
@@ -261,6 +249,25 @@ export function TargetsConfig({ targets, addTarget, removeTarget }: TargetsConfi
               </div>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={targetToDelete !== null} onOpenChange={(open) => !open && cancelDelete()}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Target Server</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this target server? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2 mt-4">
+            <Button variant="outline" onClick={cancelDelete}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={confirmDelete}>
+              Delete
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
@@ -286,12 +293,14 @@ function renderTargetDetails(target: Target) {
   }
 
   if (target.sse) {
+    const path = target.sse.path || "/"
+    const truncatedPath = path.length > 30 ? path.substring(0, 27) + "..." : path
     return (
       <div className="text-sm text-muted-foreground">
         <p>
           Host: {target.sse.host}:{target.sse.port}
         </p>
-        <p>Path: {target.sse.path || "/"}</p>
+        <p>Path: {truncatedPath}</p>
       </div>
     )
   }
