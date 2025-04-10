@@ -14,7 +14,8 @@ use crate::proto::mcpproxy::dev::listener::Listener as XdsListener;
 use crate::proto::mcpproxy::dev::rbac::Config as XdsRbac;
 use crate::proto::mcpproxy::dev::target::Target as XdsTarget;
 use crate::proto::mcpproxy::dev::target::target::Target as XdsTargetSpec;
-use crate::proto::mcpproxy::dev::target::target::auth::Auth as XdsAuth;
+use crate::proto::mcpproxy::dev::target::target::Auth as XdsAuth;
+use crate::proto::mcpproxy::dev::target::target::auth::Auth as XdsAuthSpec;
 
 use self::envoy::service::discovery::v3::DeltaDiscoveryRequest;
 use crate::rbac;
@@ -189,7 +190,10 @@ impl TryFrom<XdsTarget> for outbound::Target {
 				port: sse.port,
 				path: sse.path.clone(),
 				headers: sse.headers.clone(),
-				backend_auth: None,
+				backend_auth: match sse.auth {
+					Some(auth) => XdsAuth::try_into(auth)?,
+					None => None,
+				},
 			},
 			XdsTargetSpec::Stdio(stdio) => outbound::TargetSpec::Stdio {
 				cmd: stdio.cmd.clone(),
@@ -207,12 +211,12 @@ impl TryFrom<XdsTarget> for outbound::Target {
 	}
 }
 
-impl TryFrom<XdsAuth> for outbound::backend::BackendAuthConfig {
+impl TryFrom<XdsAuth> for Option<outbound::backend::BackendAuthConfig> {
 	type Error = ParseError;
 	fn try_from(value: XdsAuth) -> Result<Self, Self::Error> {
-		match value {
-			XdsAuth::Passthrough(_passthrough) => Ok(outbound::backend::BackendAuthConfig::Passthrough),
-			_ => Err(ParseError::InvalidSchema),
+		match value.auth {
+			Some(XdsAuthSpec::Passthrough(_)) => Ok(Some(outbound::backend::BackendAuthConfig::Passthrough)),
+			_ => Ok(None),
 		}
 	}
 }

@@ -1,7 +1,6 @@
 use secrecy::ExposeSecret;
 use secrecy::SecretString;
-use serde::{Deserialize, Serialize};
-use std::default::Default;
+use serde::Serialize;
 
 #[cfg(feature = "aws")]
 pub(crate) mod aws;

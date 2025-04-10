@@ -2,7 +2,7 @@ use crate::proto;
 use crate::proto::mcpproxy::dev::target::target::OpenApiTarget as XdsOpenAPITarget;
 use openapiv3::OpenAPI;
 use rmcp::model::Tool;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::collections::HashMap;
 pub mod backend;
 pub mod openapi;
@@ -30,12 +30,13 @@ pub enum TargetSpec {
 	OpenAPI(OpenAPITarget),
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Debug)]
 pub struct OpenAPITarget {
 	pub host: String,
 	pub prefix: String,
 	pub port: u16,
 	pub tools: Vec<(Tool, openapi::UpstreamOpenAPICall)>,
+	pub backend_auth: Option<backend::BackendAuthConfig>,
 }
 
 impl TryFrom<XdsOpenAPITarget> for OpenAPITarget {
@@ -54,6 +55,10 @@ impl TryFrom<XdsOpenAPITarget> for OpenAPITarget {
 			prefix,
 			port: value.port as u16, // TODO: check if this is correct
 			tools,
+			backend_auth: match value.auth {
+				Some(auth) => auth.try_into().map_err(|_| openapi::ParseError::MissingSchema)?,
+				None => None,
+			},
 		})
 	}
 }
