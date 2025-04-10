@@ -10,7 +10,7 @@ interface ConnectionFormProps {
 }
 
 export function ConnectionForm({ onConnect }: ConnectionFormProps) {
-  const [address, setAddress] = useState("localhost");
+  const [address, setAddress] = useState("0.0.0.0");
   const [port, setPort] = useState(3000);
   const [isConnecting, setIsConnecting] = useState(false);
 
@@ -29,7 +29,7 @@ export function ConnectionForm({ onConnect }: ConnectionFormProps) {
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label htmlFor="address">Server Address</Label>
+          <Label htmlFor="address">MCP Proxy Address</Label>
           <Input id="address" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="localhost or IP address" required />
         </div>
 

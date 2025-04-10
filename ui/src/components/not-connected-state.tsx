@@ -24,7 +24,6 @@ export function NotConnectedState({ onConnect, connectionError }: NotConnectedSt
           <div className="mb-6">
             <MCPLogo className="h-16 w-auto mx-auto" />
           </div>
-          <h1 className="text-3xl font-semibold mb-3 bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary/80">Connect to MCP Proxy</h1>
           <p className="text-sm text-muted-foreground max-w-xs mx-auto">Enter the address and port of your MCP proxy server to get started</p>
         </motion.div>
         

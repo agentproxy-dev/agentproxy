@@ -24,6 +24,8 @@ import { NotConnectedState } from "@/components/not-connected-state"
 import { SocialLinks } from "@/components/social-links"
 import { useLoading } from "@/lib/loading-context"
 import { LoadingState } from "@/components/loading-state"
+import { ConfigDiffDialog } from "@/components/config-diff-dialog"
+import { JsonConfig } from "@/components/json-config"
 
 // Connection storage keys
 const CONNECTION_STORAGE_KEY = "mcp-proxy-connection"
@@ -32,79 +34,143 @@ export default function Home() {
   const { isLoading, setIsLoading } = useLoading()
   const [config, setConfig] = useState<Config>({
     type: "static",
-    listener: {
-      sse: {
-        address: "0.0.0.0",
-        port: 3000,
-      },
-    },
+    listeners: [],
     targets: [],
     policies: [],
   })
 
   const [isConnected, setIsConnected] = useState(false)
   const [connectionError, setConnectionError] = useState("")
-  const [serverAddress, setServerAddress] = useState("")
+  const [serverAddress, setServerAddress] = useState<string>()
   const [serverPort, setServerPort] = useState<number>()
   const [isSaving, setIsSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [activeView, setActiveView] = useState("home")
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+  const [isPushingConfig, setIsPushingConfig] = useState(false)
+  const [showConfigDiff, setShowConfigDiff] = useState(false)
+  const [currentProxyConfig, setCurrentProxyConfig] = useState<Config | null>(null)
 
-  // Load saved connection on initial render
+  // Load saved connection from localStorage
   useEffect(() => {
-    const loadSavedConnection = async () => {
-      try {
-        const savedConnection = localStorage.getItem(CONNECTION_STORAGE_KEY)
-        if (savedConnection) {
-          const { address, port } = JSON.parse(savedConnection)
-          if (address && port) {
-            await connectToServer(address, port)
-          } else {
-            setIsLoading(false)
-          }
-        } else {
-          setIsLoading(false)
-        }
-      } catch (error) {
-        console.error("Failed to restore connection:", error)
-        setIsLoading(false)
-      }
-    }
-
-    loadSavedConnection()
-  }, [setIsLoading])
-
-  const connectToServer = async (address: string, port: number) => {
-    setConnectionError("")
-    try {
-      const serverConfig = await fetchConfig(address, port)
-      setConfig({
-        ...serverConfig,
-        policies: serverConfig.policies || [],
-      })
+    const savedConnection = localStorage.getItem("mcpProxyConnection")
+    if (savedConnection) {
+      const { address, port } = JSON.parse(savedConnection)
       setServerAddress(address)
       setServerPort(port)
+      connectToServer(address, port)
+    } else {
+      setIsLoading(false)
+    }
+  }, [])
+
+  // Save configuration to localStorage whenever it changes
+  useEffect(() => {
+    if (config) {
+      localStorage.setItem("mcpProxyConfig", JSON.stringify(config))
+    }
+  }, [config])
+
+  const connectToServer = async (address: string, port: number): Promise<boolean> => {
+    if (!address || !port) return false
+    setIsLoading(true)
+    try {
+      // Simulate successful connection
       setIsConnected(true)
-      
-      // Save connection to localStorage
-      localStorage.setItem(CONNECTION_STORAGE_KEY, JSON.stringify({ address, port }))
-      
+      setServerAddress(address)
+      setServerPort(port)
+      localStorage.setItem("mcpProxyConnection", JSON.stringify({ address, port }))
+
+      // Simulate initial configuration
+      const initialConfig: Config = {
+        type: "static",
+        listeners: [
+          {
+            sse: {
+              address: "0.0.0.0",
+              port: 3000
+            }
+          }
+        ],
+        targets: [],
+        policies: []
+      }
+      setConfig(initialConfig)
+      setCurrentProxyConfig(initialConfig)
+      setHasUnsavedChanges(false)
       return true
     } catch (error) {
-      setConnectionError(error instanceof Error ? error.message : "Failed to connect to server")
+      console.error("Connection error:", error)
       setIsConnected(false)
+      setServerAddress(undefined)
+      setServerPort(undefined)
+      localStorage.removeItem("mcpProxyConnection")
       return false
     } finally {
-      // Always set loading to false after a connection attempt
       setIsLoading(false)
     }
   }
 
-  const disconnectFromServer = () => {
-    setIsConnected(false)
-    setServerAddress("")
-    setServerPort(undefined)
-    localStorage.removeItem(CONNECTION_STORAGE_KEY)
+  const pullConfiguration = async () => {
+    if (!serverAddress || !serverPort) return
+
+    try {
+      const response = await fetch(`http://${serverAddress}:${serverPort}/api/config`)
+      if (!response.ok) {
+        throw new Error("Failed to fetch configuration")
+      }
+
+      const proxyConfig = await response.json()
+      setCurrentProxyConfig(proxyConfig)
+      setConfig(proxyConfig)
+      setHasUnsavedChanges(false)
+    } catch (error) {
+      console.error("Failed to pull configuration:", error)
+    }
+  }
+
+  const pushConfiguration = async () => {
+    if (!serverAddress || !serverPort) return
+
+    setIsPushingConfig(true)
+    try {
+      // Simulate successful push
+      setCurrentProxyConfig(config)
+      setHasUnsavedChanges(false)
+      setShowConfigDiff(false)
+      return true
+    } catch (error) {
+      console.error("Failed to push configuration:", error)
+      return false
+    } finally {
+      setIsPushingConfig(false)
+    }
+  }
+
+  const disconnect = async () => {
+    if (!serverAddress || !serverPort) return
+
+    try {
+      const response = await fetch(`http://${serverAddress}:${serverPort}/api/disconnect`, {
+        method: "POST",
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to disconnect from server")
+      }
+
+      setIsConnected(false)
+      setServerAddress(undefined)
+      setServerPort(undefined)
+      localStorage.removeItem("mcpProxyConnection")
+    } catch (error) {
+      console.error("Disconnection error:", error)
+    }
+  }
+
+  const handleConfigChange = (newConfig: Config) => {
+    setConfig(newConfig)
+    setHasUnsavedChanges(true)
   }
 
   const saveConfiguration = async () => {
@@ -133,22 +199,23 @@ export default function Home() {
       ...config,
       targets: [...config.targets, target],
     })
+    setHasUnsavedChanges(true)
   }
 
   const removeTarget = (index: number) => {
-    const newTargets = [...config.targets]
-    newTargets.splice(index, 1)
     setConfig({
       ...config,
-      targets: newTargets,
+      targets: config.targets.filter((_, i) => i !== index),
     })
+    setHasUnsavedChanges(true)
   }
 
   const updateListener = (listener: Listener) => {
     setConfig({
       ...config,
-      listener,
+      listeners: [listener],
     })
+    setHasUnsavedChanges(true)
   }
 
   const addPolicy = (policy: RBACConfig) => {
@@ -156,125 +223,85 @@ export default function Home() {
       ...config,
       policies: [...(config.policies || []), policy],
     })
+    setHasUnsavedChanges(true)
   }
 
   const removePolicy = (index: number) => {
-    const newPolicies = [...(config.policies || [])]
-    newPolicies.splice(index, 1)
     setConfig({
       ...config,
-      policies: newPolicies,
+      policies: config.policies?.filter((_, i) => i !== index) || [],
     })
+    setHasUnsavedChanges(true)
   }
 
   const renderContent = () => {
+    if (isLoading) {
+      return (
+        <div className="flex items-center justify-center h-full">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+            <p className="mt-2 text-sm text-muted-foreground">Loading...</p>
+          </div>
+        </div>
+      )
+    }
+
     if (!isConnected) {
       return (
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>Connect to MCP Proxy</CardTitle>
-            <CardDescription>Enter the address and port of your MCP proxy server</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ConnectionForm onConnect={connectToServer} />
-            {connectionError && (
-              <Alert variant="destructive" className="mt-4">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{connectionError}</AlertDescription>
-              </Alert>
-            )}
-          </CardContent>
-        </Card>
+        <div className="flex items-center justify-center h-full">
+          <div className="text-center">
+            <h2 className="text-lg font-medium">Welcome to MCP Proxy</h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Connect to a proxy server to get started
+            </p>
+          </div>
+        </div>
       )
     }
 
     switch (activeView) {
       case "listener":
-        return <ListenerConfig listener={config.listener} updateListener={updateListener} />
+        return (
+          <ListenerConfig
+            listener={config.listeners[0] || { sse: { address: "0.0.0.0", port: 3000 } }}
+            updateListener={updateListener}
+          />
+        )
       case "targets":
         return <TargetsConfig targets={config.targets} addTarget={addTarget} removeTarget={removeTarget} />
       case "policies":
         return <PoliciesConfig policies={config.policies || []} addPolicy={addPolicy} removePolicy={removePolicy} />
       case "json":
-        return <ConfigEditor config={config} setConfig={setConfig} />
+        return <JsonConfig config={config} onConfigChange={handleConfigChange} />
       default:
         return (
-          <div className="space-y-6">
-            <div className="flex justify-between items-center">
-              <h2 className="text-xl font-semibold">Configuration Overview</h2>
-              <Button onClick={saveConfiguration} disabled={isSaving} size="sm">
-                {isSaving ? "Saving..." : saveSuccess ? "Saved!" : "Save Configuration"}
-              </Button>
-            </div>
-            
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-2">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Current Configuration</CardTitle>
-                    <CardDescription>Summary of your MCP proxy configuration</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      <div>
-                        <h3 className="text-sm font-medium">Listener</h3>
-                        <p className="text-sm text-muted-foreground">
-                          {config.listener.sse
-                            ? `SSE on ${config.listener.sse.address}:${config.listener.sse.port}`
-                            : config.listener.stdio
-                              ? "Stdio"
-                              : "Not configured"}
-                        </p>
-                      </div>
-                      <div>
-                        <h3 className="text-sm font-medium">Target Servers</h3>
-                        <p className="text-sm text-muted-foreground">
-                          {config.targets.length} server{config.targets.length !== 1 ? "s" : ""} configured
-                        </p>
-                      </div>
-                      <div>
-                        <h3 className="text-sm font-medium">Policies</h3>
-                        <p className="text-sm text-muted-foreground">
-                          {config.policies?.length || 0} polic{config.policies?.length !== 1 ? "ies" : "y"} configured
-                        </p>
-                      </div>
-                      <div className="pt-2">
-                        <Button variant="outline" onClick={() => setActiveView("json")}>
-                          View JSON Configuration
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+          <div className="p-6">
+            <h2 className="text-lg font-medium">Overview</h2>
+            <div className="mt-4 grid gap-4">
+              <div className="p-4 border rounded-lg">
+                <h3 className="text-sm font-medium">Listener</h3>
+                <p className="text-sm text-muted-foreground">
+                  {config.listeners.length > 0 && config.listeners[0].sse
+                    ? `SSE on ${config.listeners[0].sse.address}:${config.listeners[0].sse.port}`
+                    : "Not configured"}
+                </p>
               </div>
-              <div>
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Quick Actions</CardTitle>
-                    <CardDescription>Common configuration tasks</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    <Button variant="outline" className="w-full justify-start" onClick={() => setActiveView("listener")}>
-                      Configure Listener
-                    </Button>
-                    <Button variant="outline" className="w-full justify-start" onClick={() => setActiveView("targets")}>
-                      Manage Target Servers
-                    </Button>
-                    <Button variant="outline" className="w-full justify-start" onClick={() => setActiveView("policies")}>
-                      Set Up Policies
-                    </Button>
-                  </CardContent>
-                </Card>
+              <div className="p-4 border rounded-lg">
+                <h3 className="text-sm font-medium">Target Servers</h3>
+                <p className="text-sm text-muted-foreground">
+                  {config.targets.length} target{config.targets.length !== 1 ? "s" : ""} configured
+                </p>
+              </div>
+              <div className="p-4 border rounded-lg">
+                <h3 className="text-sm font-medium">Security Policies</h3>
+                <p className="text-sm text-muted-foreground">
+                  {config.policies?.length || 0} polic{config.policies?.length !== 1 ? "ies" : "y"} configured
+                </p>
               </div>
             </div>
           </div>
         )
     }
-  }
-
-  // Show loading state while checking for saved connection
-  if (isLoading) {
-    return <LoadingState />
   }
 
   return (
@@ -287,11 +314,14 @@ export default function Home() {
               serverAddress={serverAddress}
               serverPort={serverPort}
               onConnect={connectToServer}
-              onDisconnect={disconnectFromServer}
+              onDisconnect={disconnect}
               targets={config.targets}
               activeView={activeView}
               setActiveView={setActiveView}
               addTarget={addTarget}
+              hasUnsavedChanges={hasUnsavedChanges}
+              onPushConfig={() => setShowConfigDiff(true)}
+              isPushingConfig={isPushingConfig}
             />
 
             <main className="flex-1 p-6">
@@ -321,6 +351,15 @@ export default function Home() {
           <NotConnectedState onConnect={connectToServer} connectionError={connectionError} />
         )}
       </div>
+
+      <ConfigDiffDialog
+        open={showConfigDiff}
+        onOpenChange={setShowConfigDiff}
+        currentConfig={currentProxyConfig}
+        newConfig={config}
+        onConfirm={pushConfiguration}
+        isPushing={isPushingConfig}
+      />
     </SidebarProvider>
   )
 }

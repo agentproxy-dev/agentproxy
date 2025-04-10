@@ -14,15 +14,24 @@ import {
   SidebarMenuButton,
   SidebarMenuBadge,
   SidebarSeparator,
+  useSidebar,
 } from "@/components/ui/sidebar"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { PlusCircle } from "lucide-react"
-import { Server, Settings, Shield, Headphones, Globe, Terminal, FileJson, HelpCircle, Plug, Home, RefreshCw, LogOut } from "lucide-react"
+import { PlusCircle, Upload, Loader2, Home } from "lucide-react"
+import { Server, Settings, Shield, Headphones, Globe, Terminal, FileJson, HelpCircle, Plug, RefreshCw, LogOut, ChevronsUpDown } from "lucide-react"
 import { MCPLogo } from "@/components/mcp-logo"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Target } from "@/lib/types"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
 interface AppSidebarProps {
   isConnected: boolean
@@ -34,6 +43,9 @@ interface AppSidebarProps {
   activeView: string
   setActiveView: (view: string) => void
   addTarget: (target: Target) => void
+  hasUnsavedChanges: boolean
+  onPushConfig: () => void
+  isPushingConfig: boolean
 }
 
 export function AppSidebar({
@@ -46,10 +58,14 @@ export function AppSidebar({
   activeView,
   setActiveView,
   addTarget,
+  hasUnsavedChanges,
+  onPushConfig,
+  isPushingConfig,
 }: AppSidebarProps) {
   const [quickConnectAddress, setQuickConnectAddress] = useState("localhost")
   const [quickConnectPort, setQuickConnectPort] = useState(3000)
   const [isConnecting, setIsConnecting] = useState(false)
+  const { isMobile } = useSidebar()
 
   const handleQuickConnect = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -94,6 +110,7 @@ export function AppSidebar({
                   placeholder="localhost"
                   className="h-7"
                   required
+                  aria-label="Server address"
                 />
               </div>
               <div className="space-y-1">
@@ -107,6 +124,7 @@ export function AppSidebar({
                   placeholder="3000"
                   className="h-7"
                   required
+                  aria-label="Server port"
                 />
               </div>
               <Button type="submit" size="sm" className="w-full" disabled={isConnecting}>
@@ -115,40 +133,73 @@ export function AppSidebar({
             </form>
           ) : (
             <div className="mt-4 space-y-2">
-              <div className="text-sm px-2 py-1 bg-secondary text-secondary-foreground rounded-md">
-                <div className="font-medium flex items-center">
-                  <Plug className="h-3 w-3 mr-1" /> Connected
-                </div>
-                <div className="text-xs mt-1">
-                  {serverAddress}:{serverPort}
-                </div>
-              </div>
-              <div className="flex space-x-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="flex-1 text-xs"
-                  onClick={() => {
-                    if (serverAddress && serverPort) {
-                      onConnect(serverAddress, serverPort)
-                    } else {
-                      console.error("Server address or port is undefined.")
-                    }
-                  }}
-                >
-                  <RefreshCw className="h-3 w-3 mr-1" />
-                  Refresh
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="flex-1 text-xs text-destructive hover:text-destructive"
-                  onClick={onDisconnect}
-                >
-                  <LogOut className="h-3 w-3 mr-1" />
-                  Disconnect
-                </Button>
-              </div>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <SidebarMenuButton
+                        size="lg"
+                        className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                        aria-label="Server actions"
+                      >
+                        <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+                          <Plug className="size-4" />
+                        </div>
+                        <div className="grid flex-1 text-left text-sm leading-tight">
+                          <span className="truncate font-semibold">
+                            {serverAddress}:{serverPort}
+                          </span>
+                          <span className="truncate text-xs">Connected</span>
+                        </div>
+                        <ChevronsUpDown className="ml-auto" />
+                      </SidebarMenuButton>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent
+                      className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg"
+                      align="start"
+                      side={isMobile ? "bottom" : "right"}
+                      sideOffset={4}
+                    >
+                      <DropdownMenuLabel className="text-xs text-muted-foreground">
+                        Server Actions
+                      </DropdownMenuLabel>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          if (serverAddress && serverPort) {
+                            onConnect(serverAddress, serverPort)
+                          }
+                        }}
+                        className="gap-2 p-2"
+                      >
+                        <RefreshCw className="size-4" />
+                        Refresh Connection
+                      </DropdownMenuItem>
+                      {hasUnsavedChanges && (
+                        <DropdownMenuItem
+                          onClick={onPushConfig}
+                          disabled={isPushingConfig}
+                          className="gap-2 p-2 text-primary"
+                        >
+                          {isPushingConfig ? (
+                            <Loader2 className="size-4 animate-spin" />
+                          ) : (
+                            <Upload className="size-4" />
+                          )}
+                          Push Configuration
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={onDisconnect}
+                        className="gap-2 p-2 text-destructive"
+                      >
+                        <LogOut className="size-4" />
+                        Disconnect
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </SidebarMenuItem>
+              </SidebarMenu>
             </div>
           )}
         </div>
@@ -166,6 +217,7 @@ export function AppSidebar({
                       tooltip="Home"
                       isActive={activeView === "home"}
                       onClick={() => setActiveView("home")}
+                      aria-label="Home"
                     >
                       <Home className="h-4 w-4" />
                       <span>Home</span>
@@ -176,6 +228,7 @@ export function AppSidebar({
                       tooltip="Listener Settings"
                       isActive={activeView === "listener"}
                       onClick={() => setActiveView("listener")}
+                      aria-label="Listener Settings"
                     >
                       <Headphones className="h-4 w-4" />
                       <span>Listener</span>
@@ -186,6 +239,7 @@ export function AppSidebar({
                       tooltip="Target Servers"
                       isActive={activeView === "targets"}
                       onClick={() => setActiveView("targets")}
+                      aria-label="Target Servers"
                     >
                       <Server className="h-4 w-4" />
                       <span>Targets</span>
@@ -197,6 +251,7 @@ export function AppSidebar({
                       tooltip="Security Policies"
                       isActive={activeView === "policies"}
                       onClick={() => setActiveView("policies")}
+                      aria-label="Security Policies"
                     >
                       <Shield className="h-4 w-4" />
                       <span>Policies</span>
@@ -207,6 +262,7 @@ export function AppSidebar({
                       tooltip="JSON Configuration"
                       isActive={activeView === "json"}
                       onClick={() => setActiveView("json")}
+                      aria-label="JSON Configuration"
                     >
                       <FileJson className="h-4 w-4" />
                       <span>JSON View</span>
@@ -217,54 +273,6 @@ export function AppSidebar({
             </SidebarGroup>
 
             <SidebarSeparator />
-
-            <SidebarGroup>
-              <SidebarGroupLabel className="flex justify-between items-center">
-                <span>Target Servers</span>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-5 w-5 rounded-full"
-                  onClick={handleAddNewTarget}
-                  title="Add New Target"
-                >
-                  <PlusCircle className="h-4 w-4" />
-                </Button>
-              </SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {targets.length > 0 ? (
-                    targets.map((target, index) => (
-                      <SidebarMenuItem key={index}>
-                        <SidebarMenuButton
-                          tooltip={`View ${target.name}`}
-                          onClick={() => {
-                            setActiveView("targets")
-                            // Scroll to the target in the list
-                            setTimeout(() => {
-                              const targetElement = document.getElementById(`target-${index}`)
-                              if (targetElement) {
-                                targetElement.scrollIntoView({ behavior: "smooth" })
-                              }
-                            }, 100)
-                          }}
-                        >
-                          {getTargetIcon(target)}
-                          <span>{target.name}</span>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    ))
-                  ) : (
-                    <div className="text-xs text-muted-foreground px-2 py-1 flex items-center justify-between">
-                      <span>No target servers</span>
-                      <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={handleAddNewTarget}>
-                        Add Server
-                      </Button>
-                    </div>
-                  )}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
           </>
         )}
       </SidebarContent>
