@@ -3,16 +3,13 @@ use crate::metrics::Recorder;
 use crate::outbound::openapi;
 use crate::outbound::{Target, TargetSpec};
 use crate::rbac;
+use crate::trc;
 use crate::xds::XdsStore;
 use http::HeaderName;
 use http::{HeaderMap, HeaderValue, header::AUTHORIZATION};
 use itertools::Itertools;
 use opentelemetry::trace::Tracer;
-use opentelemetry::{
-	Context,
-	global::{self, BoxedTracer},
-	trace::SpanKind,
-};
+use opentelemetry::{Context, trace::SpanKind};
 use rmcp::RoleClient;
 use rmcp::service::RunningService;
 use rmcp::transport::child_process::TokioChildProcess;
@@ -23,7 +20,7 @@ use rmcp::{
 };
 use std::borrow::Cow;
 use std::collections::HashMap;
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 use tokio::process::Command;
 use tokio::sync::RwLock;
 use tracing::instrument;
@@ -32,11 +29,6 @@ pub mod metrics;
 lazy_static::lazy_static! {
 	static ref DEFAULT_ID: rbac::Identity = rbac::Identity::default();
 	static ref DEFAULT_CONTEXT: Context = Context::new();
-}
-
-fn get_tracer() -> &'static BoxedTracer {
-	static TRACER: OnceLock<BoxedTracer> = OnceLock::new();
-	TRACER.get_or_init(|| global::tracer("mcp_proxy"))
 }
 
 #[derive(Clone)]
@@ -184,8 +176,8 @@ impl ServerHandler for Relay {
 			.extensions
 			.get::<Context>()
 			.unwrap_or(&DEFAULT_CONTEXT);
-		let tracer = get_tracer();
-		let _span = get_tracer()
+		let tracer = trc::get_tracer();
+		let _span = trc::get_tracer()
 			.span_builder("list_prompts")
 			.with_kind(SpanKind::Server)
 			.start_with_context(tracer, context);
@@ -330,11 +322,17 @@ impl ServerHandler for Relay {
 	async fn list_tools(
 		&self,
 		request: Option<PaginatedRequestParam>,
-		_context: RequestContext<RoleServer>,
+		context: RequestContext<RoleServer>,
 	) -> std::result::Result<ListToolsResult, McpError> {
-		// TODO: Use iterators
-		// TODO: Handle individual errors
-		// TODO: Do we want to handle pagination here, or just pass it through?
+		let context: &Context = context
+			.extensions
+			.get::<Context>()
+			.unwrap_or(&DEFAULT_CONTEXT);
+		let tracer = trc::get_tracer();
+		let _span = trc::get_tracer()
+			.span_builder("list_tools")
+			.with_kind(SpanKind::Server)
+			.start_with_context(tracer, context);
 		let mut pool = self.pool.write().await;
 		let connections = pool
 			.list()
@@ -388,13 +386,22 @@ impl ServerHandler for Relay {
 	async fn call_tool(
 		&self,
 		request: CallToolRequestParam,
-		_context: RequestContext<RoleServer>,
+		context: RequestContext<RoleServer>,
 	) -> std::result::Result<CallToolResult, McpError> {
+		let span_context: &Context = context
+			.extensions
+			.get::<Context>()
+			.unwrap_or(&DEFAULT_CONTEXT);
+		let tracer = trc::get_tracer();
+		let _span = trc::get_tracer()
+			.span_builder("call_tool")
+			.with_kind(SpanKind::Server)
+			.start_with_context(tracer, span_context);
 		if !self.state.read().await.policies.validate(
 			&rbac::ResourceType::Tool {
 				id: request.name.to_string(),
 			},
-			match _context.extensions.get::<rbac::Identity>() {
+			match context.extensions.get::<rbac::Identity>() {
 				Some(id) => id,
 				None => &DEFAULT_ID,
 			},

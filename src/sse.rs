@@ -235,9 +235,6 @@ async fn sse_handler(
 					}
 				};
 			}
-			// let _running_result = result.unwrap().waiting().await.inspect_err(|e| {
-			// 	tracing::error!(error = ?e, "running error");
-			// });
 			app.txs.write().await.remove(&session);
 		});
 	}
