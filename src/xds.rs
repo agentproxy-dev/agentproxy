@@ -13,8 +13,8 @@ pub use types::*;
 use crate::proto::mcpproxy::dev::listener::Listener as XdsListener;
 use crate::proto::mcpproxy::dev::rbac::Config as XdsRbac;
 use crate::proto::mcpproxy::dev::target::Target as XdsTarget;
-use crate::proto::mcpproxy::dev::target::target::Target as XdsTargetSpec;
 use crate::proto::mcpproxy::dev::target::target::Auth as XdsAuth;
+use crate::proto::mcpproxy::dev::target::target::Target as XdsTargetSpec;
 use crate::proto::mcpproxy::dev::target::target::auth::Auth as XdsAuthSpec;
 
 use self::envoy::service::discovery::v3::DeltaDiscoveryRequest;
@@ -24,6 +24,7 @@ use std::collections::HashMap;
 
 use crate::inbound;
 use crate::outbound;
+use crate::trcng;
 use serde::{Deserialize, Serialize};
 
 pub mod client;
@@ -215,7 +216,9 @@ impl TryFrom<XdsAuth> for Option<outbound::backend::BackendAuthConfig> {
 	type Error = ParseError;
 	fn try_from(value: XdsAuth) -> Result<Self, Self::Error> {
 		match value.auth {
-			Some(XdsAuthSpec::Passthrough(_)) => Ok(Some(outbound::backend::BackendAuthConfig::Passthrough)),
+			Some(XdsAuthSpec::Passthrough(_)) => {
+				Ok(Some(outbound::backend::BackendAuthConfig::Passthrough))
+			},
 			_ => Ok(None),
 		}
 	}
@@ -394,4 +397,5 @@ pub struct Config {
 	pub xds_address: String,
 	pub metadata: HashMap<String, String>,
 	pub listener: XdsListener,
+	pub tracing: Option<trcng::Config>,
 }

@@ -56,7 +56,9 @@ impl TryFrom<XdsOpenAPITarget> for OpenAPITarget {
 			port: value.port as u16, // TODO: check if this is correct
 			tools,
 			backend_auth: match value.auth {
-				Some(auth) => auth.try_into().map_err(|_| openapi::ParseError::MissingSchema)?,
+				Some(auth) => auth
+					.try_into()
+					.map_err(|_| openapi::ParseError::MissingSchema)?,
 				None => None,
 			},
 		})

@@ -135,17 +135,22 @@ async fn main() -> Result<()> {
 					.map_err(|e| anyhow::anyhow!("error serving admin: {:?}", e))
 			});
 
-			let provider = trcng::init_tracer();
+			if let Some(cfg) = cfg.tracing {
+				let provider = trcng::init_tracer(cfg)?;
+				let ct_clone = ct.clone();
+				run_set.spawn(async move {
+					ct_clone.cancelled().await;
+					provider
+						.shutdown()
+						.map_err(|e| anyhow::anyhow!("error initializing tracer: {:?}", e))
+				});
+			}
 
 			// Wait for all servers to finish? I think this does what I want :shrug:
 			while let Some(result) = run_set.join_next().await {
 				#[allow(unused_must_use)]
 				result.unwrap();
 			}
-
-			provider
-				.shutdown()
-				.expect("Failed to shutdown tracer provider");
 		},
 		Config::Xds(cfg) => {
 			let ct = tokio_util::sync::CancellationToken::new();
@@ -199,17 +204,22 @@ async fn main() -> Result<()> {
 					.map_err(|e| anyhow::anyhow!("error serving metrics: {:?}", e))
 			});
 
-			let provider = trcng::init_tracer();
+			if let Some(cfg) = cfg.tracing {
+				let provider = trcng::init_tracer(cfg)?;
+				let ct_clone = ct.clone();
+				run_set.spawn(async move {
+					ct_clone.cancelled().await;
+					provider
+						.shutdown()
+						.map_err(|e| anyhow::anyhow!("error initializing tracer: {:?}", e))
+				});
+			}
 
 			// Wait for all servers to finish? I think this does what I want :shrug:
 			while let Some(result) = run_set.join_next().await {
 				#[allow(unused_must_use)]
 				result.unwrap();
 			}
-
-			provider
-				.shutdown()
-				.expect("Failed to shutdown tracer provider");
 		},
 	};
 

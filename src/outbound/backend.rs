@@ -37,15 +37,16 @@ impl BackendAuth for PassthroughBackend {
 }
 
 impl BackendAuthConfig {
-	pub async fn build(&self, identity: &crate::rbac::Identity) -> Result<Box<dyn BackendAuth>, anyhow::Error> {
+	pub async fn build(
+		&self,
+		identity: &crate::rbac::Identity,
+	) -> Result<Box<dyn BackendAuth>, anyhow::Error> {
 		match self {
-			BackendAuthConfig::Passthrough => {
-				match &identity.claims {
-					Some(claims) => Ok(Box::new(PassthroughBackend {
-						token: claims.jwt.clone(),
-					})),
-					None => Err(anyhow::anyhow!("Passthrough auth requires a JWT token")),
-				}
+			BackendAuthConfig::Passthrough => match &identity.claims {
+				Some(claims) => Ok(Box::new(PassthroughBackend {
+					token: claims.jwt.clone(),
+				})),
+				None => Err(anyhow::anyhow!("Passthrough auth requires a JWT token")),
 			},
 			BackendAuthConfig::GCP => Ok(Box::new(gcp::GCPBackend::new().await?)),
 			#[cfg(feature = "aws")]

@@ -191,7 +191,10 @@ fn test_rbac_false_check() {
 	let rbac = RuleSet::new("test".to_string(), "test".to_string(), rules);
 	let mut headers = Map::new();
 	headers.insert("sub".to_string(), "1234567890".to_string().into());
-	let id = Identity::new(Some(Claims::new(headers, SecretString::new("".into()))), None);
+	let id = Identity::new(
+		Some(Claims::new(headers, SecretString::new("".into()))),
+		None,
+	);
 	assert!(!rbac.validate(
 		&ResourceType::Tool {
 			id: "increment".to_string()
@@ -213,7 +216,10 @@ fn test_rbac_check() {
 	let rbac = RuleSet::new("test".to_string(), "test".to_string(), rules);
 	let mut headers = Map::new();
 	headers.insert("sub".to_string(), "1234567890".to_string().into());
-	let id = Identity::new(Some(Claims::new(headers, SecretString::new("".into()))), None);
+	let id = Identity::new(
+		Some(Claims::new(headers, SecretString::new("".into()))),
+		None,
+	);
 	assert!(rbac.validate(
 		&ResourceType::Tool {
 			id: "increment".to_string()

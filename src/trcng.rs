@@ -7,13 +7,15 @@ use opentelemetry::{
 	trace::Span,
 };
 use opentelemetry_http::HeaderExtractor;
-use opentelemetry_otlp::SpanExporter;
+use opentelemetry_otlp::WithExportConfig;
+use opentelemetry_otlp::{ExporterBuildError, SpanExporter};
 use opentelemetry_sdk::Resource;
 use opentelemetry_sdk::{
 	error::OTelSdkResult,
 	propagation::{BaggagePropagator, TraceContextPropagator},
 	trace::{SdkTracerProvider, SpanProcessor},
 };
+use serde::{Deserialize, Serialize};
 use std::sync::OnceLock;
 
 pub fn get_tracer() -> &'static BoxedTracer {
@@ -55,7 +57,17 @@ impl SpanProcessor for EnrichWithBaggageSpanProcessor {
 	fn on_end(&self, _span: opentelemetry_sdk::trace::SpanData) {}
 }
 
-pub fn init_tracer() -> SdkTracerProvider {
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct Config {
+	pub tracer: Tracer,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub enum Tracer {
+	Otlp { endpoint: Option<String> },
+}
+
+pub fn init_tracer(config: Config) -> Result<SdkTracerProvider, ExporterBuildError> {
 	let baggage_propagator = BaggagePropagator::new();
 	let trace_context_propagator = TraceContextPropagator::new();
 	let composite_propagator = TextMapCompositePropagator::new(vec![
@@ -64,12 +76,18 @@ pub fn init_tracer() -> SdkTracerProvider {
 	]);
 
 	global::set_text_map_propagator(composite_propagator);
+	let builder = SpanExporter::builder();
+	let exporter = match config.tracer {
+		Tracer::Otlp { endpoint } => {
+			let builder = builder.with_tonic();
+			match endpoint {
+				Some(endpoint) => builder.with_endpoint(endpoint),
+				None => builder,
+			}
+			.build()?
+		},
+	};
 
-	let exporter = SpanExporter::builder()
-		.with_tonic()
-		// .with_endpoint("http://localhost:4318/v1/traces")
-		.build()
-		.expect("Failed to create span exporter");
 	let provider = SdkTracerProvider::builder()
 		.with_span_processor(EnrichWithBaggageSpanProcessor)
 		.with_resource(get_resource())
@@ -77,5 +95,5 @@ pub fn init_tracer() -> SdkTracerProvider {
 		.build();
 
 	global::set_tracer_provider(provider.clone());
-	provider
+	Ok(provider)
 }

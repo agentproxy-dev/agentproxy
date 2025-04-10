@@ -25,30 +25,29 @@ use tokio::sync::RwLock;
 use tracing::instrument;
 pub mod metrics;
 
-
 lazy_static::lazy_static! {
-  static ref DEFAULT_RQ_CTX: RqCtx = RqCtx::default();
+	static ref DEFAULT_RQ_CTX: RqCtx = RqCtx::default();
 }
 
 #[derive(Clone)]
 pub struct RqCtx {
-  identity: rbac::Identity,
-  context: Context,
+	identity: rbac::Identity,
+	context: Context,
 }
 
 impl Default for RqCtx {
-  fn default() -> Self {
-    Self {
-      identity: rbac::Identity::default(),
-      context: Context::new(),
-    }
-  }
+	fn default() -> Self {
+		Self {
+			identity: rbac::Identity::default(),
+			context: Context::new(),
+		}
+	}
 }
 
 impl RqCtx {
-  pub fn new(identity: rbac::Identity, context: Context) -> Self {
-    Self { identity, context }
-  }
+	pub fn new(identity: rbac::Identity, context: Context) -> Self {
+		Self { identity, context }
+	}
 }
 
 #[derive(Clone)]
@@ -120,7 +119,10 @@ impl ServerHandler for Relay {
 		request: Option<PaginatedRequestParam>,
 		_context: RequestContext<RoleServer>,
 	) -> std::result::Result<ListResourcesResult, McpError> {
-		let rq_ctx = _context.extensions.get::<RqCtx>().unwrap_or(&DEFAULT_RQ_CTX);
+		let rq_ctx = _context
+			.extensions
+			.get::<RqCtx>()
+			.unwrap_or(&DEFAULT_RQ_CTX);
 		let mut pool = self.pool.write().await;
 		let connections = pool
 			.list(rq_ctx)
@@ -154,7 +156,10 @@ impl ServerHandler for Relay {
 		request: Option<PaginatedRequestParam>,
 		_context: RequestContext<RoleServer>,
 	) -> std::result::Result<ListResourceTemplatesResult, McpError> {
-		let rq_ctx = _context.extensions.get::<RqCtx>().unwrap_or(&DEFAULT_RQ_CTX);
+		let rq_ctx = _context
+			.extensions
+			.get::<RqCtx>()
+			.unwrap_or(&DEFAULT_RQ_CTX);
 		let mut pool = self.pool.write().await;
 		let connections = pool
 			.list(rq_ctx)
@@ -254,7 +259,10 @@ impl ServerHandler for Relay {
 		request: ReadResourceRequestParam,
 		_context: RequestContext<RoleServer>,
 	) -> std::result::Result<ReadResourceResult, McpError> {
-		let rq_ctx = _context.extensions.get::<RqCtx>().unwrap_or(&DEFAULT_RQ_CTX);
+		let rq_ctx = _context
+			.extensions
+			.get::<RqCtx>()
+			.unwrap_or(&DEFAULT_RQ_CTX);
 		if !self.state.read().await.policies.validate(
 			&rbac::ResourceType::Resource {
 				id: request.uri.to_string(),
@@ -267,9 +275,12 @@ impl ServerHandler for Relay {
 		let uri = request.uri.to_string();
 		let (service_name, resource) = uri.split_once(':').unwrap();
 		let mut pool = self.pool.write().await;
-		let service_arc = pool.get_or_create(rq_ctx, service_name).await.map_err(|_e| {
-			McpError::invalid_request(format!("Service {} not found", service_name), None)
-		})?;
+		let service_arc = pool
+			.get_or_create(rq_ctx, service_name)
+			.await
+			.map_err(|_e| {
+				McpError::invalid_request(format!("Service {} not found", service_name), None)
+			})?;
 		let req = ReadResourceRequestParam {
 			uri: resource.to_string(),
 		};
@@ -299,7 +310,10 @@ impl ServerHandler for Relay {
 		request: GetPromptRequestParam,
 		_context: RequestContext<RoleServer>,
 	) -> std::result::Result<GetPromptResult, McpError> {
-		let rq_ctx = _context.extensions.get::<RqCtx>().unwrap_or(&DEFAULT_RQ_CTX);
+		let rq_ctx = _context
+			.extensions
+			.get::<RqCtx>()
+			.unwrap_or(&DEFAULT_RQ_CTX);
 		if !self.state.read().await.policies.validate(
 			&rbac::ResourceType::Prompt {
 				id: request.name.to_string(),
@@ -312,9 +326,12 @@ impl ServerHandler for Relay {
 		let prompt_name = request.name.to_string();
 		let (service_name, prompt) = prompt_name.split_once(':').unwrap();
 		let mut pool = self.pool.write().await;
-		let svc = pool.get_or_create(rq_ctx, service_name).await.map_err(|_e| {
-			McpError::invalid_request(format!("Service {} not found", service_name), None)
-		})?;
+		let svc = pool
+			.get_or_create(rq_ctx, service_name)
+			.await
+			.map_err(|_e| {
+				McpError::invalid_request(format!("Service {} not found", service_name), None)
+			})?;
 		let req = GetPromptRequestParam {
 			name: prompt.to_string(),
 			arguments: request.arguments,
@@ -420,9 +437,12 @@ impl ServerHandler for Relay {
 			.split_once(':')
 			.ok_or(McpError::invalid_request("invalid tool name", None))?;
 		let mut pool = self.pool.write().await;
-		let svc = pool.get_or_create(rq_ctx, service_name).await.map_err(|_e| {
-			McpError::invalid_request(format!("Service {} not found", service_name), None)
-		})?;
+		let svc = pool
+			.get_or_create(rq_ctx, service_name)
+			.await
+			.map_err(|_e| {
+				McpError::invalid_request(format!("Service {} not found", service_name), None)
+			})?;
 		let req = CallToolRequestParam {
 			name: Cow::Owned(tool.to_string()),
 			arguments: request.arguments,
@@ -489,7 +509,7 @@ mod pool {
 
 				if let Some((target, ct)) = target_info {
 					// Now self is not immutably borrowed by state lock
-					self.connect(&rq_ctx, &ct, &target).await?;
+					self.connect(rq_ctx, &ct, &target).await?;
 				} else {
 					// Handle target not found in state configuration
 					return Err(anyhow::anyhow!(
@@ -537,7 +557,7 @@ mod pool {
 			// 3. Connect the missing ones (self is borrowed mutably here)
 			for (name, target, ct) in connections_to_make {
 				tracing::debug!("Connecting missing target: {}", name);
-				self.connect(&rq_ctx, &ct, &target).await.map_err(|e| {
+				self.connect(rq_ctx, &ct, &target).await.map_err(|e| {
 					tracing::error!("Failed to connect target {}: {}", name, e);
 					e // Propagate error
 				})?;
