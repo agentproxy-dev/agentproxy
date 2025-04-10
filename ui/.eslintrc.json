@@ -1,0 +1,17 @@
+{
+  "extends": [
+    "next/core-web-vitals",
+    "prettier"
+  ],
+  "plugins": ["prettier"],
+  "rules": {
+    "prettier/prettier": ["error", {
+      "semi": true,
+      "singleQuote": false,
+      "tabWidth": 2,
+      "trailingComma": "es5"
+    }],
+    "semi": ["error", "always"],
+    "@typescript-eslint/semi": ["error", "always"]
+  }
+} 

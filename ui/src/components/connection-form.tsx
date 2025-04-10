@@ -4,14 +4,17 @@ import { ButtonHTMLAttributes, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertCircle } from "lucide-react";
 
 interface ConnectionFormProps {
   onConnect: (address: string, port: number) => Promise<boolean>;
+  connectionError?: string | null;
 }
 
-export function ConnectionForm({ onConnect }: ConnectionFormProps) {
+export function ConnectionForm({ onConnect, connectionError }: ConnectionFormProps) {
   const [address, setAddress] = useState("0.0.0.0");
-  const [port, setPort] = useState(3000);
+  const [port, setPort] = useState(19000);
   const [isConnecting, setIsConnecting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -38,6 +41,13 @@ export function ConnectionForm({ onConnect }: ConnectionFormProps) {
           <Input id="port" value={port} onChange={(e) => setPort(parseInt(e.target.value))} placeholder="Port number" required />
         </div>
       </div>
+
+      {connectionError && (
+        <Alert variant="destructive" className="mt-4">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{connectionError}</AlertDescription>
+        </Alert>
+      )}
 
       <Button type="submit" disabled={isConnecting} className="w-full">
         {isConnecting ? "Connecting..." : "Connect to Server"}

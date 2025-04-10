@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Trash2, Shield, Plus } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
-import { RBACConfig, Rule, ResourceType, Matcher } from "@/lib/types"
+import { RBACConfig, Rule, Matcher, ResourceType } from "@/lib/types"
 
 interface PoliciesConfigProps {
   policies: RBACConfig[]

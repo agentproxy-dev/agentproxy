@@ -72,44 +72,32 @@ export interface StdioListener {
 export enum Matcher {
   // The value must be equal to the value in the claims.
   EQUALS = 0,
+  CONTAINS = 1,
+  STARTS_WITH = 2,
+  ENDS_WITH = 3,
 }
 
-export interface Rule {
-  // The key to use when finding the value in the claims.
-  key: string;
-
-  // The value to use when matching the value in the claims.
-  value: string;
-
-  // The resource ID to use when matching the resource.
-  resource: Resource;
-
-  // The type of matcher to apply to the value once it is retrieved.
-  matcher: Matcher;
-}
-
-export interface Resource {
-  id: string;
-  // The type of resource that the rule applies to.
-  type: ResourceType;
-}
-
-// Enum for resource types
 export enum ResourceType {
   TOOL = 0,
   PROMPT = 1,
   RESOURCE = 2,
 }
 
-export interface RBACConfig {
-  // The name of the RBAC configuration.
-  name: string;
-  // The namespace of the RBAC configuration.
-  namespace: string;
-  // The rules that compose the RBAC configuration.
-  rules: Rule[];
+export interface Rule {
+  key: string;
+  value: string;
+  resource: {
+    type: ResourceType;
+    id: string;
+  };
+  matcher: Matcher;
 }
 
+export interface RBACConfig {
+  name: string;
+  namespace: string;
+  rules: Rule[];
+}
 
 type ConfigType = "static";
 

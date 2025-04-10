@@ -12,6 +12,8 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use tracing::error;
+use tower_http::cors::{CorsLayer, Any};
+
 #[derive(Clone)]
 pub struct App {
 	state: Arc<tokio::sync::RwLock<XdsStore>>,
@@ -22,6 +24,11 @@ impl App {
 		Self { state }
 	}
 	pub fn router(&self) -> Router {
+		let cors = CorsLayer::new()
+			.allow_origin(Any)
+			.allow_methods(Any)
+			.allow_headers(Any);
+
 		Router::new()
 			.route(
 				"/targets",
@@ -37,6 +44,7 @@ impl App {
 				get(rbac_get_handler).delete(rbac_delete_handler),
 			)
 			.route("/listeners", get(listener_handler))
+			.layer(cors)
 			.with_state(self.clone())
 	}
 }

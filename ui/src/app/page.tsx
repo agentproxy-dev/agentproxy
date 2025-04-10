@@ -7,16 +7,13 @@ import { AppSidebar } from "@/components/app-sidebar"
 import { ListenerConfig } from "@/components/listener-config"
 import { TargetsConfig } from "@/components/targets-config"
 import { PoliciesConfig } from "@/components/policies-config"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { AlertCircle, CheckCircle2, Info } from "lucide-react"
 import { fetchConfig, updateConfig } from "@/lib/api"
 import { Button } from "@/components/ui/button"
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
-import { 
-  Config, 
-  Listener, 
-  Target, 
+import {
+  Config,
+  Listener,
+  Target,
   RBACConfig
 } from "@/lib/types"
 import { MCPLogo } from "@/components/mcp-logo"
@@ -26,6 +23,8 @@ import { useLoading } from "@/lib/loading-context"
 import { LoadingState } from "@/components/loading-state"
 import { ConfigDiffDialog } from "@/components/config-diff-dialog"
 import { JsonConfig } from "@/components/json-config"
+import { Loader2 } from "lucide-react"
+import { ConnectionError } from "@/components/connection-error"
 
 // Connection storage keys
 const CONNECTION_STORAGE_KEY = "mcp-proxy-connection"
@@ -40,132 +39,141 @@ export default function Home() {
   })
 
   const [isConnected, setIsConnected] = useState(false)
-  const [connectionError, setConnectionError] = useState("")
-  const [serverAddress, setServerAddress] = useState<string>()
-  const [serverPort, setServerPort] = useState<number>()
+  const [connectionError, setConnectionError] = useState<string | null>(null)
+  const [serverAddress, setServerAddress] = useState<string>("")
+  const [serverPort, setServerPort] = useState<number>(19000)
   const [isSaving, setIsSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
-  const [activeView, setActiveView] = useState("home")
+  const [activeView, setActiveView] = useState<string>("home")
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [isPushingConfig, setIsPushingConfig] = useState(false)
   const [showConfigDiff, setShowConfigDiff] = useState(false)
   const [currentProxyConfig, setCurrentProxyConfig] = useState<Config | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   // Load saved connection from localStorage
   useEffect(() => {
-    const savedConnection = localStorage.getItem("mcpProxyConnection")
-    if (savedConnection) {
-      const { address, port } = JSON.parse(savedConnection)
-      setServerAddress(address)
-      setServerPort(port)
-      connectToServer(address, port)
+    const savedAddress = localStorage.getItem("serverAddress")
+    const savedPort = localStorage.getItem("serverPort")
+
+    if (savedAddress && savedPort) {
+      setServerAddress(savedAddress)
+      setServerPort(parseInt(savedPort))
+      connectToServer(savedAddress, parseInt(savedPort))
     } else {
       setIsLoading(false)
     }
   }, [])
 
-  // Save configuration to localStorage whenever it changes
+  // Save connection details to localStorage when they change
   useEffect(() => {
-    if (config) {
-      localStorage.setItem("mcpProxyConfig", JSON.stringify(config))
+    if (serverAddress && serverPort) {
+      localStorage.setItem("serverAddress", serverAddress)
+      localStorage.setItem("serverPort", serverPort.toString())
     }
-  }, [config])
+  }, [serverAddress, serverPort])
 
-  const connectToServer = async (address: string, port: number): Promise<boolean> => {
-    if (!address || !port) return false
+  // Save local configuration to localStorage when it changes
+  useEffect(() => {
+    if (isConnected) {
+      localStorage.setItem("localConfig", JSON.stringify(config))
+    }
+  }, [config, isConnected])
+
+  const connectToServer = async (address: string, port: number) => {
+    if (!address || !port) {
+      setConnectionError("Please enter a valid server address and port")
+      setIsLoading(false)
+      return false
+    }
+
     setIsLoading(true)
+    setConnectionError(null)
+
     try {
-      // Simulate successful connection
-      setIsConnected(true)
+      // Fetch configuration from the proxy
+      const baseUrl = `http://${address}:${port}`;
+
+      // Fetch listeners configuration
+      let listenersResponse;
+      try {
+        console.log('Fetching listeners configuration from', `${baseUrl}/listeners`)
+        listenersResponse = await fetch(`${baseUrl}/listeners`)
+      } catch (error) {
+        throw new Error(`Unable to connect to server at ${address}:${port}. Please check if the server is running and accessible.`)
+      }
+
+      if (!listenersResponse.ok) {
+        throw new Error(`Server returned an error: ${listenersResponse.status} ${listenersResponse.statusText}`)
+      }
+
+      const listenersData = await listenersResponse.json()
+      console.log('Received listeners data:', listenersData)
+
+      // Fetch targets configuration
+      const targetsResponse = await fetch(`${baseUrl}/targets`)
+      if (!targetsResponse.ok) {
+        throw new Error(`Failed to fetch targets: ${targetsResponse.status} ${targetsResponse.statusText}`)
+      }
+      const targetsData = await targetsResponse.json()
+      console.log('Received targets data:', targetsData)
+
+      // Convert targets object to array
+      const targetsArray = Object.entries(targetsData).map(([name, targetData]) => {
+        return {
+          name,
+          ...(targetData as any)
+        }
+      })
+      console.log('Converted targets array:', targetsArray)
+
+      // Fetch RBAC policies
+      const rbacResponse = await fetch(`${baseUrl}/rbac`)
+      if (!rbacResponse.ok) {
+        throw new Error(`Failed to fetch RBAC policies: ${rbacResponse.status} ${rbacResponse.statusText}`)
+      }
+      const rbacData = await rbacResponse.json()
+
+      // Update state with fetched configuration
+      const newConfig = {
+        type: "static" as const,
+        listeners: [listenersData], // Use the entire listeners response as the first listener
+        targets: targetsArray,
+        policies: rbacData.policies || [],
+      }
+
+      setConfig(newConfig)
+      setCurrentProxyConfig(newConfig)
       setServerAddress(address)
       setServerPort(port)
-      localStorage.setItem("mcpProxyConnection", JSON.stringify({ address, port }))
-
-      // Simulate initial configuration
-      const initialConfig: Config = {
-        type: "static",
-        listeners: [
-          {
-            sse: {
-              address: "0.0.0.0",
-              port: 3000
-            }
-          }
-        ],
-        targets: [],
-        policies: []
-      }
-      setConfig(initialConfig)
-      setCurrentProxyConfig(initialConfig)
+      setIsConnected(true)
       setHasUnsavedChanges(false)
       return true
+     
     } catch (error) {
-      console.error("Connection error:", error)
+      console.error("Error connecting to server:", error)
+      setConnectionError(error instanceof Error ? error.message : "Failed to connect to server")
       setIsConnected(false)
-      setServerAddress(undefined)
-      setServerPort(undefined)
-      localStorage.removeItem("mcpProxyConnection")
       return false
     } finally {
       setIsLoading(false)
     }
   }
 
-  const pullConfiguration = async () => {
-    if (!serverAddress || !serverPort) return
-
-    try {
-      const response = await fetch(`http://${serverAddress}:${serverPort}/api/config`)
-      if (!response.ok) {
-        throw new Error("Failed to fetch configuration")
-      }
-
-      const proxyConfig = await response.json()
-      setCurrentProxyConfig(proxyConfig)
-      setConfig(proxyConfig)
-      setHasUnsavedChanges(false)
-    } catch (error) {
-      console.error("Failed to pull configuration:", error)
-    }
-  }
-
-  const pushConfiguration = async () => {
-    if (!serverAddress || !serverPort) return
-
-    setIsPushingConfig(true)
-    try {
-      // Simulate successful push
-      setCurrentProxyConfig(config)
-      setHasUnsavedChanges(false)
-      setShowConfigDiff(false)
-      return true
-    } catch (error) {
-      console.error("Failed to push configuration:", error)
-      return false
-    } finally {
-      setIsPushingConfig(false)
-    }
-  }
-
-  const disconnect = async () => {
-    if (!serverAddress || !serverPort) return
-
-    try {
-      const response = await fetch(`http://${serverAddress}:${serverPort}/api/disconnect`, {
-        method: "POST",
-      })
-
-      if (!response.ok) {
-        throw new Error("Failed to disconnect from server")
-      }
-
-      setIsConnected(false)
-      setServerAddress(undefined)
-      setServerPort(undefined)
-      localStorage.removeItem("mcpProxyConnection")
-    } catch (error) {
-      console.error("Disconnection error:", error)
-    }
+  const disconnectFromServer = () => {
+    setIsConnected(false)
+    setServerAddress("")
+    setServerPort(19000)
+    setConfig({
+      type: "static",
+      listeners: [],
+      targets: [],
+      policies: [],
+    })
+    setCurrentProxyConfig(null)
+    setHasUnsavedChanges(false)
+    localStorage.removeItem("serverAddress")
+    localStorage.removeItem("serverPort")
   }
 
   const handleConfigChange = (newConfig: Config) => {
@@ -173,65 +181,125 @@ export default function Home() {
     setHasUnsavedChanges(true)
   }
 
-  const saveConfiguration = async () => {
-    if (!isConnected) return
+  const pushConfiguration = async () => {
+    if (!isConnected || !serverAddress || !serverPort) {
+      setError("Not connected to a server")
+      return
+    }
 
-    setIsSaving(true)
-    setSaveSuccess(false)
+    setIsPushingConfig(true)
+    setError(null)
 
     try {
-      if (serverPort !== undefined) {
-        await updateConfig(serverAddress, serverPort, config)
-      } else {
-        setConnectionError("Server port is undefined. Cannot save configuration.")
+      const baseUrl = `http://${serverAddress}:${serverPort}`
+
+      // Update listeners
+      const listenersResponse = await fetch(`${baseUrl}/listeners`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ listeners: config.listeners }),
+      })
+
+      if (!listenersResponse.ok) {
+        throw new Error(`Failed to update listeners: ${listenersResponse.statusText}`)
       }
-      setSaveSuccess(true)
-      setTimeout(() => setSaveSuccess(false), 3000)
+
+      // Update targets - first delete all existing targets
+      const existingTargetsResponse = await fetch(`${baseUrl}/targets`)
+      if (existingTargetsResponse.ok) {
+        const existingTargets = await existingTargetsResponse.json()
+        for (const target of existingTargets.targets || []) {
+          await fetch(`${baseUrl}/targets/${target.name}`, {
+            method: "DELETE",
+          })
+        }
+      }
+
+      // Then add all targets from the new configuration
+      for (const target of config.targets) {
+        const targetResponse = await fetch(`${baseUrl}/targets`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(target),
+        })
+
+        if (!targetResponse.ok) {
+          throw new Error(`Failed to update target ${target.name}: ${targetResponse.statusText}`)
+        }
+      }
+
+      // Update RBAC policies - first delete all existing policies
+      const existingPoliciesResponse = await fetch(`${baseUrl}/rbac`)
+      if (existingPoliciesResponse.ok) {
+        const existingPolicies = await existingPoliciesResponse.json()
+        for (const policy of existingPolicies.policies || []) {
+          await fetch(`${baseUrl}/rbac/${policy.name}`, {
+            method: "DELETE",
+          })
+        }
+      }
+
+      // Then add all policies from the new configuration
+      for (const policy of config.policies || []) {
+        const policyResponse = await fetch(`${baseUrl}/rbac`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(policy),
+        })
+
+        if (!policyResponse.ok) {
+          throw new Error(`Failed to update policy ${policy.name}: ${policyResponse.statusText}`)
+        }
+      }
+
+      // Update the server config with the local config
+      setConfig(config)
+      setHasUnsavedChanges(false)
+
+      // Refresh the configuration from the server
+      await connectToServer(serverAddress, serverPort)
     } catch (error) {
-      setConnectionError(error instanceof Error ? error.message : "Failed to save configuration")
+      console.error("Error pushing configuration:", error)
+      setError(error instanceof Error ? error.message : "Failed to push configuration")
     } finally {
-      setIsSaving(false)
+      setIsPushingConfig(false)
     }
   }
 
-  const addTarget = (target: Target) => {
-    setConfig({
+  const handleAddTarget = (target: Target) => {
+    const newConfig = {
       ...config,
       targets: [...config.targets, target],
-    })
-    setHasUnsavedChanges(true)
+    }
+    handleConfigChange(newConfig)
   }
 
-  const removeTarget = (index: number) => {
-    setConfig({
+  const handleRemoveTarget = (index: number) => {
+    const newConfig = {
       ...config,
       targets: config.targets.filter((_, i) => i !== index),
-    })
-    setHasUnsavedChanges(true)
+    }
+    handleConfigChange(newConfig)
   }
 
-  const updateListener = (listener: Listener) => {
-    setConfig({
-      ...config,
-      listeners: [listener],
-    })
-    setHasUnsavedChanges(true)
-  }
-
-  const addPolicy = (policy: RBACConfig) => {
-    setConfig({
+  const handleAddPolicy = (policy: RBACConfig) => {
+    const newConfig = {
       ...config,
       policies: [...(config.policies || []), policy],
-    })
-    setHasUnsavedChanges(true)
+    }
+    handleConfigChange(newConfig)
   }
 
-  const removePolicy = (index: number) => {
-    setConfig({
-      ...config,
-      policies: config.policies?.filter((_, i) => i !== index) || [],
-    })
-    setHasUnsavedChanges(true)
+  const handleRetry = () => {
+    if (serverAddress && serverPort) {
+      connectToServer(serverAddress, serverPort)
+    }
   }
 
   const renderContent = () => {
@@ -263,14 +331,20 @@ export default function Home() {
       case "listener":
         return (
           <ListenerConfig
-            listener={config.listeners[0] || { sse: { address: "0.0.0.0", port: 3000 } }}
-            updateListener={updateListener}
+            config={config}
+            onChange={handleConfigChange}
+            serverAddress={serverAddress}
+            serverPort={serverPort}
           />
         )
       case "targets":
-        return <TargetsConfig targets={config.targets} addTarget={addTarget} removeTarget={removeTarget} />
+        return <TargetsConfig 
+          targets={config.targets} 
+          addTarget={handleAddTarget}
+          removeTarget={handleRemoveTarget}
+        />
       case "policies":
-        return <PoliciesConfig policies={config.policies || []} addPolicy={addPolicy} removePolicy={removePolicy} />
+        return <PoliciesConfig policies={config.policies || []} addPolicy={handleAddPolicy} removePolicy={handleRemovePolicy} />
       case "json":
         return <JsonConfig config={config} onConfigChange={handleConfigChange} />
       default:
@@ -295,7 +369,7 @@ export default function Home() {
               <div className="p-4 border rounded-lg">
                 <h3 className="text-sm font-medium">Security Policies</h3>
                 <p className="text-sm text-muted-foreground">
-                  {config.policies?.length || 0} polic{config.policies?.length !== 1 ? "ies" : "y"} configured
+                  {config.policies?.length} policy{config.policies?.length !== 1 ? "ies" : "y"} configured
                 </p>
               </div>
             </div>
@@ -314,13 +388,13 @@ export default function Home() {
               serverAddress={serverAddress}
               serverPort={serverPort}
               onConnect={connectToServer}
-              onDisconnect={disconnect}
+              onDisconnect={disconnectFromServer}
               targets={config.targets}
               activeView={activeView}
               setActiveView={setActiveView}
-              addTarget={addTarget}
+              addTarget={handleAddTarget}
               hasUnsavedChanges={hasUnsavedChanges}
-              onPushConfig={() => setShowConfigDiff(true)}
+              onPushConfig={pushConfiguration}
               isPushingConfig={isPushingConfig}
             />
 
@@ -344,11 +418,20 @@ export default function Home() {
                 </div>
               </div>
 
+              {error && (
+                <div className="mb-4 rounded-md bg-destructive/10 p-4 text-destructive">
+                  <p>{error}</p>
+                </div>
+              )}
+
               {renderContent()}
             </main>
           </>
         ) : (
-          <NotConnectedState onConnect={connectToServer} connectionError={connectionError} />
+          <NotConnectedState
+            onConnect={connectToServer}
+            connectionError={connectionError || ""}
+          />
         )}
       </div>
 
