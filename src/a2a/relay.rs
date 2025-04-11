@@ -9,22 +9,15 @@ use bytes::Bytes;
 use eventsource_stream::Eventsource;
 use http::HeaderName;
 use http::{HeaderMap, HeaderValue, header::AUTHORIZATION};
-use rmcp::Error as McpError;
 use serde::Serialize;
-use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::RwLock;
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::instrument;
 
-lazy_static::lazy_static! {
-	static ref DEFAULT_ID: rbac::Identity = rbac::Identity::default();
-}
-
-#[derive(Clone)]
+/// Relay is responsible for abstracting different A2A backends identified by their target name.
 pub struct Relay {
 	state: Arc<tokio::sync::RwLock<XdsStore>>,
-	pool: Arc<RwLock<pool::ConnectionPool>>,
+	pool: pool::ConnectionPool,
 	_metrics: Arc<metrics::Metrics>,
 }
 
@@ -32,7 +25,7 @@ impl Relay {
 	pub fn new(state: Arc<tokio::sync::RwLock<XdsStore>>, metrics: Arc<metrics::Metrics>) -> Self {
 		Self {
 			state: state.clone(),
-			pool: Arc::new(RwLock::new(pool::ConnectionPool::new(state.clone()))),
+			pool: pool::ConnectionPool::new(state.clone()),
 			_metrics: metrics,
 		}
 	}
@@ -50,20 +43,18 @@ impl Relay {
 		ctx: &RqCtx,
 		service_name: &str,
 	) -> anyhow::Result<AgentCard> {
-		let mut pool = self.pool.write().await;
-		let svc = pool
-			.get_or_create(ctx, service_name)
-			.await
-			.context(format!("Service {} not found", service_name))?;
-		let mut card = svc.fetch_agent_card().await?;
-		let url = {
-			let state = self.state.read().await;
-			match &state.listener {
-				Listener::A2a(a) => a.url(host),
-				_ => {
-					panic!("must be a2a")
-				},
-			}
+		let mut card = self
+			.pool
+			.connect(ctx, service_name)
+			.await?
+			.fetch_agent_card()
+			.await?;
+		let state = self.state.read().await;
+		let url = match &state.listener {
+			Listener::A2a(a) => a.url(host),
+			_ => {
+				panic!("must be a2a")
+			},
 		};
 		card.url = format!("{}/{}", url, service_name);
 
@@ -88,15 +79,12 @@ impl Relay {
 		service_name: String,
 	) -> anyhow::Result<Response> {
 		use futures::StreamExt;
-		let mut pool = self.pool.write().await;
-		let svc = pool
-			.get_or_create(rq_ctx, &service_name)
+		let svc = self
+			.pool
+			.connect(rq_ctx, &service_name)
 			.await
 			.context(format!("Service {} not found", &service_name))?;
-		let client = svc.fetch_client()?;
-		let (to_client_tx, to_client_rx) =
-			tokio::sync::mpsc::channel::<a2a_sdk::JsonRpcMessage>(64);
-		let resp = client.json(&request).send().await?;
+		let resp = svc.send_request(&request).await?;
 
 		// TODO: implement RBAC
 		let content = resp
@@ -109,13 +97,11 @@ impl Relay {
 		// This may be a streaming response or singleton.
 		match content.as_deref() {
 			Some("application/json") => {
-				let j = resp
-					.json::<a2a_sdk::JsonRpcMessage>()
-					.await
-					.expect("TODO handle error");
+				let j = resp.json::<a2a_sdk::JsonRpcMessage>().await?;
 				Ok(Response::Single(j))
 			},
 			Some("text/event-stream") => {
+				let (tx, rx) = tokio::sync::mpsc::channel::<a2a_sdk::JsonRpcMessage>(64);
 				tokio::spawn(async move {
 					let mut events = resp.bytes_stream().eventsource();
 
@@ -124,13 +110,12 @@ impl Relay {
 						if event.event == "message" {
 							let j: a2a_sdk::JsonRpcMessage =
 								serde_json::from_str(&event.data).expect("TODO handle error");
-							to_client_tx.send(j).await.unwrap();
+							tx.send(j).await.unwrap();
 						}
 					}
-					drop(to_client_tx);
 				});
 
-				Ok(Response::Streaming(ReceiverStream::new(to_client_rx)))
+				Ok(Response::Streaming(ReceiverStream::new(rx)))
 			},
 			_ => anyhow::bail!("expected JSON or event stream"),
 		}
@@ -142,71 +127,37 @@ mod pool {
 
 	pub(crate) struct ConnectionPool {
 		state: Arc<tokio::sync::RwLock<XdsStore>>,
-		by_name: HashMap<String, Arc<UpstreamTarget>>,
 	}
 
 	impl ConnectionPool {
 		pub(crate) fn new(state: Arc<tokio::sync::RwLock<XdsStore>>) -> Self {
-			Self {
-				state,
-				by_name: HashMap::new(),
-			}
+			Self { state }
 		}
 
-		pub(crate) async fn get_or_create(
-			&mut self,
+		#[instrument(level = "debug", skip_all, fields(name))]
+		pub(crate) async fn connect(
+			&self,
 			rq_ctx: &RqCtx,
 			name: &str,
-		) -> anyhow::Result<Arc<UpstreamTarget>> {
-			// Connect if it doesn't exist
-			if !self.by_name.contains_key(name) {
-				// Read target info and drop lock before calling connect
-				let target_info: Option<(Target, tokio_util::sync::CancellationToken)> = {
-					let state = self.state.read().await;
-					state
-						.targets
-						.get(name)
-						.map(|(target, ct)| (target.clone(), ct.clone()))
-				};
+		) -> Result<a2a::Client, anyhow::Error> {
+			let target_info: Option<(Target, tokio_util::sync::CancellationToken)> = {
+				let state = self.state.read().await;
+				state
+					.targets
+					.get(name)
+					.map(|(target, ct)| (target.clone(), ct.clone()))
+			};
 
-				if let Some((target, ct)) = target_info {
-					// Now self is not immutably borrowed by state lock
-					self.connect(rq_ctx, &ct, &target).await?;
-				} else {
-					// Handle target not found in state configuration
-					return Err(anyhow::anyhow!(
-						"Target configuration not found for {}",
-						name
-					));
-				}
-			}
-			let target = self.by_name.get(name).cloned();
-			Ok(target.ok_or(McpError::invalid_request(
-				format!("Service {} not found", name),
-				None,
-			))?)
-		}
-
-		#[instrument(
-            level = "debug",
-            skip_all,
-            fields(
-          name=%target.name,
-            ),
-        )]
-		pub(crate) async fn connect(
-			&mut self,
-			rq_ctx: &RqCtx,
-			// TODO use this
-			_ct: &tokio_util::sync::CancellationToken,
-			target: &Target,
-		) -> Result<(), anyhow::Error> {
-			// Already connected
-			if let Some(_transport) = self.by_name.get(&target.name) {
-				return Ok(());
-			}
+			// TODO use ct
+			let Some((target, _ct)) = target_info else {
+				// Handle target not found in state configuration
+				return Err(anyhow::anyhow!(
+					"Target configuration not found for {}",
+					name
+				));
+			};
 			tracing::trace!("connecting to target: {}", target.name);
-			let transport: UpstreamTarget = match &target.spec {
+			let transport = match &target.spec {
 				TargetSpec::A2a {
 					host,
 					port,
@@ -232,44 +183,14 @@ mod pool {
 						.default_headers(upstream_headers)
 						.build()
 						.unwrap();
-					UpstreamTarget::A2a(a2a::Client {
+					a2a::Client {
 						url: reqwest::Url::parse(&url).expect("failed to parse url"),
 						client,
-					})
+					}
 				},
 				_ => anyhow::bail!("only A2A target is supported"),
 			};
-			self
-				.by_name
-				.insert(target.name.clone(), Arc::new(transport));
-			Ok(())
-		}
-	}
-}
-
-// UpstreamTarget defines a source for MCP information.
-#[derive(Debug)]
-enum UpstreamTarget {
-	A2a(a2a::Client),
-}
-
-impl UpstreamTarget {
-	async fn fetch_agent_card(&self) -> Result<AgentCard, anyhow::Error> {
-		match self {
-			UpstreamTarget::A2a(m) => Ok(
-				m.client
-					.get(format!("{}.well-known/agent.json", m.url))
-					.header("Content-type", "application/json")
-					.send()
-					.await?
-					.json()
-					.await?,
-			),
-		}
-	}
-	fn fetch_client(&self) -> Result<reqwest::RequestBuilder, anyhow::Error> {
-		match self {
-			UpstreamTarget::A2a(m) => Ok(m.client.post(m.url.clone())),
+			Ok(transport)
 		}
 	}
 }
