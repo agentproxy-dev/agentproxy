@@ -100,13 +100,13 @@ export async function fetchListeners(address: string, port: number): Promise<Lis
 
     const data = await response.json();
     console.log("Raw listeners data from API:", data);
-    
+
     // Ensure the data has the correct structure
-    if (data && typeof data === 'object') {
+    if (data && typeof data === "object") {
       // If the response already has the SSE property, return it directly
       if (data.sse) {
         console.log("API returned data with SSE property:", data.sse);
-        
+
         // Check if the SSE data has 'host' instead of 'address'
         if (data.sse.host !== undefined && data.sse.address === undefined) {
           console.log("Converting 'host' to 'address' in SSE data");
@@ -114,11 +114,11 @@ export async function fetchListeners(address: string, port: number): Promise<Lis
             sse: {
               address: data.sse.host,
               port: data.sse.port,
-              tls: data.sse.tls
-            }
+              tls: data.sse.tls,
+            },
           };
         }
-        
+
         return data as Listener;
       } else {
         // Otherwise, create a proper structure
@@ -126,8 +126,8 @@ export async function fetchListeners(address: string, port: number): Promise<Lis
         return {
           sse: {
             address: data.address || data.host || "0.0.0.0",
-            port: data.port || 5555
-          }
+            port: data.port || 5555,
+          },
         };
       }
     } else {
@@ -136,8 +136,8 @@ export async function fetchListeners(address: string, port: number): Promise<Lis
       return {
         sse: {
           address: "0.0.0.0",
-          port: 5555
-        }
+          port: 5555,
+        },
       };
     }
   } catch (error) {

@@ -44,7 +44,9 @@ export function ListenerConfig({ config, serverAddress, serverPort }: ListenerCo
           setPort(data.sse.port?.toString() || "5555");
         } else {
           // Fallback to the config prop if the API response doesn't have the expected format
-          setAddress(config.listeners[0]?.sse?.address || config.listeners[0]?.sse?.host || "0.0.0.0");
+          setAddress(
+            config.listeners[0]?.sse?.address || config.listeners[0]?.sse?.host || "0.0.0.0"
+          );
           setPort(config.listeners[0]?.sse?.port?.toString() || "5555");
         }
       } catch (err) {
@@ -52,7 +54,9 @@ export function ListenerConfig({ config, serverAddress, serverPort }: ListenerCo
         setError(err instanceof Error ? err.message : "Failed to fetch listener configuration");
 
         // Fallback to the config prop if the API request fails
-        setAddress(config.listeners[0]?.sse?.address || config.listeners[0]?.sse?.host || "0.0.0.0");
+        setAddress(
+          config.listeners[0]?.sse?.address || config.listeners[0]?.sse?.host || "0.0.0.0"
+        );
         setPort(config.listeners[0]?.sse?.port?.toString() || "5555");
       } finally {
         setIsLoading(false);

@@ -20,7 +20,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Upload,
   Loader2,
   Home,
   Shield,
@@ -108,7 +107,7 @@ export function AppSidebar({
                 <Input
                   id="quick-address"
                   value={quickConnectAddress}
-                  onChange={e => setQuickConnectAddress(e.target.value)}
+                  onChange={(e) => setQuickConnectAddress(e.target.value)}
                   placeholder="localhost"
                   className="h-7"
                   required
@@ -122,7 +121,7 @@ export function AppSidebar({
                 <Input
                   id="quick-port"
                   value={quickConnectPort}
-                  onChange={e => setQuickConnectPort(parseInt(e.target.value))}
+                  onChange={(e) => setQuickConnectPort(parseInt(e.target.value))}
                   placeholder="3000"
                   className="h-7"
                   required

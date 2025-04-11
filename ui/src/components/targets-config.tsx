@@ -5,9 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Trash2, PlusCircle, Server, Globe, Terminal, Loader2 } from "lucide-react";
+import { PlusCircle, Server, Globe, Terminal, Loader2 } from "lucide-react";
 import { Target, TargetType } from "@/lib/types";
 import { updateTarget } from "@/lib/api";
 import {
@@ -17,7 +16,6 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { useMCPServer } from "@/hooks/use-mcp-server";
 import TargetItem from "./target-item";
 
 interface TargetsConfigProps {
@@ -56,7 +54,7 @@ export function TargetsConfig({
     if (serverType === "stdio") {
       targetConfig.stdio = {
         cmd: command,
-        args: args.split(" ").filter(arg => arg.trim() !== ""),
+        args: args.split(" ").filter((arg) => arg.trim() !== ""),
         env: {},
       };
     } else if (serverType === "sse") {
@@ -66,7 +64,7 @@ export function TargetsConfig({
         if (urlObj.port) {
           port = parseInt(urlObj.port, 10);
         } else {
-          port = urlObj.protocol === 'https:' ? 443 : 80;
+          port = urlObj.protocol === "https:" ? 443 : 80;
         }
         targetConfig.sse = {
           host: urlObj.hostname,
@@ -127,7 +125,6 @@ export function TargetsConfig({
   const confirmDelete = async () => {
     if (targetToDelete !== null) {
       // Remove target from local state
-      const targetToRemove = targets[targetToDelete];
       removeTarget(targetToDelete);
 
       // Update targets on server
@@ -146,7 +143,10 @@ export function TargetsConfig({
         } catch (error) {
           console.error("Error removing target:", error);
           if (onConfigUpdate) {
-            onConfigUpdate(false, error instanceof Error ? error.message : "Failed to remove target");
+            onConfigUpdate(
+              false,
+              error instanceof Error ? error.message : "Failed to remove target"
+            );
           }
         } finally {
           setIsUpdating(false);
@@ -223,7 +223,7 @@ export function TargetsConfig({
               <Input
                 id="name"
                 value={serverName}
-                onChange={e => setServerName(e.target.value)}
+                onChange={(e) => setServerName(e.target.value)}
                 placeholder="Enter server name"
                 required
                 disabled={isUpdating}
@@ -232,7 +232,10 @@ export function TargetsConfig({
 
             <div className="space-y-2">
               <Label>Server Type</Label>
-              <Tabs value={serverType} onValueChange={value => setServerType(value as TargetType)}>
+              <Tabs
+                value={serverType}
+                onValueChange={(value) => setServerType(value as TargetType)}
+              >
                 <TabsList className="grid grid-cols-3">
                   <TabsTrigger value="sse" className="flex items-center">
                     <Globe className="h-4 w-4 mr-2" />
@@ -255,7 +258,7 @@ export function TargetsConfig({
                       id="url"
                       type="url"
                       value={url}
-                      onChange={e => setUrl(e.target.value)}
+                      onChange={(e) => setUrl(e.target.value)}
                       placeholder="http://localhost:3000/events"
                       required
                       disabled={isUpdating}
@@ -272,7 +275,7 @@ export function TargetsConfig({
                     <Input
                       id="command"
                       value={command}
-                      onChange={e => setCommand(e.target.value)}
+                      onChange={(e) => setCommand(e.target.value)}
                       placeholder="npx"
                       required
                       disabled={isUpdating}
@@ -283,7 +286,7 @@ export function TargetsConfig({
                     <Input
                       id="args"
                       value={args}
-                      onChange={e => setArgs(e.target.value)}
+                      onChange={(e) => setArgs(e.target.value)}
                       placeholder="--port 3000"
                       disabled={isUpdating}
                     />
@@ -297,7 +300,7 @@ export function TargetsConfig({
                       id="openapi-url"
                       type="url"
                       value={url}
-                      onChange={e => setUrl(e.target.value)}
+                      onChange={(e) => setUrl(e.target.value)}
                       placeholder="http://localhost:3000"
                       required
                       disabled={isUpdating}
@@ -323,7 +326,7 @@ export function TargetsConfig({
         </DialogContent>
       </Dialog>
 
-      <Dialog open={targetToDelete !== null} onOpenChange={open => !open && cancelDelete()}>
+      <Dialog open={targetToDelete !== null} onOpenChange={(open) => !open && cancelDelete()}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Delete Target Server</DialogTitle>

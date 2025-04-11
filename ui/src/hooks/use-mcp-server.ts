@@ -1,25 +1,12 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
-import {
-  ClientRequest,
-  ResourceUpdatedNotificationSchema,
-  LoggingMessageNotificationSchema,
-  ServerCapabilities,
-  CancelledNotificationSchema,
-  ResourceListChangedNotificationSchema,
-  ToolListChangedNotificationSchema,
-  PromptListChangedNotificationSchema,
-} from "@modelcontextprotocol/sdk/types.js";
+import { ClientRequest, ServerCapabilities } from "@modelcontextprotocol/sdk/types.js";
 import { RequestOptions } from "@modelcontextprotocol/sdk/shared/protocol.js";
 import { useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
- 
-type ConnectionStatus =
-  | "disconnected"
-  | "connected"
-  | "error"
-  | "error-connecting-to-proxy";
+
+type ConnectionStatus = "disconnected" | "connected" | "error" | "error-connecting-to-proxy";
 
 interface UseMCPServerProps {
   sseUrl: string;
@@ -41,7 +28,7 @@ export function useMCPServer({
   const makeRequest = async <T extends z.ZodType>(
     request: ClientRequest,
     schema: T,
-    options?: RequestOptions & { suppressToast?: boolean },
+    options?: RequestOptions & { suppressToast?: boolean }
   ): Promise<z.output<T>> => {
     if (!mcpClient) {
       throw new Error("MCP client not connected");
@@ -82,9 +69,8 @@ export function useMCPServer({
       setConnectionStatus("error");
       return;
     }
-    
 
-    console.log("Connecting to MCP Server:", sseUrl);   
+    console.log("Connecting to MCP Server:", sseUrl);
     const client = new Client(
       {
         name: " mcp-proxy-ui",
@@ -111,30 +97,36 @@ export function useMCPServer({
         setConnectionStatus("error");
         return;
       }
-      
+
       const clientTransport = new SSEClientTransport(url);
-      
+
       try {
         await client.connect(clientTransport);
-        
+
         const capabilities = client.getServerCapabilities();
         setServerCapabilities(capabilities ?? null);
-        
+
         setMcpClient(client);
         setConnectionStatus("connected");
       } catch (error) {
         console.error(`Failed to connect to MCP Server: ${sseUrl}:`, error);
-        
+
         // Check if the error is related to the proxy
-        if (error instanceof Error && 
-            (error.message.includes("Failed to fetch") || 
-             error.message.includes("NetworkError") ||
-             error.message.includes("CORS"))) {
+        if (
+          error instanceof Error &&
+          (error.message.includes("Failed to fetch") ||
+            error.message.includes("NetworkError") ||
+            error.message.includes("CORS"))
+        ) {
           setConnectionStatus("error-connecting-to-proxy");
-          toast.error("Failed to connect to the proxy server. Please check your network connection.");
+          toast.error(
+            "Failed to connect to the proxy server. Please check your network connection."
+          );
         } else {
           setConnectionStatus("error");
-          toast.error(`Failed to connect: ${error instanceof Error ? error.message : String(error)}`);
+          toast.error(
+            `Failed to connect: ${error instanceof Error ? error.message : String(error)}`
+          );
         }
       }
     } catch (e) {

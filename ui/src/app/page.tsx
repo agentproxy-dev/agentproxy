@@ -5,7 +5,13 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { ListenerConfig } from "@/components/listener-config";
 import { TargetsConfig } from "@/components/targets-config";
 import { PoliciesConfig } from "@/components/policies-config";
-import { updateTarget, updatePolicies, fetchListeners, fetchTargets, fetchPolicies } from "@/lib/api";
+import {
+  updateTarget,
+  updatePolicies,
+  fetchListeners,
+  fetchTargets,
+  fetchPolicies,
+} from "@/lib/api";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Config, Target, RBACConfig } from "@/lib/types";
 import { NotConnectedState } from "@/components/not-connected-state";
@@ -26,9 +32,6 @@ export default function Home() {
   const [serverAddress, setServerAddress] = useState<string>("");
   const [serverPort, setServerPort] = useState<number>(19000);
   const [activeView, setActiveView] = useState<string>("home");
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [currentProxyConfig, setCurrentProxyConfig] = useState<Config | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [configUpdateMessage, setConfigUpdateMessage] = useState<{
     success: boolean;
     message: string;
@@ -106,11 +109,9 @@ export default function Home() {
       };
 
       setConfig(newConfig);
-      setCurrentProxyConfig(newConfig);
       setServerAddress(address);
       setServerPort(port);
       setIsConnected(true);
-      setHasUnsavedChanges(false);
       return true;
     } catch (error) {
       console.error("Error connecting to server:", error);
@@ -132,15 +133,12 @@ export default function Home() {
       targets: [],
       policies: [],
     });
-    setCurrentProxyConfig(null);
-    setHasUnsavedChanges(false);
     localStorage.removeItem("serverAddress");
     localStorage.removeItem("serverPort");
   };
 
   const handleConfigChange = (newConfig: Config) => {
     setConfig(newConfig);
-    setHasUnsavedChanges(true);
   };
 
   const handleConfigUpdate = (success: boolean, message: string) => {
@@ -209,10 +207,10 @@ export default function Home() {
       if (serverAddress && serverPort) {
         // Convert RBACConfig to RBACPolicy format
         const rbacPolicies =
-          newConfig.policies?.map(p => ({
+          newConfig.policies?.map((p) => ({
             name: p.name,
             namespace: p.namespace,
-            rules: p.rules.map(rule => ({
+            rules: p.rules.map((rule) => ({
               key: rule.key,
               value: rule.value,
               resource: {
@@ -245,10 +243,10 @@ export default function Home() {
       if (serverAddress && serverPort) {
         // Convert RBACConfig to RBACPolicy format
         const rbacPolicies =
-          newConfig.policies?.map(p => ({
+          newConfig.policies?.map((p) => ({
             name: p.name,
             namespace: p.namespace,
-            rules: p.rules.map(rule => ({
+            rules: p.rules.map((rule) => ({
               key: rule.key,
               value: rule.value,
               resource: {
@@ -385,12 +383,6 @@ export default function Home() {
                   </h1>
                 </div>
               </div>
-
-              {error && (
-                <div className="mb-4 rounded-md bg-destructive/10 p-4 text-destructive">
-                  <p>{error}</p>
-                </div>
-              )}
 
               {configUpdateMessage && (
                 <div
