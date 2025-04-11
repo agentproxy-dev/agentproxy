@@ -25,3 +25,11 @@ message BackendAuth {
     google.protobuf.Empty passthrough = 1;
   }
 }
+
+message Header {
+  string key = 1;
+  oneof value {
+    string string_value = 2;
+    string env_value = 3;
+  }
+}

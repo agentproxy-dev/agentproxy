@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 pub mod aidp {
 	pub mod dev {
 
@@ -53,4 +55,35 @@ pub fn resolve_local_data_source(
 		},
 		aidp::dev::common::local_data_source::Source::Inline(inline) => Ok(inline.clone()),
 	}
+}
+
+pub fn resolve_header_map(
+	headers: &[aidp::dev::common::Header],
+) -> Result<HashMap<String, String>, std::io::Error> {
+	let mut header_map = HashMap::new();
+	for header in headers {
+		match &header.value {
+			Some(aidp::dev::common::header::Value::StringValue(value)) => {
+				header_map.insert(header.key.clone(), value.clone());
+			},
+			Some(aidp::dev::common::header::Value::EnvValue(value)) => {
+				header_map.insert(
+					header.key.clone(),
+					std::env::var(value).map_err(|_| {
+						std::io::Error::new(
+							std::io::ErrorKind::InvalidData,
+							"Failed to resolve environment variable",
+						)
+					})?,
+				);
+			},
+			_ => {
+				return Err(std::io::Error::new(
+					std::io::ErrorKind::InvalidData,
+					"Unsupported header value type",
+				));
+			},
+		}
+	}
+	Ok(header_map)
 }

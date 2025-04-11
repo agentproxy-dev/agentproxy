@@ -1,4 +1,5 @@
 use crate::metrics::Recorder;
+use crate::outbound::backend;
 use crate::outbound::openapi;
 use crate::outbound::{Target, TargetSpec};
 use crate::rbac;
@@ -610,31 +611,19 @@ mod pool {
 					};
 
 					let url = format!("{}://{}:{}{}", scheme, host, port, path);
-					let transport = match backend_auth.clone() {
-						Some(backend_auth) => {
-							let backend_auth = backend_auth.build(&rq_ctx.identity).await?;
-							let token = backend_auth.get_token().await?;
-							let mut upstream_headers = HeaderMap::new();
-							let auth_value = HeaderValue::from_str(token.as_str())?;
-							upstream_headers.insert(AUTHORIZATION, auth_value);
-							for (key, value) in headers {
-								upstream_headers.insert(
-									HeaderName::from_bytes(key.as_bytes())?,
-									HeaderValue::from_str(value)?,
-								);
-							}
-							let client = reqwest::Client::builder()
-								.default_headers(upstream_headers)
-								.build()
-								.unwrap();
-							let client = ReqwestSseClient::new_with_client(url.as_str(), client).await?;
-							SseTransport::start_with_client(client).await?
-						},
-						None => {
-							let client = ReqwestSseClient::new(url.as_str())?;
-							SseTransport::start_with_client(client).await?
-						},
-					};
+					let mut upstream_headers = get_default_headers(backend_auth, rq_ctx).await?;
+					for (key, value) in headers {
+						upstream_headers.insert(
+							HeaderName::from_bytes(key.as_bytes())?,
+							HeaderValue::from_str(value)?,
+						);
+					}
+					let client = reqwest::Client::builder()
+						.default_headers(upstream_headers)
+						.build()
+						.unwrap();
+					let client = ReqwestSseClient::new_with_client(url.as_str(), client).await?;
+					let transport = SseTransport::start_with_client(client).await?;
 
 					upstream::UpstreamTarget::Mcp(
 						serve_client_with_ct((), transport, ct.child_token()).await?,
@@ -666,6 +655,7 @@ mod pool {
 						scheme: scheme.to_string(),
 						prefix: open_api.prefix.clone(),
 						port: open_api.port,
+						headers: get_default_headers(&open_api.backend_auth, rq_ctx).await?,
 					})
 				},
 			};
@@ -673,6 +663,23 @@ mod pool {
 				.by_name
 				.insert(target.name.clone(), Arc::new(transport));
 			Ok(())
+		}
+	}
+
+	async fn get_default_headers(
+		auth_config: &Option<backend::BackendAuthConfig>,
+		rq_ctx: &RqCtx,
+	) -> Result<HeaderMap, anyhow::Error> {
+		match auth_config {
+			Some(auth_config) => {
+				let backend_auth = auth_config.build(&rq_ctx.identity).await?;
+				let token = backend_auth.get_token().await?;
+				let mut upstream_headers = HeaderMap::new();
+				let auth_value = HeaderValue::from_str(token.as_str())?;
+				upstream_headers.insert(AUTHORIZATION, auth_value);
+				Ok(upstream_headers)
+			},
+			None => Ok(HeaderMap::new()),
 		}
 	}
 }

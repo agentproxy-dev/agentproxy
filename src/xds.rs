@@ -10,14 +10,14 @@ pub use client::*;
 pub use metrics::*;
 pub use types::*;
 
+use self::envoy::service::discovery::v3::DeltaDiscoveryRequest;
+use crate::proto;
 use crate::proto::aidp::dev::common::BackendAuth as XdsAuth;
 use crate::proto::aidp::dev::common::backend_auth::Auth as XdsAuthSpec;
 use crate::proto::aidp::dev::mcp::listener::Listener as XdsListener;
 use crate::proto::aidp::dev::mcp::rbac::Config as XdsRbac;
 use crate::proto::aidp::dev::mcp::target::Target as XdsTarget;
 use crate::proto::aidp::dev::mcp::target::target::Target as XdsTargetSpec;
-
-use self::envoy::service::discovery::v3::DeltaDiscoveryRequest;
 use crate::rbac;
 use crate::strng::Strng;
 use std::collections::HashMap;
@@ -190,7 +190,7 @@ impl TryFrom<XdsTarget> for outbound::Target {
 				host: sse.host.clone(),
 				port: sse.port,
 				path: sse.path.clone(),
-				headers: sse.headers.clone(),
+				headers: proto::resolve_header_map(&sse.headers).map_err(|_| ParseError::InvalidSchema)?,
 				backend_auth: match sse.auth {
 					Some(auth) => XdsAuth::try_into(auth)?,
 					None => None,
