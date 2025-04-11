@@ -8,6 +8,7 @@ use crate::xds::XdsStore;
 use http::HeaderName;
 use http::{HeaderMap, HeaderValue, header::AUTHORIZATION};
 use itertools::Itertools;
+use opentelemetry::trace::FutureExt;
 use opentelemetry::trace::Tracer;
 use opentelemetry::{Context, trace::SpanKind};
 use rmcp::RoleClient;
@@ -139,7 +140,7 @@ impl ServerHandler for Relay {
 		let all = connections.into_iter().map(|(_name, svc)| {
 			let request = request.clone();
 			async move {
-				match svc.list_resources(request).await {
+				match svc.list_resources(request, rq_ctx).await {
 					Ok(r) => Ok(r.resources),
 					Err(e) => Err(e),
 				}
@@ -181,7 +182,7 @@ impl ServerHandler for Relay {
 		let all = connections.into_iter().map(|(_name, svc)| {
 			let request = request.clone();
 			async move {
-				match svc.list_resource_templates(request).await {
+				match svc.list_resource_templates(request, rq_ctx).await {
 					Ok(r) => Ok(r.resource_templates),
 					Err(e) => Err(e),
 				}
@@ -227,7 +228,7 @@ impl ServerHandler for Relay {
 		let all = connections.into_iter().map(|(_name, svc)| {
 			let request = request.clone();
 			async move {
-				match svc.list_prompts(request).await {
+				match svc.list_prompts(request, rq_ctx).await {
 					Ok(r) => Ok(
 						r.prompts
 							.into_iter()
@@ -310,7 +311,7 @@ impl ServerHandler for Relay {
 			},
 			(),
 		);
-		match service_arc.read_resource(req).await {
+		match service_arc.read_resource(req, rq_ctx).await {
 			Ok(r) => Ok(r),
 			Err(e) => Err(e.into()),
 		}
@@ -367,7 +368,7 @@ impl ServerHandler for Relay {
 			},
 			(),
 		);
-		match svc.get_prompt(req).await {
+		match svc.get_prompt(req, rq_ctx).await {
 			Ok(r) => Ok(r),
 			Err(e) => Err(e.into()),
 		}
@@ -393,7 +394,7 @@ impl ServerHandler for Relay {
 		let all = connections.into_iter().map(|(_name, svc_arc)| {
 			let request = request.clone();
 			async move {
-				match svc_arc.list_tools(request).await {
+				match svc_arc.list_tools(request, rq_ctx).await {
 					Ok(r) => Ok(
 						r.tools
 							.into_iter()
@@ -479,7 +480,7 @@ impl ServerHandler for Relay {
 			(),
 		);
 
-		match svc.call_tool(req).await {
+		match svc.call_tool(req, rq_ctx).await {
 			Ok(r) => Ok(r),
 			Err(e) => {
 				self.metrics.clone().record(

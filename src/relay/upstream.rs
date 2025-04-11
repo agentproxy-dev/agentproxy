@@ -68,14 +68,17 @@ impl UpstreamTarget {
 	pub(crate) async fn list_tools(
 		&self,
 		request: Option<PaginatedRequestParam>,
+		rq_ctx: &RqCtx,
 	) -> Result<ListToolsResult, UpstreamError> {
 		match self {
 			UpstreamTarget::Mcp(m) => {
+				let mut extensions = rmcp::model::Extensions::new();
+				extensions.insert(rq_ctx.clone());
 				let result = m
 					.send_request(ClientRequest::ListToolsRequest(ListToolsRequest {
 						method: Default::default(),
 						params: request,
-						extensions: Default::default(),
+						extensions,
 					}))
 					.await?;
 				match result {
@@ -95,14 +98,17 @@ impl UpstreamTarget {
 	pub(crate) async fn get_prompt(
 		&self,
 		request: GetPromptRequestParam,
+		rq_ctx: &RqCtx,
 	) -> Result<GetPromptResult, UpstreamError> {
 		match self {
 			UpstreamTarget::Mcp(m) => {
+				let mut extensions = rmcp::model::Extensions::new();
+				extensions.insert(rq_ctx.clone());
 				let result = m
 					.send_request(ClientRequest::GetPromptRequest(GetPromptRequest {
 						method: Default::default(),
 						params: request,
-						extensions: Default::default(),
+						extensions,
 					}))
 					.await?;
 				match result {
@@ -122,14 +128,17 @@ impl UpstreamTarget {
 	pub(crate) async fn list_prompts(
 		&self,
 		request: Option<PaginatedRequestParam>,
+		rq_ctx: &RqCtx,
 	) -> Result<ListPromptsResult, UpstreamError> {
 		match self {
 			UpstreamTarget::Mcp(m) => {
+				let mut extensions = rmcp::model::Extensions::new();
+				extensions.insert(rq_ctx.clone());
 				let result = m
 					.send_request(ClientRequest::ListPromptsRequest(ListPromptsRequest {
 						method: Default::default(),
 						params: request,
-						extensions: Default::default(),
+						extensions,
 					}))
 					.await?;
 				match result {
@@ -149,14 +158,17 @@ impl UpstreamTarget {
 	pub(crate) async fn list_resources(
 		&self,
 		request: Option<PaginatedRequestParam>,
+		rq_ctx: &RqCtx,
 	) -> Result<ListResourcesResult, UpstreamError> {
 		match self {
 			UpstreamTarget::Mcp(m) => {
+				let mut extensions = rmcp::model::Extensions::new();
+				extensions.insert(rq_ctx.clone());
 				let result = m
 					.send_request(ClientRequest::ListResourcesRequest(ListResourcesRequest {
 						method: Default::default(),
 						params: request,
-						extensions: Default::default(),
+						extensions,
 					}))
 					.await?;
 				match result {
@@ -176,15 +188,18 @@ impl UpstreamTarget {
 	pub(crate) async fn list_resource_templates(
 		&self,
 		request: Option<PaginatedRequestParam>,
+		rq_ctx: &RqCtx,
 	) -> Result<ListResourceTemplatesResult, UpstreamError> {
 		match self {
 			UpstreamTarget::Mcp(m) => {
+				let mut extensions = rmcp::model::Extensions::new();
+				extensions.insert(rq_ctx.clone());
 				let result = m
 					.send_request(ClientRequest::ListResourceTemplatesRequest(
 						ListResourceTemplatesRequest {
 							method: Default::default(),
 							params: request,
-							extensions: Default::default(),
+							extensions,
 						},
 					))
 					.await?;
@@ -205,14 +220,17 @@ impl UpstreamTarget {
 	pub(crate) async fn read_resource(
 		&self,
 		request: ReadResourceRequestParam,
+		rq_ctx: &RqCtx,
 	) -> Result<ReadResourceResult, UpstreamError> {
 		match self {
 			UpstreamTarget::Mcp(m) => {
+				let mut extensions = rmcp::model::Extensions::new();
+				extensions.insert(rq_ctx.clone());
 				let result = m
 					.send_request(ClientRequest::ReadResourceRequest(ReadResourceRequest {
 						method: Default::default(),
 						params: request,
-						extensions: Default::default(),
+						extensions,
 					}))
 					.await?;
 				match result {
@@ -229,14 +247,17 @@ impl UpstreamTarget {
 	pub(crate) async fn call_tool(
 		&self,
 		request: CallToolRequestParam,
+		rq_ctx: &RqCtx,
 	) -> Result<CallToolResult, UpstreamError> {
 		match self {
 			UpstreamTarget::Mcp(m) => {
+				let mut extensions = rmcp::model::Extensions::new();
+				extensions.insert(rq_ctx.clone());
 				let result = m
 					.send_request(ClientRequest::CallToolRequest(CallToolRequest {
 						method: Default::default(),
 						params: request,
-						extensions: Default::default(),
+						extensions,
 					}))
 					.await?;
 				match result {

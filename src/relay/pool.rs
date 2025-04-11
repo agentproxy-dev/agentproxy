@@ -280,8 +280,24 @@ impl SseClient<reqwest::Error> for ReqwestSseClient {
 		let sse_url = self.sse_url.clone();
 		let session_id = session_id.to_string();
 		Box::pin(async move {
+			let mut headers = HeaderMap::new();
+			if let ClientJsonRpcMessage::Request(req) = &message {
+				match req.request.extensions().get::<RqCtx>() {
+					Some(rq_ctx) => {
+						let tracer = trcng::get_tracer();
+						let _span = tracer
+							.span_builder("sse_post")
+							.with_kind(SpanKind::Client)
+							.start_with_context(tracer, &rq_ctx.context);
+						trcng::add_context_to_request(&mut headers, &rq_ctx.context);
+					},
+					None => {
+						tracing::trace!("No RqCtx found in extensions");
+					},
+				}
+			}
 			let uri = sse_url.join(&session_id).map_err(SseTransportError::from)?;
-			let request_builder = client.post(uri.as_ref()).json(&message);
+			let request_builder = client.post(uri.as_ref()).json(&message).headers(headers);
 			request_builder
 				.send()
 				.await

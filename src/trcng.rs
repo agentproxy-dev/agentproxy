@@ -32,6 +32,7 @@ pub fn add_context_to_request(req: &mut HeaderMap, ctx: &Context) {
 	global::get_text_map_propagator(|propagator| {
 		propagator.inject_context(ctx, &mut HeaderInjector(req))
 	});
+	req.insert("baggage", "is_synthetic=true".parse().unwrap());
 }
 
 fn get_resource() -> Resource {
