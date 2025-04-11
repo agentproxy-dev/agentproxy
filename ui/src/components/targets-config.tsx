@@ -17,6 +17,8 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import { useMCPServer } from "@/hooks/use-mcp-server";
+import TargetItem from "./target-item";
 
 interface TargetsConfigProps {
   targets: Target[];
@@ -43,7 +45,6 @@ export function TargetsConfig({
   const [args, setArgs] = useState("");
   const [targetToDelete, setTargetToDelete] = useState<number | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
-  const [selectedTargetIndex, setSelectedTargetIndex] = useState<number | null>(null);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -119,19 +120,6 @@ export function TargetsConfig({
     setArgs("");
   };
 
-  const getTargetIcon = (type: TargetType) => {
-    switch (type) {
-      case "sse":
-        return <Globe className="h-4 w-4" />;
-      case "stdio":
-        return <Terminal className="h-4 w-4" />;
-      case "openapi":
-        return <Server className="h-4 w-4" />;
-      default:
-        return <Server className="h-4 w-4" />;
-    }
-  };
-
   const handleDeleteTarget = (index: number) => {
     setTargetToDelete(index);
   };
@@ -174,7 +162,7 @@ export function TargetsConfig({
   };
 
   return (
-    <div className="space-y-6 max-w-3xl">
+    <div className="space-y-6">
       <div>
         <h3 className="text-lg font-medium mb-2">Target Servers</h3>
         <p className="text-sm text-muted-foreground mb-4">
@@ -200,36 +188,13 @@ export function TargetsConfig({
       ) : (
         <div className="space-y-4">
           {targets.map((target, index) => (
-            <div
+            <TargetItem
               key={index}
-              id={`target-${index}`}
-              className="border rounded-lg p-4 space-y-4"
-            >
-              <div className="flex justify-between items-start">
-                <div>
-                  <h4 className="font-medium">{target.name}</h4>
-                  <div className="flex items-center mt-1">
-                    <Badge variant="outline" className="mr-2 flex items-center">
-                      {getTargetIcon(getTargetType(target))}
-                      <span className="ml-1">{getTargetType(target)}</span>
-                    </Badge>
-                    {renderTargetDetails(target)}
-                  </div>
-                </div>
-                <div className="flex space-x-2">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleDeleteTarget(index)}
-                    className="text-muted-foreground hover:text-destructive"
-                    disabled={isUpdating}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            
-            </div>
+              target={target}
+              index={index}
+              onDelete={handleDeleteTarget}
+              isUpdating={isUpdating}
+            />
           ))}
         </div>
       )}
@@ -385,49 +350,4 @@ export function TargetsConfig({
       </Dialog>
     </div>
   );
-}
-
-function getTargetType(target: Target): TargetType {
-  if (target.stdio) return "stdio";
-  if (target.sse) return "sse";
-  if (target.openapi) return "openapi";
-  return "sse";
-}
-
-function renderTargetDetails(target: Target) {
-  if (target.stdio) {
-    return (
-      <div className="text-sm text-muted-foreground">
-        <p>
-          Command: {target.stdio.cmd} {target.stdio.args?.join(" ")}
-        </p>
-      </div>
-    );
-  }
-
-  if (target.sse) {
-    const path = target.sse.path || "/";
-    const truncatedPath = path.length > 30 ? path.substring(0, 27) + "..." : path;
-    return (
-      <div className="text-sm text-muted-foreground">
-        <p>
-          Host: {target.sse.host}:{target.sse.port}
-        </p>
-        <p>Path: {truncatedPath}</p>
-      </div>
-    );
-  }
-
-  if (target.openapi) {
-    return (
-      <div className="text-sm text-muted-foreground">
-        <p>
-          Host: {target.openapi.host}:{target.openapi.port}
-        </p>
-        <p>Schema: {target.openapi.schema?.file_path || "Inline schema"}</p>
-      </div>
-    );
-  }
-
-  return null;
 }
