@@ -58,7 +58,6 @@ impl Relay {
 		};
 		card.url = format!("{}/{}", url, service_name);
 
-		let state = self.state.read().await;
 		let pols = &state.policies;
 		card.skills = card
 			.skills
@@ -79,6 +78,13 @@ impl Relay {
 		service_name: String,
 	) -> anyhow::Result<Response> {
 		use futures::StreamExt;
+
+		{
+			// TODO: how can we apply RBAC? The request doesn't say what 'skill' to use
+			// let state = self.state.read().await;
+			// let pols = &state.policies;
+			// pols.validate(&rbac::ResourceType::Tool { id: tool_name }, &ctx.identity)
+		}
 		let svc = self
 			.pool
 			.connect(rq_ctx, &service_name)
