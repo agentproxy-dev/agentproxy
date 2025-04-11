@@ -385,46 +385,7 @@ impl From<&AuthenticationInfo> for AuthenticationInfo {
 		value.clone()
 	}
 }
-#[derive(serde::Deserialize, serde::Serialize, Clone, Debug)]
-pub struct CancelTaskRequest {
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub id: Option<Id>,
-	#[serde(default = "defaults::cancel_task_request_jsonrpc")]
-	pub jsonrpc: String,
-	pub method: String,
-	pub params: TaskIdParams,
-}
-impl From<&CancelTaskRequest> for CancelTaskRequest {
-	fn from(value: &CancelTaskRequest) -> Self {
-		value.clone()
-	}
-}
-#[derive(serde::Deserialize, serde::Serialize, Clone, Debug)]
-pub struct CancelTaskResponse {
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub error: Option<JsonrpcError>,
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub id: Option<Id>,
-	#[serde(default = "defaults::cancel_task_response_jsonrpc")]
-	pub jsonrpc: String,
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub result: Option<Task>,
-}
-impl From<&CancelTaskResponse> for CancelTaskResponse {
-	fn from(value: &CancelTaskResponse) -> Self {
-		value.clone()
-	}
-}
-impl Default for CancelTaskResponse {
-	fn default() -> Self {
-		Self {
-			error: Default::default(),
-			id: Default::default(),
-			jsonrpc: defaults::cancel_task_response_jsonrpc(),
-			result: Default::default(),
-		}
-	}
-}
+
 #[derive(serde::Deserialize, serde::Serialize, Clone, Debug)]
 pub struct DataPart {
 	pub data: ::serde_json::Map<String, ::serde_json::Value>,
@@ -467,76 +428,10 @@ impl From<&FilePart> for FilePart {
 		value.clone()
 	}
 }
-#[derive(serde::Deserialize, serde::Serialize, Clone, Debug)]
-pub struct GetTaskPushNotificationRequest {
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub id: Option<Id>,
-	#[serde(default = "defaults::get_task_push_notification_request_jsonrpc")]
-	pub jsonrpc: String,
-	pub method: String,
-	pub params: TaskIdParams,
-}
-impl From<&GetTaskPushNotificationRequest> for GetTaskPushNotificationRequest {
-	fn from(value: &GetTaskPushNotificationRequest) -> Self {
-		value.clone()
-	}
-}
-#[derive(serde::Deserialize, serde::Serialize, Clone, Debug)]
-pub struct GetTaskPushNotificationResponse {
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub error: Option<JsonrpcError>,
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub id: Option<Id>,
-	#[serde(default = "defaults::get_task_push_notification_response_jsonrpc")]
-	pub jsonrpc: String,
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub result: Option<TaskPushNotificationConfig>,
-}
-impl From<&GetTaskPushNotificationResponse> for GetTaskPushNotificationResponse {
-	fn from(value: &GetTaskPushNotificationResponse) -> Self {
-		value.clone()
-	}
-}
-impl Default for GetTaskPushNotificationResponse {
-	fn default() -> Self {
-		Self {
-			error: Default::default(),
-			id: Default::default(),
-			jsonrpc: defaults::get_task_push_notification_response_jsonrpc(),
-			result: Default::default(),
-		}
-	}
-}
 
 const_string!(GetTaskRequestMethod = "tasks/get");
 pub type GetTaskRequest = Request<GetTaskRequestMethod, TaskQueryParams>;
 
-#[derive(serde::Deserialize, serde::Serialize, Clone, Debug)]
-pub struct GetTaskResponse {
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub error: Option<JsonrpcError>,
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub id: Option<Id>,
-	#[serde(default = "defaults::get_task_response_jsonrpc")]
-	pub jsonrpc: String,
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub result: Option<Task>,
-}
-impl From<&GetTaskResponse> for GetTaskResponse {
-	fn from(value: &GetTaskResponse) -> Self {
-		value.clone()
-	}
-}
-impl Default for GetTaskResponse {
-	fn default() -> Self {
-		Self {
-			error: Default::default(),
-			id: Default::default(),
-			jsonrpc: defaults::get_task_response_jsonrpc(),
-			result: Default::default(),
-		}
-	}
-}
 #[derive(serde::Deserialize, serde::Serialize, Clone, Debug)]
 #[serde(untagged)]
 pub enum Id {
@@ -590,91 +485,7 @@ impl From<&InvalidRequestError> for InvalidRequestError {
 		value.clone()
 	}
 }
-#[derive(serde::Deserialize, serde::Serialize, Clone, Debug)]
-pub struct JsonParseError {
-	pub code: i64,
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub data: Option<::serde_json::Value>,
-	pub message: String,
-}
-impl From<&JsonParseError> for JsonParseError {
-	fn from(value: &JsonParseError) -> Self {
-		value.clone()
-	}
-}
-#[derive(serde::Deserialize, serde::Serialize, Clone, Debug)]
-pub struct JsonrpcError {
-	pub code: i64,
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub data: Option<::serde_json::Value>,
-	pub message: String,
-}
-impl From<&JsonrpcError> for JsonrpcError {
-	fn from(value: &JsonrpcError) -> Self {
-		value.clone()
-	}
-}
-#[derive(serde::Deserialize, serde::Serialize, Clone, Debug)]
-pub struct JsonrpcMessage {
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub id: Option<Id>,
-	#[serde(default = "defaults::jsonrpc_message_jsonrpc")]
-	pub jsonrpc: String,
-}
-impl From<&JsonrpcMessage> for JsonrpcMessage {
-	fn from(value: &JsonrpcMessage) -> Self {
-		value.clone()
-	}
-}
-impl Default for JsonrpcMessage {
-	fn default() -> Self {
-		Self {
-			id: Default::default(),
-			jsonrpc: defaults::jsonrpc_message_jsonrpc(),
-		}
-	}
-}
-#[derive(serde::Deserialize, serde::Serialize, Clone, Debug)]
-pub struct JsonrpcRequest {
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub id: Option<Id>,
-	#[serde(default = "defaults::jsonrpc_request_jsonrpc")]
-	pub jsonrpc: String,
-	pub method: String,
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub params: Option<::serde_json::Map<String, ::serde_json::Value>>,
-}
-impl From<&JsonrpcRequest> for JsonrpcRequest {
-	fn from(value: &JsonrpcRequest) -> Self {
-		value.clone()
-	}
-}
-#[derive(serde::Deserialize, serde::Serialize, Clone, Debug)]
-pub struct JsonrpcResponse {
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub error: Option<JsonrpcError>,
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub id: Option<Id>,
-	#[serde(default = "defaults::jsonrpc_response_jsonrpc")]
-	pub jsonrpc: String,
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub result: Option<::serde_json::Value>,
-}
-impl From<&JsonrpcResponse> for JsonrpcResponse {
-	fn from(value: &JsonrpcResponse) -> Self {
-		value.clone()
-	}
-}
-impl Default for JsonrpcResponse {
-	fn default() -> Self {
-		Self {
-			error: Default::default(),
-			id: Default::default(),
-			jsonrpc: defaults::jsonrpc_response_jsonrpc(),
-			result: Default::default(),
-		}
-	}
-}
+
 #[derive(serde::Deserialize, serde::Serialize, Clone, Debug)]
 pub struct Message {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
@@ -807,72 +618,6 @@ const_string!(SendSubscribeTaskRequestMethod = "tasks/sendSubscribe");
 pub type SendSubscribeTaskRequest = Request<SendSubscribeTaskRequestMethod, TaskSendParams>;
 
 #[derive(serde::Deserialize, serde::Serialize, Clone, Debug)]
-pub struct SendTaskResponse {
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub error: Option<JsonrpcError>,
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub id: Option<Id>,
-	#[serde(default = "defaults::send_task_response_jsonrpc")]
-	pub jsonrpc: String,
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub result: Option<Task>,
-}
-impl From<&SendTaskResponse> for SendTaskResponse {
-	fn from(value: &SendTaskResponse) -> Self {
-		value.clone()
-	}
-}
-impl Default for SendTaskResponse {
-	fn default() -> Self {
-		Self {
-			error: Default::default(),
-			id: Default::default(),
-			jsonrpc: defaults::send_task_response_jsonrpc(),
-			result: Default::default(),
-		}
-	}
-}
-#[derive(serde::Deserialize, serde::Serialize, Clone, Debug)]
-pub struct SendTaskStreamingRequest {
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub id: Option<Id>,
-	#[serde(default = "defaults::send_task_streaming_request_jsonrpc")]
-	pub jsonrpc: String,
-	pub method: String,
-	pub params: TaskSendParams,
-}
-impl From<&SendTaskStreamingRequest> for SendTaskStreamingRequest {
-	fn from(value: &SendTaskStreamingRequest) -> Self {
-		value.clone()
-	}
-}
-#[derive(serde::Deserialize, serde::Serialize, Clone, Debug)]
-pub struct SendTaskStreamingResponse {
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub error: Option<JsonrpcError>,
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub id: Option<Id>,
-	#[serde(default = "defaults::send_task_streaming_response_jsonrpc")]
-	pub jsonrpc: String,
-	#[serde(default = "defaults::send_task_streaming_response_result")]
-	pub result: SendTaskStreamingResponseResult,
-}
-impl From<&SendTaskStreamingResponse> for SendTaskStreamingResponse {
-	fn from(value: &SendTaskStreamingResponse) -> Self {
-		value.clone()
-	}
-}
-impl Default for SendTaskStreamingResponse {
-	fn default() -> Self {
-		Self {
-			error: Default::default(),
-			id: Default::default(),
-			jsonrpc: defaults::send_task_streaming_response_jsonrpc(),
-			result: defaults::send_task_streaming_response_result(),
-		}
-	}
-}
-#[derive(serde::Deserialize, serde::Serialize, Clone, Debug)]
 #[serde(untagged)]
 #[derive(Default)]
 pub enum SendTaskStreamingResponseResult {
@@ -882,46 +627,6 @@ pub enum SendTaskStreamingResponseResult {
 	None,
 }
 
-#[derive(serde::Deserialize, serde::Serialize, Clone, Debug)]
-pub struct SetTaskPushNotificationRequest {
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub id: Option<Id>,
-	#[serde(default = "defaults::set_task_push_notification_request_jsonrpc")]
-	pub jsonrpc: String,
-	pub method: String,
-	pub params: TaskPushNotificationConfig,
-}
-impl From<&SetTaskPushNotificationRequest> for SetTaskPushNotificationRequest {
-	fn from(value: &SetTaskPushNotificationRequest) -> Self {
-		value.clone()
-	}
-}
-#[derive(serde::Deserialize, serde::Serialize, Clone, Debug)]
-pub struct SetTaskPushNotificationResponse {
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub error: Option<JsonrpcError>,
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub id: Option<Id>,
-	#[serde(default = "defaults::set_task_push_notification_response_jsonrpc")]
-	pub jsonrpc: String,
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub result: Option<TaskPushNotificationConfig>,
-}
-impl From<&SetTaskPushNotificationResponse> for SetTaskPushNotificationResponse {
-	fn from(value: &SetTaskPushNotificationResponse) -> Self {
-		value.clone()
-	}
-}
-impl Default for SetTaskPushNotificationResponse {
-	fn default() -> Self {
-		Self {
-			error: Default::default(),
-			id: Default::default(),
-			jsonrpc: defaults::set_task_push_notification_response_jsonrpc(),
-			result: Default::default(),
-		}
-	}
-}
 #[derive(serde::Deserialize, serde::Serialize, Clone, Debug)]
 pub struct Task {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1011,20 +716,7 @@ impl From<&TaskQueryParams> for TaskQueryParams {
 		value.clone()
 	}
 }
-#[derive(serde::Deserialize, serde::Serialize, Clone, Debug)]
-pub struct TaskResubscriptionRequest {
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub id: Option<Id>,
-	#[serde(default = "defaults::task_resubscription_request_jsonrpc")]
-	pub jsonrpc: String,
-	pub method: String,
-	pub params: TaskQueryParams,
-}
-impl From<&TaskResubscriptionRequest> for TaskResubscriptionRequest {
-	fn from(value: &TaskResubscriptionRequest) -> Self {
-		value.clone()
-	}
-}
+
 #[derive(serde::Deserialize, serde::Serialize, Clone, Debug)]
 pub struct TaskSendParams {
 	#[serde(
@@ -1169,69 +861,17 @@ impl From<&UnsupportedOperationError> for UnsupportedOperationError {
 	}
 }
 pub mod defaults {
-
 	pub(super) fn agent_card_default_input_modes() -> Vec<String> {
 		vec!["text".to_string()]
 	}
 	pub(super) fn agent_card_default_output_modes() -> Vec<String> {
 		vec!["text".to_string()]
 	}
-	pub(super) fn cancel_task_request_jsonrpc() -> String {
-		"2.0".to_string()
-	}
-	pub(super) fn cancel_task_response_jsonrpc() -> String {
-		"2.0".to_string()
-	}
 	pub(super) fn data_part_type() -> String {
 		"data".to_string()
 	}
 	pub(super) fn file_part_type() -> String {
 		"file".to_string()
-	}
-	pub(super) fn get_task_push_notification_request_jsonrpc() -> String {
-		"2.0".to_string()
-	}
-	pub(super) fn get_task_push_notification_response_jsonrpc() -> String {
-		"2.0".to_string()
-	}
-	pub(super) fn get_task_request_jsonrpc() -> String {
-		"2.0".to_string()
-	}
-	pub(super) fn get_task_response_jsonrpc() -> String {
-		"2.0".to_string()
-	}
-	pub(super) fn jsonrpc_message_jsonrpc() -> String {
-		"2.0".to_string()
-	}
-	pub(super) fn jsonrpc_request_jsonrpc() -> String {
-		"2.0".to_string()
-	}
-	pub(super) fn jsonrpc_response_jsonrpc() -> String {
-		"2.0".to_string()
-	}
-	pub(super) fn send_task_request_jsonrpc() -> String {
-		"2.0".to_string()
-	}
-	pub(super) fn send_task_response_jsonrpc() -> String {
-		"2.0".to_string()
-	}
-	pub(super) fn send_task_streaming_request_jsonrpc() -> String {
-		"2.0".to_string()
-	}
-	pub(super) fn send_task_streaming_response_jsonrpc() -> String {
-		"2.0".to_string()
-	}
-	pub(super) fn send_task_streaming_response_result() -> super::SendTaskStreamingResponseResult {
-		super::SendTaskStreamingResponseResult::None
-	}
-	pub(super) fn set_task_push_notification_request_jsonrpc() -> String {
-		"2.0".to_string()
-	}
-	pub(super) fn set_task_push_notification_response_jsonrpc() -> String {
-		"2.0".to_string()
-	}
-	pub(super) fn task_resubscription_request_jsonrpc() -> String {
-		"2.0".to_string()
 	}
 	pub(super) fn text_part_type() -> String {
 		"text".to_string()

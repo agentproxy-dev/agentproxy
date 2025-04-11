@@ -1,11 +1,11 @@
+use crate::a2a;
 use crate::authn;
 use crate::authn::JwtAuthenticator;
 use crate::proto;
 use crate::proto::aidp::dev::mcp::listener::{
 	Listener as XdsListener,
 	listener::{
-		Listener as XdsListenerSpec, SseListener as XdsSseListener,
-		A2aListener as XdsA2aListener,
+		A2aListener as XdsA2aListener, Listener as XdsListenerSpec, SseListener as XdsSseListener,
 		TlsConfig as XdsTlsConfig,
 	},
 };
@@ -65,8 +65,8 @@ impl SseListener {
 			Some(authn) => match authn.jwt {
 				Some(jwt) => Some(
 					JwtAuthenticator::new(&jwt)
-					.await
-					.map_err(|e| anyhow::anyhow!("error creating jwt authenticator: {:?}", e))?,
+						.await
+						.map_err(|e| anyhow::anyhow!("error creating jwt authenticator: {:?}", e))?,
 				),
 				None => None,
 			},
@@ -104,8 +104,8 @@ impl A2AListener {
 			Some(authn) => match authn.jwt {
 				Some(jwt) => Some(
 					JwtAuthenticator::new(&jwt)
-					.await
-					.map_err(|e| anyhow::anyhow!("error creating jwt authenticator: {:?}", e))?,
+						.await
+						.map_err(|e| anyhow::anyhow!("error creating jwt authenticator: {:?}", e))?,
 				),
 				None => None,
 			},
@@ -231,7 +231,7 @@ impl Listener {
 				let listener = tokio::net::TcpListener::bind(socket_addr).await.unwrap();
 				let child_token = ct.child_token();
 				let app = SseApp::new(state.clone(), metrics, authenticator, child_token);
-				let router = app.mcp_router();
+				let router = app.router();
 
 				info!("serving sse on {}:{}", sse_listener.host, sse_listener.port);
 				let child_token = ct.child_token();
@@ -318,8 +318,8 @@ impl Listener {
 					.unwrap();
 				let listener = tokio::net::TcpListener::bind(socket_addr).await.unwrap();
 				let child_token = ct.child_token();
-				let app = SseApp::new(state.clone(), metrics, authenticator, child_token);
-				let router = app.a2a_router();
+				let app = a2a::handlers::App::new(state.clone(), metrics, authenticator, child_token);
+				let router = app.router();
 
 				info!("serving a2a on {}:{}", a2a_listener.host, a2a_listener.port);
 				let child_token = ct.child_token();
