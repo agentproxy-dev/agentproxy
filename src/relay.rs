@@ -8,7 +8,6 @@ use crate::xds::XdsStore;
 use http::HeaderName;
 use http::{HeaderMap, HeaderValue, header::AUTHORIZATION};
 use itertools::Itertools;
-use opentelemetry::trace::FutureExt;
 use opentelemetry::trace::Tracer;
 use opentelemetry::{Context, trace::SpanKind};
 use rmcp::RoleClient;
