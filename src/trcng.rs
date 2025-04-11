@@ -6,7 +6,7 @@ use opentelemetry::{
 	propagation::TextMapCompositePropagator,
 	trace::Span,
 };
-use opentelemetry_http::HeaderExtractor;
+use opentelemetry_http::{HeaderExtractor, HeaderInjector};
 use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_otlp::{ExporterBuildError, SpanExporter};
 use opentelemetry_sdk::Resource;
@@ -26,6 +26,12 @@ pub fn get_tracer() -> &'static BoxedTracer {
 // Utility function to extract the context from the incoming request headers
 pub fn extract_context_from_request(req: &HeaderMap) -> Context {
 	global::get_text_map_propagator(|propagator| propagator.extract(&HeaderExtractor(req)))
+}
+
+pub fn add_context_to_request(req: &mut HeaderMap, ctx: &Context) {
+	global::get_text_map_propagator(|propagator| {
+		propagator.inject_context(ctx, &mut HeaderInjector(req))
+	});
 }
 
 fn get_resource() -> Resource {
