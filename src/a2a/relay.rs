@@ -1,10 +1,8 @@
-use crate::backend::BackendAuth;
 use crate::inbound::Listener;
 use crate::outbound::{Target, TargetSpec};
-use crate::rbac::Identity;
 use crate::relay::metrics;
 use crate::xds::XdsStore;
-use crate::{a2a, rbac};
+use crate::{a2a, backend, rbac};
 use a2a_sdk::AgentCard;
 use anyhow::Context;
 use bytes::Bytes;
@@ -49,12 +47,12 @@ impl Relay {
 	pub async fn fetch_agent_card(
 		&self,
 		host: String,
-		claims: Identity,
+		ctx: &RqCtx,
 		service_name: &str,
 	) -> anyhow::Result<AgentCard> {
 		let mut pool = self.pool.write().await;
 		let svc = pool
-			.get_or_create(service_name)
+			.get_or_create(ctx, service_name)
 			.await
 			.context(format!("Service {} not found", service_name))?;
 		let mut card = svc.fetch_agent_card().await?;
@@ -77,7 +75,7 @@ impl Relay {
 			.filter(|s| {
 				// TODO for now we treat it as a 'tool'
 				let tool_name = format!("{}:{}", service_name, s.name);
-				pols.validate(&rbac::ResourceType::Tool { id: tool_name }, &claims)
+				pols.validate(&rbac::ResourceType::Tool { id: tool_name }, &ctx.identity)
 			})
 			.cloned()
 			.collect();
@@ -86,14 +84,13 @@ impl Relay {
 	pub async fn proxy(
 		self,
 		request: a2a_sdk::A2aRequest,
-		// TODO: implement RBAC
-		_claims: Identity,
+		rq_ctx: &RqCtx,
 		service_name: String,
 	) -> anyhow::Result<Response> {
 		use futures::StreamExt;
 		let mut pool = self.pool.write().await;
 		let svc = pool
-			.get_or_create(&service_name)
+			.get_or_create(rq_ctx, &service_name)
 			.await
 			.context(format!("Service {} not found", &service_name))?;
 		let client = svc.fetch_client()?;
@@ -101,6 +98,7 @@ impl Relay {
 			tokio::sync::mpsc::channel::<a2a_sdk::ClientJsonRpcMessage>(64);
 		let resp = client.json(&request).send().await?;
 
+		// TODO: implement RBAC
 		let content = resp
 			.headers()
 			.get(reqwest::header::CONTENT_TYPE)
@@ -146,7 +144,6 @@ impl Relay {
 }
 
 mod pool {
-
 	use super::*;
 
 	pub(crate) struct ConnectionPool {
@@ -164,6 +161,7 @@ mod pool {
 
 		pub(crate) async fn get_or_create(
 			&mut self,
+			rq_ctx: &RqCtx,
 			name: &str,
 		) -> anyhow::Result<Arc<UpstreamTarget>> {
 			// Connect if it doesn't exist
@@ -179,7 +177,7 @@ mod pool {
 
 				if let Some((target, ct)) = target_info {
 					// Now self is not immutably borrowed by state lock
-					self.connect(&ct, &target).await?;
+					self.connect(rq_ctx, &ct, &target).await?;
 				} else {
 					// Handle target not found in state configuration
 					return Err(anyhow::anyhow!(
@@ -204,6 +202,7 @@ mod pool {
         )]
 		pub(crate) async fn connect(
 			&mut self,
+			rq_ctx: &RqCtx,
 			// TODO use this
 			_ct: &tokio_util::sync::CancellationToken,
 			target: &Target,
@@ -228,27 +227,17 @@ mod pool {
 						_ => "http",
 					};
 					let url = format!("{}://{}:{}{}", scheme, host, port, path);
-
-					let client = match backend_auth.clone() {
-						Some(backend_auth) => {
-							let backend_auth = backend_auth.build().await;
-							let token = backend_auth.get_token().await?;
-							let mut upstream_headers = HeaderMap::new();
-							let auth_value = HeaderValue::from_str(token.as_str())?;
-							upstream_headers.insert(AUTHORIZATION, auth_value);
-							for (key, value) in headers {
-								upstream_headers.insert(
-									HeaderName::from_bytes(key.as_bytes())?,
-									HeaderValue::from_str(value)?,
-								);
-							}
-							reqwest::Client::builder()
-								.default_headers(upstream_headers)
-								.build()
-								.unwrap()
-						},
-						None => reqwest::Client::new(),
-					};
+					let mut upstream_headers = get_default_headers(backend_auth, rq_ctx).await?;
+					for (key, value) in headers {
+						upstream_headers.insert(
+							HeaderName::from_bytes(key.as_bytes())?,
+							HeaderValue::from_str(value)?,
+						);
+					}
+					let client = reqwest::Client::builder()
+						.default_headers(upstream_headers)
+						.build()
+						.unwrap();
 					UpstreamTarget::A2a(a2a::Client {
 						url: reqwest::Url::parse(&url).expect("failed to parse url"),
 						client,
@@ -296,5 +285,45 @@ struct SerializeStream<T>(T);
 impl<T: Serialize> From<SerializeStream<T>> for bytes::Bytes {
 	fn from(val: SerializeStream<T>) -> Self {
 		Bytes::from(serde_json::to_vec(&val.0).unwrap())
+	}
+}
+
+async fn get_default_headers(
+	auth_config: &Option<backend::BackendAuthConfig>,
+	rq_ctx: &RqCtx,
+) -> Result<HeaderMap, anyhow::Error> {
+	match auth_config {
+		Some(auth_config) => {
+			let backend_auth = auth_config.build(&rq_ctx.identity).await?;
+			let token = backend_auth.get_token().await?;
+			let mut upstream_headers = HeaderMap::new();
+			let auth_value = HeaderValue::from_str(token.as_str())?;
+			upstream_headers.insert(AUTHORIZATION, auth_value);
+			Ok(upstream_headers)
+		},
+		None => Ok(HeaderMap::new()),
+	}
+}
+#[derive(Clone)]
+pub struct RqCtx {
+	identity: rbac::Identity,
+	_context: opentelemetry::Context,
+}
+
+impl Default for RqCtx {
+	fn default() -> Self {
+		Self {
+			identity: rbac::Identity::default(),
+			_context: opentelemetry::Context::new(),
+		}
+	}
+}
+
+impl RqCtx {
+	pub fn new(identity: rbac::Identity, context: opentelemetry::Context) -> Self {
+		Self {
+			identity,
+			_context: context,
+		}
 	}
 }

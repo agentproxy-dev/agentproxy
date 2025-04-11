@@ -1,6 +1,6 @@
 use crate::a2a::relay;
 use crate::sse::AuthError;
-use crate::{a2a, authn, proxyprotocol, rbac};
+use crate::{a2a, authn, proxyprotocol, rbac, trcng};
 use a2a_sdk::AgentCard;
 use axum::extract::{ConnectInfo, OptionalFromRequestParts, Path, State};
 use axum::response::sse::Event;
@@ -13,8 +13,8 @@ use futures::Stream;
 use futures::StreamExt;
 use headers::Authorization;
 use headers::authorization::Bearer;
-use http::StatusCode;
 use http::request::Parts;
+use http::{HeaderMap, StatusCode};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -79,15 +79,18 @@ async fn agent_card_handler(
 	State(app): State<App>,
 	Path(target): Path<String>,
 	Host(host): Host,
+	headers: HeaderMap,
 	ConnectInfo(connection): ConnectInfo<proxyprotocol::Address>,
 	claims: Option<rbac::Claims>,
 ) -> anyhow::Result<Json<AgentCard>, StatusCode> {
 	tracing::info!("new agent card request");
 	let relay = relay::Relay::new(app.state.clone(), app.metrics.clone());
 	let connection_id = connection.identity.clone().map(|i| i.to_string());
-	let claims = rbac::Identity::new(claims.map(|c| c.0), connection_id);
+	let claims = rbac::Identity::new(claims, connection_id);
+	let context = trcng::extract_context_from_request(&headers);
+	let rq_ctx = relay::RqCtx::new(claims, context);
 	let card = relay
-		.fetch_agent_card(host, claims, &target)
+		.fetch_agent_card(host, &rq_ctx, &target)
 		.await
 		.map_err(|_e| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -99,6 +102,7 @@ async fn agent_call_handler(
 	ConnectInfo(connection): ConnectInfo<proxyprotocol::Address>,
 	Path(target): Path<String>,
 	claims: Option<rbac::Claims>,
+	headers: HeaderMap,
 	// TODO: needs to be generic task
 	Json(request): Json<a2a_sdk::A2aRequest>,
 ) -> anyhow::Result<
@@ -111,9 +115,11 @@ async fn agent_call_handler(
 	tracing::info!("new agent call");
 	let relay = a2a::relay::Relay::new(app.state.clone(), app.metrics.clone());
 	let connection_id = connection.identity.clone().map(|i| i.to_string());
-	let claims = rbac::Identity::new(claims.map(|c| c.0), connection_id);
+	let claims = rbac::Identity::new(claims, connection_id);
+	let context = trcng::extract_context_from_request(&headers);
+	let rq_ctx = relay::RqCtx::new(claims, context);
 	let rx = relay
-		.proxy(request, claims, target)
+		.proxy(request, &rq_ctx, target)
 		.await
 		.map_err(|_e| StatusCode::INTERNAL_SERVER_ERROR)?;
 

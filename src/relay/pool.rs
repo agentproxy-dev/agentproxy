@@ -183,6 +183,11 @@ impl ConnectionPool {
 					headers: get_default_headers(&open_api.backend_auth, rq_ctx).await?,
 				})
 			},
+			TargetSpec::A2a { .. } => {
+				// TODO: we probably want to silently ignore these instead of log an error,
+				// or make it so the API doesn't allow expressing this at all.
+				anyhow::bail!("A2a target is not supported for target {}", target.name);
+			},
 		};
 		self
 			.by_name
