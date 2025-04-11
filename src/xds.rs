@@ -10,18 +10,21 @@ pub use client::*;
 pub use metrics::*;
 pub use types::*;
 
-use crate::proto::mcpproxy::dev::listener::Listener as XdsListener;
-use crate::proto::mcpproxy::dev::rbac::Config as XdsRbac;
-use crate::proto::mcpproxy::dev::target::Target as XdsTarget;
-use crate::proto::mcpproxy::dev::target::target::Target as XdsTargetSpec;
-
 use self::envoy::service::discovery::v3::DeltaDiscoveryRequest;
+use crate::proto;
+use crate::proto::aidp::dev::common::BackendAuth as XdsAuth;
+use crate::proto::aidp::dev::common::backend_auth::Auth as XdsAuthSpec;
+use crate::proto::aidp::dev::mcp::listener::Listener as XdsListener;
+use crate::proto::aidp::dev::mcp::rbac::RuleSet as XdsRbac;
+use crate::proto::aidp::dev::mcp::target::Target as XdsTarget;
+use crate::proto::aidp::dev::mcp::target::target::Target as XdsTargetSpec;
 use crate::rbac;
 use crate::strng::Strng;
 use std::collections::HashMap;
 
 use crate::inbound;
 use crate::outbound;
+use crate::trcng;
 use serde::{Deserialize, Serialize};
 
 pub mod client;
@@ -187,8 +190,11 @@ impl TryFrom<XdsTarget> for outbound::Target {
 				host: sse.host.clone(),
 				port: sse.port,
 				path: sse.path.clone(),
-				headers: sse.headers.clone(),
-				backend_auth: None,
+				headers: proto::resolve_header_map(&sse.headers).map_err(|_| ParseError::InvalidSchema)?,
+				backend_auth: match sse.auth {
+					Some(auth) => XdsAuth::try_into(auth)?,
+					None => None,
+				},
 			},
 			XdsTargetSpec::Stdio(stdio) => outbound::TargetSpec::Stdio {
 				cmd: stdio.cmd.clone(),
@@ -203,6 +209,18 @@ impl TryFrom<XdsTarget> for outbound::Target {
 			name: value.name.clone(),
 			spec,
 		})
+	}
+}
+
+impl TryFrom<XdsAuth> for Option<outbound::backend::BackendAuthConfig> {
+	type Error = ParseError;
+	fn try_from(value: XdsAuth) -> Result<Self, Self::Error> {
+		match value.auth {
+			Some(XdsAuthSpec::Passthrough(_)) => {
+				Ok(Some(outbound::backend::BackendAuthConfig::Passthrough))
+			},
+			_ => Ok(None),
+		}
 	}
 }
 
@@ -379,4 +397,5 @@ pub struct Config {
 	pub xds_address: String,
 	pub metadata: HashMap<String, String>,
 	pub listener: XdsListener,
+	pub tracing: Option<trcng::Config>,
 }

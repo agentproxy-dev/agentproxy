@@ -1,7 +1,8 @@
 syntax = "proto3";
 
 import "google/protobuf/duration.proto";
-package mcpproxy.dev.common;
+import "google/protobuf/empty.proto";
+package aidp.dev.common;
 
 message LocalDataSource {
   oneof source {
@@ -17,4 +18,18 @@ message RemoteDataSource {
   map<string, string> headers = 4;
   google.protobuf.Duration initial_timeout = 5;
   google.protobuf.Duration refresh_interval = 6;
+}
+
+message BackendAuth {
+  oneof auth {
+    google.protobuf.Empty passthrough = 1;
+  }
+}
+
+message Header {
+  string key = 1;
+  oneof value {
+    string string_value = 2;
+    string env_value = 3;
+  }
 }

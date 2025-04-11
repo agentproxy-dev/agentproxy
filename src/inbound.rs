@@ -1,7 +1,7 @@
 use crate::authn;
 use crate::authn::JwtAuthenticator;
 use crate::proto;
-use crate::proto::mcpproxy::dev::listener::{
+use crate::proto::aidp::dev::mcp::listener::{
 	Listener as XdsListener,
 	listener::{
 		Listener as XdsListenerSpec, SseListener as XdsSseListener,

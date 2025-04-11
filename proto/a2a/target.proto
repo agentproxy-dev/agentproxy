@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package aidp.dev.a2a.target;
+
+import "common.proto";
+
+message Target {
+
+  // The name of the target.
+  string name = 1;
+  // The host of the target.
+  string host = 2;
+  // The port of the target.
+  uint32 port = 3;
+  // The headers of the target.
+  map<string, string> headers = 4;
+
+  aidp.dev.common.BackendAuth auth = 5;
+
+}
+

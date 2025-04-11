@@ -1,7 +1,8 @@
-use crate::proto::mcpproxy::dev::common;
-use crate::proto::mcpproxy::dev::listener::listener::sse_listener;
+use crate::proto::aidp::dev::common;
+use crate::proto::aidp::dev::mcp::listener::listener::sse_listener;
 use jsonwebtoken::jwk::Jwk;
 use jsonwebtoken::{DecodingKey, Validation, decode, decode_header};
+use secrecy::SecretString;
 use serde::Serialize;
 use serde_json::Value;
 use serde_json::map::Map;
@@ -10,7 +11,6 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
-
 #[derive(Debug)]
 pub enum AuthError {
 	InvalidToken(jsonwebtoken::errors::Error),
@@ -65,8 +65,7 @@ fn duration_from_pb(duration: Option<pbjson_types::Duration>, default: Duration)
 
 impl JwksRemoteSource {
 	fn from_xds(remote: &common::RemoteDataSource) -> Result<Self, JwkError> {
-		let url = format!("{}:{}", remote.url, remote.port);
-		let url = format!("{}/{}", url, remote.path);
+		let url = format!("{}:{}/{}", remote.url, remote.port, remote.path);
 		let client = reqwest::ClientBuilder::new()
 			.timeout(duration_from_pb(
 				remote.initial_timeout,
@@ -243,6 +242,9 @@ impl JwtAuthenticator {
 		let token_data = decode::<Map<String, Value>>(token, &key.key, &validation)
 			.map_err(AuthError::InvalidToken)?;
 		tracing::info!("token data: {:?}", token_data);
-		Ok(crate::rbac::Claims::new(token_data.claims))
+		Ok(crate::rbac::Claims::new(
+			token_data.claims,
+			SecretString::new(token.into()),
+		))
 	}
 }

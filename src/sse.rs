@@ -1,6 +1,7 @@
 use crate::authn;
 use crate::relay;
 use crate::relay::Relay;
+use crate::trcng;
 use crate::xds::XdsStore as AppState;
 use crate::{proxyprotocol, rbac};
 use anyhow::Result;
@@ -8,6 +9,7 @@ use axum::extract::{ConnectInfo, OptionalFromRequestParts};
 use axum::{
 	Json, RequestPartsExt, Router,
 	extract::{Query, State},
+	http::header::HeaderMap,
 	http::{StatusCode, request::Parts},
 	response::sse::{Event, Sse},
 	response::{IntoResponse, Response},
@@ -78,12 +80,10 @@ impl OptionalFromRequestParts<App> for rbac::Claims {
 		let authn = state.authn.read().await;
 		match authn.as_ref() {
 			Some(authn) => {
-				tracing::info!("jwt");
 				let TypedHeader(Authorization(bearer)) = parts
 					.extract::<TypedHeader<Authorization<Bearer>>>()
 					.await
 					.map_err(AuthError::NoAuthHeaderPresent)?;
-				tracing::info!("bearer: {}", bearer.token());
 				let claims = authn.authenticate(bearer.token()).await;
 				match claims {
 					Ok(claims) => Ok(Some(claims)),
@@ -132,6 +132,7 @@ async fn post_event_handler(
 	State(app): State<App>,
 	ConnectInfo(_connection): ConnectInfo<proxyprotocol::Address>,
 	claims: Option<rbac::Claims>,
+	headers: HeaderMap,
 	Query(PostEventQuery { session_id }): Query<PostEventQuery>,
 	Json(message): Json<ClientJsonRpcMessage>,
 ) -> Result<StatusCode, StatusCode> {
@@ -143,12 +144,15 @@ async fn post_event_handler(
 			.clone()
 	};
 
+	let context = trcng::extract_context_from_request(&headers);
+
 	// Add claims to the message for RBAC
 	// TODO: maybe do it here so we don't need to do this.
 	let mut message = message;
 	if let ClientJsonRpcMessage::Request(req) = &mut message {
-		let claims = rbac::Identity::new(claims.map(|c| c.0), app.connection_id.read().await.clone());
-		req.request.extensions_mut().insert(claims);
+		let claims = rbac::Identity::new(claims, app.connection_id.read().await.clone());
+		let rq_ctx = relay::RqCtx::new(claims, context);
+		req.request.extensions_mut().insert(rq_ctx);
 	}
 
 	if tx.send(message).await.is_err() {
@@ -220,9 +224,6 @@ async fn sse_handler(
 					}
 				};
 			}
-			// let _running_result = result.unwrap().waiting().await.inspect_err(|e| {
-			// 	tracing::error!(error = ?e, "running error");
-			// });
 			app.txs.write().await.remove(&session);
 		});
 	}

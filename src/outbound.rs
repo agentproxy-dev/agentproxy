@@ -1,19 +1,19 @@
 use crate::proto;
-use crate::proto::mcpproxy::dev::target::target::OpenApiTarget as XdsOpenAPITarget;
+use crate::proto::aidp::dev::mcp::target::target::OpenApiTarget as XdsOpenAPITarget;
 use openapiv3::OpenAPI;
 use rmcp::model::Tool;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::collections::HashMap;
 pub mod backend;
 pub mod openapi;
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Debug)]
 pub struct Target {
 	pub name: String,
 	pub spec: TargetSpec,
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Debug)]
 pub enum TargetSpec {
 	Sse {
 		host: String,
@@ -30,12 +30,14 @@ pub enum TargetSpec {
 	OpenAPI(OpenAPITarget),
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Debug)]
 pub struct OpenAPITarget {
 	pub host: String,
 	pub prefix: String,
 	pub port: u16,
 	pub tools: Vec<(Tool, openapi::UpstreamOpenAPICall)>,
+	pub headers: HashMap<String, String>,
+	pub backend_auth: Option<backend::BackendAuthConfig>,
 }
 
 impl TryFrom<XdsOpenAPITarget> for OpenAPITarget {
@@ -49,11 +51,19 @@ impl TryFrom<XdsOpenAPITarget> for OpenAPITarget {
 			serde_json::from_slice(&schema_bytes).map_err(openapi::ParseError::SerdeError)?;
 		let tools = openapi::parse_openapi_schema(&schema)?;
 		let prefix = openapi::get_server_prefix(&schema)?;
+		let headers = proto::resolve_header_map(&value.headers)?;
 		Ok(OpenAPITarget {
 			host: value.host.clone(),
 			prefix,
 			port: value.port as u16, // TODO: check if this is correct
 			tools,
+			headers,
+			backend_auth: match value.auth {
+				Some(auth) => auth
+					.try_into()
+					.map_err(|_| openapi::ParseError::MissingSchema)?,
+				None => None,
+			},
 		})
 	}
 }

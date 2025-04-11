@@ -1,5 +1,6 @@
-use serde::{Deserialize, Serialize};
-use std::default::Default;
+use secrecy::ExposeSecret;
+use secrecy::SecretString;
+use serde::Serialize;
 
 #[cfg(feature = "aws")]
 pub(crate) mod aws;
@@ -11,9 +12,10 @@ pub trait BackendAuth: Send + Sync {
 	async fn get_token(&self) -> Result<String, anyhow::Error>;
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+#[derive(Debug, Clone, Serialize)]
 pub enum BackendAuthConfig {
-	#[default]
+	#[serde(rename = "passthrough", skip_serializing)]
+	Passthrough,
 	#[cfg(feature = "gcp")]
 	#[serde(rename = "gcp")]
 	GCP,
@@ -22,10 +24,31 @@ pub enum BackendAuthConfig {
 	AWS,
 }
 
+#[derive(Debug, Clone)]
+struct PassthroughBackend {
+	token: SecretString,
+}
+
+#[async_trait::async_trait]
+impl BackendAuth for PassthroughBackend {
+	async fn get_token(&self) -> Result<String, anyhow::Error> {
+		Ok(self.token.expose_secret().to_string())
+	}
+}
+
 impl BackendAuthConfig {
-	pub async fn build(&self) -> impl BackendAuth {
+	pub async fn build(
+		&self,
+		identity: &crate::rbac::Identity,
+	) -> Result<Box<dyn BackendAuth>, anyhow::Error> {
 		match self {
-			BackendAuthConfig::GCP => gcp::GCPBackend::new().await.unwrap(),
+			BackendAuthConfig::Passthrough => match &identity.claims {
+				Some(claims) => Ok(Box::new(PassthroughBackend {
+					token: claims.jwt.clone(),
+				})),
+				None => Err(anyhow::anyhow!("Passthrough auth requires a JWT token")),
+			},
+			BackendAuthConfig::GCP => Ok(Box::new(gcp::GCPBackend::new().await?)),
 			#[cfg(feature = "aws")]
 			BackendAuthConfig::AWS => {
 				panic!("AWS backend not implemented")

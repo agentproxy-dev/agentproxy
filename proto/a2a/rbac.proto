@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package mcpproxy.dev.rbac;
+package aidp.dev.a2a.rbac;
 
 // A rule that defines a resource type and a key-value pair 
 //that can be used to match against a resource.
@@ -16,9 +16,7 @@ message Rule {
   message Resource {
     // The type of resource that the rule applies to.
     enum ResourceType {
-      TOOL = 0;
-      PROMPT = 1;
-      RESOURCE = 2;
+      TASK = 0;
     }
 
     string id = 1;
@@ -40,7 +38,7 @@ message Rule {
 }
 
 // A configuration that defines a set of RBAC rules for a given listener
-message Config {
+message RuleSet {
   // The name of the RBAC configuration.
   string name = 1;
   // The namespace of the RBAC configuration.

@@ -11,14 +11,14 @@ use tracing_subscriber::{self, EnvFilter};
 use mcp_proxy::admin::App as AdminApp;
 use mcp_proxy::inbound;
 use mcp_proxy::metrics::App as MetricsApp;
-use mcp_proxy::proto::mcpproxy::dev::rbac::Config as XdsRbac;
-use mcp_proxy::proto::mcpproxy::dev::target::Target as XdsTarget;
+use mcp_proxy::proto::aidp::dev::mcp::rbac::RuleSet as XdsRbac;
+use mcp_proxy::proto::aidp::dev::mcp::target::Target as XdsTarget;
 use mcp_proxy::relay;
 use mcp_proxy::signal;
+use mcp_proxy::trcng;
 use mcp_proxy::xds;
 use mcp_proxy::xds::ProxyStateUpdater;
 use mcp_proxy::xds::XdsStore as ProxyState;
-
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
@@ -135,6 +135,17 @@ async fn main() -> Result<()> {
 					.map_err(|e| anyhow::anyhow!("error serving admin: {:?}", e))
 			});
 
+			if let Some(cfg) = cfg.tracing {
+				let provider = trcng::init_tracer(cfg)?;
+				let ct_clone = ct.clone();
+				run_set.spawn(async move {
+					ct_clone.cancelled().await;
+					provider
+						.shutdown()
+						.map_err(|e| anyhow::anyhow!("error initializing tracer: {:?}", e))
+				});
+			}
+
 			// Wait for all servers to finish? I think this does what I want :shrug:
 			while let Some(result) = run_set.join_next().await {
 				#[allow(unused_must_use)]
@@ -192,6 +203,17 @@ async fn main() -> Result<()> {
 					.await
 					.map_err(|e| anyhow::anyhow!("error serving metrics: {:?}", e))
 			});
+
+			if let Some(cfg) = cfg.tracing {
+				let provider = trcng::init_tracer(cfg)?;
+				let ct_clone = ct.clone();
+				run_set.spawn(async move {
+					ct_clone.cancelled().await;
+					provider
+						.shutdown()
+						.map_err(|e| anyhow::anyhow!("error initializing tracer: {:?}", e))
+				});
+			}
 
 			// Wait for all servers to finish? I think this does what I want :shrug:
 			while let Some(result) = run_set.join_next().await {

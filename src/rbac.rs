@@ -1,9 +1,9 @@
-use crate::proto::mcpproxy::dev::rbac::rule;
-use crate::proto::mcpproxy::dev::rbac::{Config as XdsRuleSet, Rule as XdsRule};
+use crate::proto::aidp::dev::mcp::rbac::rule;
+use crate::proto::aidp::dev::mcp::rbac::{Rule as XdsRule, RuleSet as XdsRuleSet};
+use secrecy::SecretString;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use serde_json::map::Map;
-
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct RuleSet {
@@ -132,20 +132,22 @@ impl From<&rule::Matcher> for Matcher {
 	}
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct Identity {
-	claims: Option<Map<String, Value>>,
-	connection_id: Option<String>,
+#[derive(Clone, Debug, Default)]
+pub struct Claims {
+	pub inner: Map<String, Value>,
+	pub jwt: SecretString,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
-pub struct Claims(pub Map<String, Value>);
-
 impl Claims {
-	pub fn new(claims: Map<String, Value>) -> Self {
-		Self(claims)
+	pub fn new(claims: Map<String, Value>, jwt: SecretString) -> Self {
+		Self { inner: claims, jwt }
 	}
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct Identity {
+	pub claims: Option<Claims>,
+	pub connection_id: Option<String>,
 }
 
 impl Identity {
@@ -156,7 +158,7 @@ impl Identity {
 		}
 	}
 
-	pub fn new(claims: Option<Map<String, Value>>, connection_id: Option<String>) -> Self {
+	pub fn new(claims: Option<Claims>, connection_id: Option<String>) -> Self {
 		Self {
 			claims,
 			connection_id,
@@ -170,7 +172,7 @@ impl Identity {
 	}
 	fn get_claim(&self, key: &str) -> Option<&str> {
 		match &self.claims {
-			Some(claims) => claims.get(key).and_then(|v| v.as_str()),
+			Some(claims) => claims.inner.get(key).and_then(|v| v.as_str()),
 			None => None,
 		}
 	}
@@ -189,7 +191,10 @@ fn test_rbac_false_check() {
 	let rbac = RuleSet::new("test".to_string(), "test".to_string(), rules);
 	let mut headers = Map::new();
 	headers.insert("sub".to_string(), "1234567890".to_string().into());
-	let id = Identity::new(Some(headers), None);
+	let id = Identity::new(
+		Some(Claims::new(headers, SecretString::new("".into()))),
+		None,
+	);
 	assert!(!rbac.validate(
 		&ResourceType::Tool {
 			id: "increment".to_string()
@@ -211,7 +216,10 @@ fn test_rbac_check() {
 	let rbac = RuleSet::new("test".to_string(), "test".to_string(), rules);
 	let mut headers = Map::new();
 	headers.insert("sub".to_string(), "1234567890".to_string().into());
-	let id = Identity::new(Some(headers), None);
+	let id = Identity::new(
+		Some(Claims::new(headers, SecretString::new("".into()))),
+		None,
+	);
 	assert!(rbac.validate(
 		&ResourceType::Tool {
 			id: "increment".to_string()

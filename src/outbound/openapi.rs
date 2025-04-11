@@ -483,6 +483,7 @@ pub struct Handler {
 	pub prefix: String,
 	pub port: u16,
 	pub client: reqwest::Client,
+	pub headers: HeaderMap,
 	pub tools: Vec<(Tool, UpstreamOpenAPICall)>,
 }
 
@@ -795,6 +796,7 @@ mod tests {
 			prefix: "".to_string(),
 			port: parsed.port().unwrap_or(8080),
 			client,
+			headers: HeaderMap::new(),
 			tools: vec![
 				(test_tool_get, upstream_call_get),
 				(test_tool_post, upstream_call_post),
