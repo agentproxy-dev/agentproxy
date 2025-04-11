@@ -1,10 +1,10 @@
-import { AlertCircle } from "lucide-react"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Button } from "@/components/ui/button"
+import { AlertCircle } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 
 interface ConnectionErrorProps {
-  error: string
-  onRetry: () => void
+  error: string;
+  onRetry: () => void;
 }
 
 export function ConnectionError({ error, onRetry }: ConnectionErrorProps) {
@@ -13,13 +13,11 @@ export function ConnectionError({ error, onRetry }: ConnectionErrorProps) {
       <Alert variant="destructive" className="max-w-md">
         <AlertCircle className="h-4 w-4" />
         <AlertTitle>Connection Failed</AlertTitle>
-        <AlertDescription className="mt-2">
-          {error}
-        </AlertDescription>
+        <AlertDescription className="mt-2">{error}</AlertDescription>
       </Alert>
       <Button onClick={onRetry} variant="outline">
         Try Again
       </Button>
     </div>
-  )
-} 
+  );
+}

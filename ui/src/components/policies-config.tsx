@@ -1,265 +1,248 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Trash2, Shield, Plus } from "lucide-react"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
-import { RBACConfig, Rule, Matcher, ResourceType } from "@/lib/types"
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Trash2, PlusCircle, Loader2 } from "lucide-react";
+import { RBACConfig } from "@/lib/types";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 
 interface PoliciesConfigProps {
-  policies: RBACConfig[]
-  addPolicy: (policy: RBACConfig) => void
-  removePolicy: (index: number) => void
+  policies: RBACConfig[];
+  addPolicy: (policy: RBACConfig) => void;
+  removePolicy: (index: number) => void;
+  serverAddress?: string;
+  serverPort?: number;
+  onConfigUpdate?: (success: boolean, message: string) => void;
 }
 
-export function PoliciesConfig({ policies, addPolicy, removePolicy }: PoliciesConfigProps) {
-  const [isAddingPolicy, setIsAddingPolicy] = useState(false)
-  const [policyToDelete, setPolicyToDelete] = useState<number | null>(null)
-  const [name, setName] = useState("")
-  const [namespace, setNamespace] = useState("")
-  const [key, setKey] = useState("sub")
-  const [value, setValue] = useState("")
-  const [resourceType, setResourceType] = useState<ResourceType>(ResourceType.TOOL)
-  const [resourceId, setResourceId] = useState("")
+export function PoliciesConfig({
+  policies,
+  addPolicy,
+  removePolicy,
+  serverAddress,
+  serverPort,
+  onConfigUpdate,
+}: PoliciesConfigProps) {
+  const [isAddingPolicy, setIsAddingPolicy] = useState(false);
+  const [policyName, setPolicyName] = useState("");
+  const [policyToDelete, setPolicyToDelete] = useState<number | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
 
-  const handleAddPolicy = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
+  const updatePoliciesOnServer = async (updatedPolicies: RBACConfig[]) => {
+    if (!serverAddress || !serverPort) return false;
 
-    const rule: Rule = {
-      key,
-      value,
-      resource: {
-        id: resourceId,
-        type: resourceType,
-      },
-      matcher: Matcher.EQUALS,
+    setIsUpdating(true);
+    try {
+      const response = await fetch(`http://${serverAddress}:${serverPort}/rbac`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(updatedPolicies),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to update policies: ${response.status} ${response.statusText}`);
+      }
+
+      if (onConfigUpdate) {
+        onConfigUpdate(true, "Policies updated successfully");
+      }
+      return true;
+    } catch (error) {
+      console.error("Error updating policies:", error);
+      if (onConfigUpdate) {
+        onConfigUpdate(false, error instanceof Error ? error.message : "Failed to update policies");
+      }
+      return false;
+    } finally {
+      setIsUpdating(false);
     }
+  };
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
 
     const policy: RBACConfig = {
-      name,
-      namespace,
-      rules: [rule],
+      name: policyName,
+      namespace: "default",
+      rules: [],
+    };
+
+    // Add policy to local state
+    addPolicy(policy);
+
+    // Update policies on server
+    if (serverAddress && serverPort) {
+      const updatedPolicies = [...policies, policy];
+      await updatePoliciesOnServer(updatedPolicies);
     }
 
-    addPolicy(policy)
-    resetForm()
-    setIsAddingPolicy(false)
-  }
+    resetForm();
+    setIsAddingPolicy(false);
+  };
 
   const resetForm = () => {
-    setName("")
-    setNamespace("")
-    setKey("sub")
-    setValue("")
-    setResourceType(ResourceType.TOOL)
-    setResourceId("")
-  }
+    setPolicyName("");
+  };
 
   const handleDeletePolicy = (index: number) => {
-    setPolicyToDelete(index)
-  }
+    setPolicyToDelete(index);
+  };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (policyToDelete !== null) {
-      removePolicy(policyToDelete)
-      setPolicyToDelete(null)
+      // Remove policy from local state
+      removePolicy(policyToDelete);
+
+      // Update policies on server
+      if (serverAddress && serverPort) {
+        const updatedPolicies = policies.filter((_, i) => i !== policyToDelete);
+        await updatePoliciesOnServer(updatedPolicies);
+      }
+
+      setPolicyToDelete(null);
     }
-  }
+  };
 
   const cancelDelete = () => {
-    setPolicyToDelete(null)
-  }
+    setPolicyToDelete(null);
+  };
 
   return (
     <div className="space-y-6 max-w-3xl">
       <div>
         <h3 className="text-lg font-medium mb-2">Security Policies</h3>
         <p className="text-sm text-muted-foreground mb-4">
-          Configure access control policies for your MCP proxy
+          Configure security policies for the proxy
         </p>
       </div>
 
-      {policies.length === 0 ? (
+      {isUpdating && (
+        <Alert>
+          <AlertDescription className="flex items-center">
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            Updating policies on server...
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {policies.length === 0 && !isAddingPolicy ? (
         <Alert>
           <AlertDescription>
-            No policies configured. Add a policy to control access to your MCP proxy resources.
+            No security policies configured. Add a policy to get started.
           </AlertDescription>
         </Alert>
       ) : (
         <div className="space-y-4">
           {policies.map((policy, index) => (
-            <Card key={index} id={`policy-${index}`} className="relative border border-muted">
-              <CardContent className="p-4">
-                <div className="flex justify-between items-start">
-                  <div className="space-y-2 w-full">
-                    <div className="flex items-center">
-                      <Shield className="h-4 w-4 mr-2 text-muted-foreground" />
-                      <h3 className="font-medium">{policy.name}</h3>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                      <div>
-                        <span className="font-medium">Namespace:</span> {policy.namespace}
-                      </div>
-                      {policy.rules.map((rule, ruleIndex) => (
-                        <div key={ruleIndex} className="col-span-2 border-t pt-2 mt-2">
-                          <div>
-                            <span className="font-medium">Key:</span> {rule.key}
-                          </div>
-                          <div>
-                            <span className="font-medium">Value:</span> {rule.value}
-                          </div>
-                          <div>
-                            <span className="font-medium">Resource Type:</span> {ResourceType[rule.resource.type]}
-                          </div>
-                          <div>
-                            <span className="font-medium">Resource ID:</span> {rule.resource.id}
-                          </div>
-                          <div>
-                            <span className="font-medium">Matcher:</span> {Matcher[rule.matcher]}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleDeletePolicy(index)}
-                    className="text-muted-foreground hover:text-destructive"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+            <div
+              key={index}
+              id={`policy-${index}`}
+              className="border rounded-lg p-4 flex justify-between items-start"
+            >
+              <div>
+                <h4 className="font-medium">{policy.name}</h4>
+                <div className="flex items-center mt-1">
+                  <Badge variant="outline" className="mr-2">
+                    {policy.rules.length} rules
+                  </Badge>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => handleDeletePolicy(index)}
+                className="text-muted-foreground hover:text-destructive"
+                disabled={isUpdating}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
           ))}
         </div>
       )}
 
-      <Button onClick={() => setIsAddingPolicy(true)} className="flex items-center">
-        <Plus className="h-4 w-4 mr-2" />
+      <Button
+        onClick={() => setIsAddingPolicy(true)}
+        className="flex items-center"
+        disabled={isUpdating}
+      >
+        <PlusCircle className="h-4 w-4 mr-2" />
         Add Policy
       </Button>
 
       <Dialog open={isAddingPolicy} onOpenChange={setIsAddingPolicy}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add Policy</DialogTitle>
-            <DialogDescription>
-              Create a new access control policy for your MCP proxy
-            </DialogDescription>
+            <DialogTitle>Add Security Policy</DialogTitle>
+            <DialogDescription>Configure a new security policy for the proxy.</DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleAddPolicy} className="space-y-4 mt-6">
+          <form onSubmit={handleSubmit} className="space-y-4 mt-6">
             <div className="space-y-2">
               <Label htmlFor="name">Policy Name</Label>
               <Input
                 id="name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
+                value={policyName}
+                onChange={e => setPolicyName(e.target.value)}
                 placeholder="Enter policy name"
                 required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="namespace">Namespace</Label>
-              <Input
-                id="namespace"
-                value={namespace}
-                onChange={(e) => setNamespace(e.target.value)}
-                placeholder="Enter namespace"
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="key">Key</Label>
-              <Select value={key} onValueChange={setKey}>
-                <SelectTrigger id="key">
-                  <SelectValue placeholder="Select key" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="sub">Subject (sub)</SelectItem>
-                  <SelectItem value="iss">Issuer (iss)</SelectItem>
-                  <SelectItem value="aud">Audience (aud)</SelectItem>
-                  <SelectItem value="role">Role</SelectItem>
-                  <SelectItem value="scope">Scope</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="value">Value</Label>
-              <Input
-                id="value"
-                value={value}
-                onChange={(e) => setValue(e.target.value)}
-                placeholder="Value to match"
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="resourceType">Resource Type</Label>
-              <Select 
-                value={ResourceType[resourceType]} 
-                onValueChange={(value) => setResourceType(ResourceType[value as keyof typeof ResourceType])}
-              >
-                <SelectTrigger id="resourceType">
-                  <SelectValue placeholder="Select resource type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="TOOL">Tool</SelectItem>
-                  <SelectItem value="PROMPT">Prompt</SelectItem>
-                  <SelectItem value="RESOURCE">Resource</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="resourceId">Resource ID</Label>
-              <Input
-                id="resourceId"
-                value={resourceId}
-                onChange={(e) => setResourceId(e.target.value)}
-                placeholder="Resource identifier"
-                required
+                disabled={isUpdating}
               />
             </div>
 
             <div className="flex justify-end">
-              <Button type="submit">Add Policy</Button>
+              <Button type="submit" disabled={isUpdating}>
+                {isUpdating ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Adding...
+                  </>
+                ) : (
+                  "Add Policy"
+                )}
+              </Button>
             </div>
           </form>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={policyToDelete !== null} onOpenChange={(open) => !open && cancelDelete()}>
+      <Dialog open={policyToDelete !== null} onOpenChange={open => !open && cancelDelete()}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete Policy</DialogTitle>
+            <DialogTitle>Delete Security Policy</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete this policy? This action cannot be undone.
+              Are you sure you want to delete this security policy? This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <div className="flex justify-end gap-2 mt-4">
-            <Button variant="outline" onClick={cancelDelete}>
+            <Button variant="outline" onClick={cancelDelete} disabled={isUpdating}>
               Cancel
             </Button>
-            <Button variant="destructive" onClick={confirmDelete}>
-              Delete
+            <Button variant="destructive" onClick={confirmDelete} disabled={isUpdating}>
+              {isUpdating ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                "Delete"
+              )}
             </Button>
           </div>
         </DialogContent>
       </Dialog>
     </div>
-  )
+  );
 }

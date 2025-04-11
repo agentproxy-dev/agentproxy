@@ -1,6 +1,6 @@
 "use client";
 
-import { ButtonHTMLAttributes, useState } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -33,12 +33,24 @@ export function ConnectionForm({ onConnect, connectionError }: ConnectionFormPro
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor="address">MCP Proxy Address</Label>
-          <Input id="address" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="localhost or IP address" required />
+          <Input
+            id="address"
+            value={address}
+            onChange={e => setAddress(e.target.value)}
+            placeholder="localhost or IP address"
+            required
+          />
         </div>
 
         <div className="space-y-2">
           <Label htmlFor="port">Port</Label>
-          <Input id="port" value={port} onChange={(e) => setPort(parseInt(e.target.value))} placeholder="Port number" required />
+          <Input
+            id="port"
+            value={port}
+            onChange={e => setPort(parseInt(e.target.value))}
+            placeholder="Port number"
+            required
+          />
         </div>
       </div>
 

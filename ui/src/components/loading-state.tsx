@@ -1,12 +1,12 @@
-"use client"
+"use client";
 
-import { MCPLogo } from "@/components/mcp-logo"
-import { motion } from "framer-motion"
+import { MCPLogo } from "@/components/mcp-logo";
+import { motion } from "framer-motion";
 
 export function LoadingState() {
   return (
     <div className="flex min-h-screen w-full items-center justify-center">
-      <motion.div 
+      <motion.div
         className="text-center"
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -16,5 +16,5 @@ export function LoadingState() {
         <p className="text-muted-foreground">Loading...</p>
       </motion.div>
     </div>
-  )
-} 
+  );
+}

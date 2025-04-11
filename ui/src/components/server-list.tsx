@@ -1,23 +1,26 @@
-"use client"
+"use client";
 
-import { Card, CardContent } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Trash2 } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Trash2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Target } from "@/lib/types";
 
 interface ServerListProps {
-  targets: any[]
-  removeTarget: (index: number) => void
+  targets: Target[];
+  removeTarget: (index: number) => void;
 }
 
 export function ServerList({ targets, removeTarget }: ServerListProps) {
   if (targets.length === 0) {
     return (
       <Alert>
-        <AlertDescription>No target servers configured. Add a server to get started.</AlertDescription>
+        <AlertDescription>
+          No target servers configured. Add a server to get started.
+        </AlertDescription>
       </Alert>
-    )
+    );
   }
 
   return (
@@ -48,17 +51,17 @@ export function ServerList({ targets, removeTarget }: ServerListProps) {
         </Card>
       ))}
     </div>
-  )
+  );
 }
 
-function getTargetType(target) {
-  if (target.stdio) return "stdio"
-  if (target.sse) return "sse"
-  if (target.openapi) return "openapi"
-  return "unknown"
+function getTargetType(target: Target) {
+  if (target.stdio) return "stdio";
+  if (target.sse) return "sse";
+  if (target.openapi) return "openapi";
+  return "unknown";
 }
 
-function renderTargetDetails(target) {
+function renderTargetDetails(target: Target) {
   if (target.stdio) {
     return (
       <div className="text-sm text-muted-foreground">
@@ -66,7 +69,7 @@ function renderTargetDetails(target) {
           Command: {target.stdio.cmd} {target.stdio.args?.join(" ")}
         </p>
       </div>
-    )
+    );
   }
 
   if (target.sse) {
@@ -77,7 +80,7 @@ function renderTargetDetails(target) {
         </p>
         <p>Path: {target.sse.path || "/"}</p>
       </div>
-    )
+    );
   }
 
   if (target.openapi) {
@@ -88,8 +91,8 @@ function renderTargetDetails(target) {
         </p>
         <p>Schema: {target.openapi.schema?.file_path || "Inline schema"}</p>
       </div>
-    )
+    );
   }
 
-  return null
+  return null;
 }

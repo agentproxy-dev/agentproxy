@@ -1,26 +1,21 @@
-"use client"
+"use client";
 
-import * as React from "react"
-import { Moon, Sun } from "lucide-react"
-import { useTheme } from "next-themes"
-import { Button } from "@/components/ui/button"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
+import * as React from "react";
+import { Moon, Sun } from "lucide-react";
+import { useTheme } from "next-themes";
+import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface ThemeToggleProps {
-  asChild?: boolean
-  className?: string
+  asChild?: boolean;
+  className?: string;
 }
 
 export function ThemeToggle({ asChild, className }: ThemeToggleProps) {
-  const { theme, setTheme } = useTheme()
-  const Comp = asChild ? "div" : Button
+  const { theme, setTheme } = useTheme();
+  const Comp = asChild ? "div" : Button;
 
-  const toggleTheme = () => setTheme(theme === "light" ? "dark" : "light")
+  const toggleTheme = () => setTheme(theme === "light" ? "dark" : "light");
 
   const content = (
     <>
@@ -28,36 +23,31 @@ export function ThemeToggle({ asChild, className }: ThemeToggleProps) {
       <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
       <span className="sr-only">Toggle theme</span>
     </>
-  )
+  );
 
   if (asChild) {
     return (
-      <div 
+      <div
         className={className}
         onClick={toggleTheme}
         role="button"
         tabIndex={0}
-        onKeyDown={(e) => {
+        onKeyDown={e => {
           if (e.key === "Enter" || e.key === " ") {
-            toggleTheme()
+            toggleTheme();
           }
         }}
       >
         {content}
       </div>
-    )
+    );
   }
 
   return (
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          <Comp
-            variant="ghost"
-            size="icon"
-            onClick={toggleTheme}
-            className={className}
-          >
+          <Comp variant="ghost" size="icon" onClick={toggleTheme} className={className}>
             {content}
           </Comp>
         </TooltipTrigger>
@@ -66,5 +56,5 @@ export function ThemeToggle({ asChild, className }: ThemeToggleProps) {
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>
-  )
-} 
+  );
+}

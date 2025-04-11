@@ -1,6 +1,6 @@
-"use client"
+"use client";
 
-import { useState } from "react"
+import { useState } from "react";
 import {
   Sidebar,
   SidebarContent,
@@ -15,15 +15,24 @@ import {
   SidebarMenuBadge,
   SidebarSeparator,
   useSidebar,
-} from "@/components/ui/sidebar"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { PlusCircle, Upload, Loader2, Home } from "lucide-react"
-import { Server, Settings, Shield, Headphones, Globe, Terminal, FileJson, HelpCircle, Plug, RefreshCw, LogOut, ChevronsUpDown } from "lucide-react"
-import { MCPLogo } from "@/components/mcp-logo"
-import { ThemeToggle } from "@/components/theme-toggle"
-import { Target } from "@/lib/types"
+} from "@/components/ui/sidebar";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Upload,
+  Loader2,
+  Home,
+  Shield,
+  Headphones,
+  Server,
+  Code,
+  LogOut,
+  ChevronsUpDown,
+} from "lucide-react";
+import { MCPLogo } from "@/components/mcp-logo";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { Target } from "@/lib/types";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,21 +40,18 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+} from "@/components/ui/dropdown-menu";
 
 interface AppSidebarProps {
-  isConnected: boolean
-  serverAddress?: string
-  serverPort?: number
-  onConnect: (address: string, port: number) => Promise<boolean>
-  onDisconnect: () => void
-  targets: any[]
-  activeView: string
-  setActiveView: (view: string) => void
-  addTarget: (target: Target) => void
-  hasUnsavedChanges: boolean
-  onPushConfig: () => void
-  isPushingConfig: boolean
+  isConnected: boolean;
+  serverAddress?: string;
+  serverPort?: number;
+  onConnect: (address: string, port: number) => Promise<boolean>;
+  onDisconnect: () => void;
+  targets: any[];
+  activeView: string;
+  setActiveView: (view: string) => void;
+  addTarget: (target: Target) => void;
 }
 
 export function AppSidebar({
@@ -57,37 +63,33 @@ export function AppSidebar({
   targets,
   activeView,
   setActiveView,
-  addTarget,
-  hasUnsavedChanges,
-  onPushConfig,
-  isPushingConfig,
 }: AppSidebarProps) {
-  const [quickConnectAddress, setQuickConnectAddress] = useState("localhost")
-  const [quickConnectPort, setQuickConnectPort] = useState(3000)
-  const [isConnecting, setIsConnecting] = useState(false)
-  const { isMobile } = useSidebar()
+  const [quickConnectAddress, setQuickConnectAddress] = useState("localhost");
+  const [quickConnectPort, setQuickConnectPort] = useState(3000);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const { isMobile } = useSidebar();
 
   const handleQuickConnect = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    setIsConnecting(true)
+    e.preventDefault();
+    setIsConnecting(true);
 
     try {
-      await onConnect(quickConnectAddress, quickConnectPort)
+      await onConnect(quickConnectAddress, quickConnectPort);
     } finally {
-      setIsConnecting(false)
+      setIsConnecting(false);
     }
-  }
+  };
 
-  const handleAddNewTarget = () => {
-    setActiveView("targets")
-    // Focus on the add target form
-    setTimeout(() => {
-      const addTargetForm = document.getElementById("add-target-form")
-      if (addTargetForm) {
-        addTargetForm.scrollIntoView({ behavior: "smooth" })
-      }
-    }, 100)
-  }
+  // const handleAddNewTarget = () => {
+  //   setActiveView("targets")
+  //   // Focus on the add target form
+  //   setTimeout(() => {
+  //     const addTargetForm = document.getElementById("add-target-form")
+  //     if (addTargetForm) {
+  //       addTargetForm.scrollIntoView({ behavior: "smooth" })
+  //     }
+  //   }, 100)
+  // }
 
   return (
     <Sidebar>
@@ -106,7 +108,7 @@ export function AppSidebar({
                 <Input
                   id="quick-address"
                   value={quickConnectAddress}
-                  onChange={(e) => setQuickConnectAddress(e.target.value)}
+                  onChange={e => setQuickConnectAddress(e.target.value)}
                   placeholder="localhost"
                   className="h-7"
                   required
@@ -120,7 +122,7 @@ export function AppSidebar({
                 <Input
                   id="quick-port"
                   value={quickConnectPort}
-                  onChange={(e) => setQuickConnectPort(parseInt(e.target.value))}
+                  onChange={e => setQuickConnectPort(parseInt(e.target.value))}
                   placeholder="3000"
                   className="h-7"
                   required
@@ -143,7 +145,7 @@ export function AppSidebar({
                         aria-label="Server actions"
                       >
                         <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-                          <Plug className="size-4" />
+                          <Server className="size-4" />
                         </div>
                         <div className="grid flex-1 text-left text-sm leading-tight">
                           <span className="truncate font-semibold">
@@ -166,28 +168,14 @@ export function AppSidebar({
                       <DropdownMenuItem
                         onClick={() => {
                           if (serverAddress && serverPort) {
-                            onConnect(serverAddress, serverPort)
+                            onConnect(serverAddress, serverPort);
                           }
                         }}
                         className="gap-2 p-2"
                       >
-                        <RefreshCw className="size-4" />
+                        <Loader2 className="size-4 animate-spin" />
                         Refresh Connection
                       </DropdownMenuItem>
-                      {hasUnsavedChanges && (
-                        <DropdownMenuItem
-                          onClick={onPushConfig}
-                          disabled={isPushingConfig}
-                          className="gap-2 p-2 text-primary"
-                        >
-                          {isPushingConfig ? (
-                            <Loader2 className="size-4 animate-spin" />
-                          ) : (
-                            <Upload className="size-4" />
-                          )}
-                          Push Configuration
-                        </DropdownMenuItem>
-                      )}
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
                         onClick={onDisconnect}
@@ -264,7 +252,7 @@ export function AppSidebar({
                       onClick={() => setActiveView("json")}
                       aria-label="JSON Configuration"
                     >
-                      <FileJson className="h-4 w-4" />
+                      <Code className="h-4 w-4" />
                       <span>JSON View</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -287,18 +275,5 @@ export function AppSidebar({
         </SidebarMenu>
       </SidebarFooter>
     </Sidebar>
-  )
-}
-
-function getTargetIcon(target: Target) {
-  if (target.stdio) {
-    return <Terminal className="h-4 w-4" />
-  }
-  if (target.sse) {
-    return <Globe className="h-4 w-4" />
-  }
-  if (target.openapi) {
-    return <Globe className="h-4 w-4" />
-  }
-  return <Server className="h-4 w-4" />
+  );
 }

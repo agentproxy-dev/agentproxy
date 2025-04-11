@@ -51,21 +51,21 @@ export interface Listener {
 }
 
 export interface SseListener {
-  address: string;
+  // The address can be either 'address' or 'host'
+  address?: string;
+  host?: string;
   port: number;
-  tls?: SseListener.TlsConfig;
+  tls?: TlsConfig;
 }
 
-// Nested type definition
-export namespace SseListener {
-  export interface TlsConfig {
-    key_pem: LocalDataSource;
-    cert_pem: LocalDataSource;
-  }
+export interface TlsConfig {
+  key_pem: LocalDataSource;
+  cert_pem: LocalDataSource;
 }
 
 export interface StdioListener {
   // Empty interface as the message has no fields
+  // eslint-disable-next-line @typescript-eslint/no-empty-object-type
 }
 
 // Enum for matcher types

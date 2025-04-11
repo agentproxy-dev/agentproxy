@@ -1,158 +1,147 @@
-const mockConfigurations = {
-  "localhost:3000": {
-    type: "static",
-    listener: {
-      sse: {
-        host: "0.0.0.0",
-        port: 3000,
-      },
-    },
-    targets: [
-      {
-        name: "everything",
-        stdio: {
-          cmd: "npx",
-          args: ["@modelcontextprotocol/server-everything"],
-        },
-      },
-    ],
-  },
-  "localhost:3001": {
-    type: "static",
-    listener: {
-      sse: {
-        host: "0.0.0.0",
-        port: 3001,
-      },
-    },
-    targets: [
-      {
-        name: "petstore",
-        openapi: {
-          host: "petstore3.swagger.io",
-          port: 443,
-          schema: {
-            file_path: "examples/openapi/openapi.json",
-          },
-        },
-      },
-    ],
-  },
-  "localhost:3002": {
-    type: "static",
-    listener: {
-      sse: {
-        host: "0.0.0.0",
-        port: 3002,
-        authn: {
-          jwt: {
-            issuer: ["me"],
-            audience: ["me.com"],
-            jwks: {
-              local: {
-                file: "manifests/jwt/pub-key",
-              },
-            },
-          },
-        },
-      },
-    },
-    policies: [
-      {
-        key: "sub",
-        value: "me",
-        resource: {
-          tool: {
-            id: "everything:echo",
-          },
-        },
-        matcher: {
-          equals: {},
-        },
-      },
-    ],
-    targets: [
-      {
-        name: "everything",
-        stdio: {
-          cmd: "npx",
-          args: ["@modelcontextprotocol/server-everything"],
-        },
-      },
-      {
-        name: "everything_else",
-        stdio: {
-          cmd: "npx",
-          args: ["@modelcontextprotocol/server-everything"],
-        },
-      },
-    ],
-  },
-}
-
-// Store updated configurations
-const updatedConfigs = { ...mockConfigurations }
-
-// Mock available servers
-const mockAvailableServers = [
-  { name: "Local Development", address: "localhost", port: "3000" },
-  { name: "Petstore API", address: "localhost", port: "3001" },
-  { name: "Auth Server", address: "localhost", port: "3002" },
-  { name: "Production Server", address: "mcp-proxy.example.com", port: "443" },
-  { name: "Staging Server", address: "staging.mcp-proxy.example.com", port: "443" },
-]
+import { Target, RBACConfig, Listener } from "./types";
 
 /**
- * Simulates fetching the configuration from the MCP proxy server
+ * Fetches the targets configuration from the MCP proxy server
  */
-export async function fetchConfig(address: string, port: number): Promise<any> {
-  // Simulate network delay
-  await new Promise((resolve) => setTimeout(resolve, 800))
+export async function fetchTargets(address: string, port: number): Promise<Target[]> {
+  try {
+    const response = await fetch(`http://${address}:${port}/targets`);
 
-  const key = `${address}:${port}`
+    if (!response.ok) {
+      throw new Error(`Failed to fetch targets: ${response.status} ${response.statusText}`);
+    }
 
-  // Check if we have this configuration
-  if (updatedConfigs[key]) {
-    return { ...updatedConfigs[key] }
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error("Error fetching targets:", error);
+    throw error;
   }
-
-  // Check if we have a mock configuration for this address:port
-  if (mockConfigurations[key]) {
-    return { ...mockConfigurations[key] }
-  }
-
-  // Simulate connection error for unknown servers
-  if (Math.random() > 0.8) {
-    throw new Error("Connection timed out")
-  }
-
-  throw new Error("Server not found or configuration unavailable")
 }
 
 /**
- * Simulates updating the configuration on the MCP proxy server
+ * Updates a single target on the MCP proxy server
  */
-export async function updateConfig(address: string, port: number, config: any): Promise<void> {
-  // Simulate network delay
-  await new Promise((resolve) => setTimeout(resolve, 1000))
+export async function updateTarget(address: string, port: number, target: Target): Promise<void> {
+  console.log("Updating target:", target);
+  try {
+    const response = await fetch(`http://${address}:${port}/targets`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(target),
+    });
 
-  const key = `${address}:${port}`
-
-  // Randomly fail sometimes to simulate network issues
-  if (Math.random() > 0.9) {
-    throw new Error("Failed to update configuration: Network error")
+    if (!response.ok) {
+      throw new Error(`Failed to update target: ${response.status} ${response.statusText}`);
+    }
+  } catch (error) {
+    console.error("Error updating target:", error);
+    throw error;
   }
-
-  // Store the updated configuration
-  updatedConfigs[key] = { ...config }
 }
 
 /**
- * Simulates fetching all available servers
+ * Fetches the RBAC policies from the MCP proxy server
  */
-export async function getAllServers(): Promise<any[]> {
-  // Simulate network delay
-  await new Promise((resolve) => setTimeout(resolve, 500))
+export async function fetchPolicies(address: string, port: number): Promise<RBACConfig[]> {
+  try {
+    const response = await fetch(`http://${address}:${port}/rbac`);
 
-  return [...mockAvailableServers]
+    if (!response.ok) {
+      throw new Error(`Failed to fetch policies: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data.policies || [];
+  } catch (error) {
+    console.error("Error fetching policies:", error);
+    throw error;
+  }
+}
+
+/**
+ * Updates the RBAC policies on the MCP proxy server
+ */
+export async function updatePolicies(
+  address: string,
+  port: number,
+  policies: RBACConfig[]
+): Promise<void> {
+  try {
+    const response = await fetch(`http://${address}:${port}/rbac`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(policies),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to update policies: ${response.status} ${response.statusText}`);
+    }
+  } catch (error) {
+    console.error("Error updating policies:", error);
+    throw error;
+  }
+}
+
+/**
+ * Fetches the listener configuration from the MCP proxy server
+ */
+export async function fetchListeners(address: string, port: number): Promise<Listener> {
+  try {
+    const response = await fetch(`http://${address}:${port}/listeners`);
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch listeners: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    console.log("Raw listeners data from API:", data);
+    
+    // Ensure the data has the correct structure
+    if (data && typeof data === 'object') {
+      // If the response already has the SSE property, return it directly
+      if (data.sse) {
+        console.log("API returned data with SSE property:", data.sse);
+        
+        // Check if the SSE data has 'host' instead of 'address'
+        if (data.sse.host !== undefined && data.sse.address === undefined) {
+          console.log("Converting 'host' to 'address' in SSE data");
+          return {
+            sse: {
+              address: data.sse.host,
+              port: data.sse.port,
+              tls: data.sse.tls
+            }
+          };
+        }
+        
+        return data as Listener;
+      } else {
+        // Otherwise, create a proper structure
+        console.log("API returned data without SSE property, creating structure");
+        return {
+          sse: {
+            address: data.address || data.host || "0.0.0.0",
+            port: data.port || 5555
+          }
+        };
+      }
+    } else {
+      // Fallback if the response is not in the expected format
+      console.log("API returned unexpected data format, using fallback");
+      return {
+        sse: {
+          address: "0.0.0.0",
+          port: 5555
+        }
+      };
+    }
+  } catch (error) {
+    console.error("Error fetching listeners:", error);
+    throw error;
+  }
 }

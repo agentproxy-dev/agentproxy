@@ -1,32 +1,31 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
-import { Config } from "@/lib/types"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { AlertCircle } from "lucide-react"
+import { useState } from "react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
+import { Config } from "@/lib/types";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertCircle } from "lucide-react";
 
 interface JsonConfigProps {
-  config: Config
-  onConfigChange: (config: Config) => void
+  config: Config;
+  onConfigChange: (config: Config) => void;
 }
 
 export function JsonConfig({ config, onConfigChange }: JsonConfigProps) {
-  const [jsonText, setJsonText] = useState(JSON.stringify(config, null, 2))
-  const [error, setError] = useState<string | null>(null)
+  const [jsonText, setJsonText] = useState(JSON.stringify(config, null, 2));
+  const [error, setError] = useState<string | null>(null);
 
   const handleJsonChange = (value: string) => {
-    setJsonText(value)
+    setJsonText(value);
     try {
-      const parsedConfig = JSON.parse(value) as Config
-      onConfigChange(parsedConfig)
-      setError(null)
-    } catch (e) {
-      setError("Invalid JSON format")
+      const parsedConfig = JSON.parse(value) as Config;
+      onConfigChange(parsedConfig);
+      setError(null);
+    } catch {
+      setError("Invalid JSON format");
     }
-  }
+  };
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -46,7 +45,9 @@ export function JsonConfig({ config, onConfigChange }: JsonConfigProps) {
           <div className="space-y-4">
             <Textarea
               value={jsonText}
-              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => handleJsonChange(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                handleJsonChange(e.target.value)
+              }
               className="font-mono h-[500px]"
               placeholder="Enter JSON configuration"
             />
@@ -60,5 +61,5 @@ export function JsonConfig({ config, onConfigChange }: JsonConfigProps) {
         </CardContent>
       </Card>
     </div>
-  )
-} 
+  );
+}

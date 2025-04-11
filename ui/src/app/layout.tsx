@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
-import { AppFooter } from "@/components/app-footer";
 import { LoadingWrapper } from "@/components/loading-wrapper";
 
 const geistSans = Geist({
@@ -41,10 +40,7 @@ export default function RootLayout({
           storageKey="mcp-proxy-theme"
         >
           <LoadingWrapper>
-            <main className="flex-1 overflow-auto">
-              {children}
-            </main>
-            <AppFooter />
+            <main className="flex-1 overflow-auto">{children}</main>
           </LoadingWrapper>
         </ThemeProvider>
       </body>
