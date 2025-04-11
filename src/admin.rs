@@ -11,8 +11,8 @@ use axum::{
 	routing::get,
 };
 use serde::{Deserialize, Serialize};
+use tower_http::cors::{Any, CorsLayer};
 use tracing::error;
-use tower_http::cors::{CorsLayer, Any};
 
 #[derive(Clone)]
 pub struct App {
