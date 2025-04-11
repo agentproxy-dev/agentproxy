@@ -108,7 +108,7 @@ async fn agent_call_handler(
 ) -> anyhow::Result<
 	AxumEither<
 		Sse<impl Stream<Item = anyhow::Result<Event, axum::Error>>>,
-		Json<a2a_sdk::ClientJsonRpcMessage>,
+		Json<a2a_sdk::JsonRpcMessage>,
 	>,
 	StatusCode,
 > {
@@ -119,7 +119,7 @@ async fn agent_call_handler(
 	let context = trcng::extract_context_from_request(&headers);
 	let rq_ctx = relay::RqCtx::new(claims, context);
 	let rx = relay
-		.proxy(request, &rq_ctx, target)
+		.proxy_request(request, &rq_ctx, target)
 		.await
 		.map_err(|_e| StatusCode::INTERNAL_SERVER_ERROR)?;
 

@@ -3,211 +3,22 @@
 #![allow(clippy::match_single_binding)]
 #![allow(clippy::clone_on_copy)]
 
+mod jsonrpc;
+
+use crate::jsonrpc::*;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
-use std::sync::Arc;
 
-pub mod error {
-	use std::fmt::Display;
-	use std::fmt::{Debug, Formatter};
-	pub struct ConversionError(::std::borrow::Cow<'static, str>);
-	impl ::std::error::Error for ConversionError {}
-	impl Display for ConversionError {
-		fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), ::std::fmt::Error> {
-			Display::fmt(&self.0, f)
-		}
-	}
-	impl Debug for ConversionError {
-		fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), ::std::fmt::Error> {
-			Debug::fmt(&self.0, f)
-		}
-	}
-	impl From<&'static str> for ConversionError {
-		fn from(value: &'static str) -> Self {
-			Self(value.into())
-		}
-	}
-	impl From<String> for ConversionError {
-		fn from(value: String) -> Self {
-			Self(value.into())
-		}
-	}
-}
-
-pub trait ConstString: Default {
-	const VALUE: &str;
-}
-#[macro_export]
-macro_rules! const_string {
-	($name:ident = $value:literal) => {
-		#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-		pub struct $name;
-
-		impl ConstString for $name {
-			const VALUE: &str = $value;
-		}
-
-		impl serde::Serialize for $name {
-			fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-			where
-				S: serde::Serializer,
-			{
-				$value.serialize(serializer)
-			}
-		}
-
-		impl<'de> serde::Deserialize<'de> for $name {
-			fn deserialize<D>(deserializer: D) -> Result<$name, D::Error>
-			where
-				D: serde::Deserializer<'de>,
-			{
-				let s: String = serde::Deserialize::deserialize(deserializer)?;
-				if s == $value {
-					Ok($name)
-				} else {
-					Err(serde::de::Error::custom(format!(concat!(
-						"expect const string value \"",
-						$value,
-						"\""
-					))))
-				}
-			}
-		}
-	};
-}
-
-const_string!(JsonRpcVersion2_0 = "2.0");
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub enum NumberOrString {
-	Number(u32),
-	String(Arc<str>),
-}
-
-impl NumberOrString {
-	pub fn into_json_value(self) -> Value {
-		match self {
-			NumberOrString::Number(n) => Value::Number(serde_json::Number::from(n)),
-			NumberOrString::String(s) => Value::String(s.to_string()),
-		}
-	}
-}
-
-impl std::fmt::Display for NumberOrString {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		match self {
-			NumberOrString::Number(n) => Display::fmt(&n, f),
-			NumberOrString::String(s) => Display::fmt(&s, f),
-		}
-	}
-}
-
-impl Serialize for NumberOrString {
-	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-	where
-		S: serde::Serializer,
-	{
-		match self {
-			NumberOrString::Number(n) => n.serialize(serializer),
-			NumberOrString::String(s) => s.serialize(serializer),
-		}
-	}
-}
-
-impl<'de> Deserialize<'de> for NumberOrString {
-	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-	where
-		D: serde::Deserializer<'de>,
-	{
-		let value: Value = Deserialize::deserialize(deserializer)?;
-		match value {
-			Value::Number(n) => Ok(NumberOrString::Number(
-				n.as_u64()
-					.ok_or(serde::de::Error::custom("Expect an integer"))? as u32,
-			)),
-			Value::String(s) => Ok(NumberOrString::String(s.into())),
-			_ => Err(serde::de::Error::custom("Expect number or string")),
-		}
-	}
-}
-
-pub type RequestId = NumberOrString;
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct JsonRpcRequest<R = Request> {
-	pub jsonrpc: JsonRpcVersion2_0,
-	pub id: RequestId,
-	#[serde(flatten)]
-	pub request: R,
-}
-#[derive(Debug, Clone)]
-pub struct Request<M = String, P = JsonObject> {
-	pub method: M,
-	// #[serde(skip_serializing_if = "Option::is_none")]
-	pub params: P,
-}
-
-impl<M, R> Serialize for Request<M, R>
-where
-	M: Serialize,
-	R: Serialize,
-{
-	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-	where
-		S: serde::Serializer,
-	{
-		Proxy::serialize(
-			&Proxy {
-				method: &self.method,
-				params: &self.params,
-			},
-			serializer,
-		)
-	}
-}
-
-#[derive(Serialize, Deserialize)]
-struct Proxy<M, P> {
-	method: M,
-	params: P,
-}
-
-impl<'de, M, R> Deserialize<'de> for Request<M, R>
-where
-	M: Deserialize<'de>,
-	R: Deserialize<'de>,
-{
-	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-	where
-		D: serde::Deserializer<'de>,
-	{
-		let body = Proxy::deserialize(deserializer)?;
-		Ok(Request {
-			method: body.method,
-			params: body.params,
-		})
-	}
-}
-
-pub type JsonObject<F = Value> = serde_json::Map<String, F>;
-
-type DefaultResponse = JsonObject;
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct JsonRpcResponse<R = JsonObject> {
-	pub jsonrpc: JsonRpcVersion2_0,
-	pub id: RequestId,
-	pub result: R,
-}
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(untagged)]
-pub enum JsonRpcMessage<Req = Request, Resp = DefaultResponse> {
-	Request(JsonRpcRequest<Req>),
-	Response(JsonRpcResponse<Resp>),
+pub enum JsonRpcMessage {
+	Request(JsonRpcRequest<A2aRequest>),
+	Response(JsonRpcResponse<A2aResponse>),
 }
 
-pub type ClientJsonRpcMessage = JsonRpcMessage<A2aRequest, A2aResponse>;
-
+// TODO: this is not complete, add the rest
 #[derive(serde::Deserialize, serde::Serialize, Clone, Debug)]
 #[serde(untagged)]
 pub enum A2aRequest {
@@ -215,7 +26,7 @@ pub enum A2aRequest {
 	SendSubscribeTaskRequest(SendSubscribeTaskRequest),
 	GetTaskRequest(GetTaskRequest),
 }
-
+// TODO: this is not complete, add the rest
 #[derive(serde::Deserialize, serde::Serialize, Clone, Debug)]
 #[serde(untagged)]
 pub enum A2aResponse {
@@ -877,6 +688,34 @@ pub mod defaults {
 		"text".to_string()
 	}
 }
+
+pub mod error {
+	use std::fmt::Display;
+	use std::fmt::{Debug, Formatter};
+	pub struct ConversionError(::std::borrow::Cow<'static, str>);
+	impl ::std::error::Error for ConversionError {}
+	impl Display for ConversionError {
+		fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), ::std::fmt::Error> {
+			Display::fmt(&self.0, f)
+		}
+	}
+	impl Debug for ConversionError {
+		fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), ::std::fmt::Error> {
+			Debug::fmt(&self.0, f)
+		}
+	}
+	impl From<&'static str> for ConversionError {
+		fn from(value: &'static str) -> Self {
+			Self(value.into())
+		}
+	}
+	impl From<String> for ConversionError {
+		fn from(value: String) -> Self {
+			Self(value.into())
+		}
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use crate::{A2aResponse, TaskStatusUpdateEvent};
@@ -906,6 +745,6 @@ mod tests {
 			}
 		}
 		};
-		let got: crate::ClientJsonRpcMessage = serde_json::from_value(js).unwrap();
+		let got: crate::JsonRpcMessage = serde_json::from_value(js).unwrap();
 	}
 }

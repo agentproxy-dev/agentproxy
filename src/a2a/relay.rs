@@ -39,8 +39,8 @@ impl Relay {
 }
 
 pub enum Response {
-	Streaming(ReceiverStream<a2a_sdk::ClientJsonRpcMessage>),
-	Single(a2a_sdk::ClientJsonRpcMessage),
+	Streaming(ReceiverStream<a2a_sdk::JsonRpcMessage>),
+	Single(a2a_sdk::JsonRpcMessage),
 }
 
 impl Relay {
@@ -81,7 +81,7 @@ impl Relay {
 			.collect();
 		Ok(card)
 	}
-	pub async fn proxy(
+	pub async fn proxy_request(
 		self,
 		request: a2a_sdk::A2aRequest,
 		rq_ctx: &RqCtx,
@@ -95,7 +95,7 @@ impl Relay {
 			.context(format!("Service {} not found", &service_name))?;
 		let client = svc.fetch_client()?;
 		let (to_client_tx, to_client_rx) =
-			tokio::sync::mpsc::channel::<a2a_sdk::ClientJsonRpcMessage>(64);
+			tokio::sync::mpsc::channel::<a2a_sdk::JsonRpcMessage>(64);
 		let resp = client.json(&request).send().await?;
 
 		// TODO: implement RBAC
@@ -105,15 +105,12 @@ impl Relay {
 			.and_then(|value| value.to_str().ok())
 			.and_then(|value| value.parse::<mime::Mime>().ok())
 			.map(|mime| mime.type_().as_str().to_string() + "/" + mime.subtype().as_str());
-		tracing::error!(
-			"howardjohn: got response code={} content_type={:?}",
-			resp.status(),
-			content
-		);
+
+		// This may be a streaming response or singleton.
 		match content.as_deref() {
 			Some("application/json") => {
 				let j = resp
-					.json::<a2a_sdk::ClientJsonRpcMessage>()
+					.json::<a2a_sdk::JsonRpcMessage>()
 					.await
 					.expect("TODO handle error");
 				Ok(Response::Single(j))
@@ -124,12 +121,9 @@ impl Relay {
 
 					while let Some(thing) = events.next().await {
 						let event = thing.expect("TODO");
-						tracing::error!("howardjohn: got event {:?}", event);
 						if event.event == "message" {
-							tracing::error!("howardjohn: data: {}", event.data.to_string());
-							let j: a2a_sdk::ClientJsonRpcMessage =
+							let j: a2a_sdk::JsonRpcMessage =
 								serde_json::from_str(&event.data).expect("TODO handle error");
-							tracing::error!("howardjohn: sent {j:?}");
 							to_client_tx.send(j).await.unwrap();
 						}
 					}
