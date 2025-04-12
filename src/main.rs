@@ -6,6 +6,7 @@ use prometheus_client::registry::Registry;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::task::JoinSet;
+use tracing::info;
 use tracing_subscriber::{self, EnvFilter};
 
 use mcp_proxy::admin::App as AdminApp;
@@ -226,11 +227,17 @@ async fn main() -> Result<()> {
 	Ok(())
 }
 
+fn get_bind_address() -> String {
+	std::env::var("MCPGW_BIND_ADDRESS").unwrap_or_else(|_| "0.0.0.0".to_string())
+}
+
 async fn start_metrics_service(
 	registry: Arc<Registry>,
 	ct: tokio_util::sync::CancellationToken,
 ) -> Result<(), std::io::Error> {
-	let listener = tokio::net::TcpListener::bind("127.0.0.1:9091").await?;
+	let bind_address = format!("{}:9091", get_bind_address());
+	info!("serving metrics server on {}", bind_address);
+	let listener = tokio::net::TcpListener::bind(bind_address).await?;
 	let app = MetricsApp::new(registry);
 	let router = app.router();
 	axum::serve(listener, router)
@@ -244,7 +251,9 @@ async fn start_admin_service(
 	state: Arc<tokio::sync::RwLock<ProxyState>>,
 	ct: tokio_util::sync::CancellationToken,
 ) -> Result<(), std::io::Error> {
-	let listener = tokio::net::TcpListener::bind("127.0.0.1:19000").await?;
+	let bind_address = format!("{}:19000", get_bind_address());
+	info!("serving admin server on {}", bind_address);
+	let listener = tokio::net::TcpListener::bind(bind_address).await?;
 	let app = AdminApp::new(state);
 	let router = app.router();
 	axum::serve(listener, router)
