@@ -200,9 +200,9 @@ async fn rbac_delete_handler(
 async fn listener_handler(
 	State(app): State<App>,
 ) -> Result<String, (StatusCode, impl IntoResponse)> {
-	let listener = app.state.read().await.listener.clone();
-	match serde_json::to_string(&listener) {
-		Ok(json_listener) => Ok(json_listener),
+	let listeners = app.state.read().await.listeners.clone();
+	match serde_json::to_string(&listeners) {
+		Ok(json_listeners) => Ok(json_listeners),
 		Err(e) => {
 			error!("error serializing listener: {:?}", e);
 			Err((

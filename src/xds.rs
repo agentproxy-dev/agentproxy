@@ -1,3 +1,4 @@
+use prost::Message;
 use std::error::Error as StdErr;
 use std::fmt;
 use std::fmt::Formatter;
@@ -376,18 +377,85 @@ impl PolicyStore {
 	}
 }
 
+#[derive(Clone)]
+pub struct ListenerStore {
+	by_name: HashMap<String, inbound::Listener>,
+	update_rx: tokio::sync::mpsc::Sender<UpdateEvent>,
+}
+
+impl Serialize for ListenerStore {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: serde::Serializer,
+	{
+		self.by_name.serialize(serializer)
+	}
+}
+pub enum UpdateEvent {
+	Insert(String),
+	Remove(String),
+}
+
+impl ListenerStore {
+	pub fn new(update_rx: tokio::sync::mpsc::Sender<UpdateEvent>) -> Self {
+		Self {
+			by_name: HashMap::new(),
+			update_rx,
+		}
+	}
+}
+
+impl ListenerStore {
+	pub fn iter(&self) -> impl Iterator<Item = (&String, &inbound::Listener)> {
+		self.by_name.iter()
+	}
+
+	pub async fn insert(&mut self, listener: XdsListener) -> anyhow::Result<()> {
+		let listener_name = listener.name.clone();
+		let xds_listener = inbound::Listener::from_xds(listener).await?;
+		self.by_name.insert(listener_name.clone(), xds_listener);
+		self
+			.update_rx
+			.send(UpdateEvent::Insert(listener_name))
+			.await
+			.map_err(|e| anyhow::anyhow!("failed to send update event: {:?}", e))?;
+		Ok(())
+	}
+
+	pub async fn get(&self, listener_name: &str) -> anyhow::Result<&inbound::Listener> {
+		Ok(self.by_name.get(listener_name).unwrap())
+	}
+
+	pub async fn remove(&mut self, listener_name: &str) -> anyhow::Result<()> {
+		self.by_name.remove(listener_name);
+		self
+			.update_rx
+			.send(UpdateEvent::Remove(listener_name.to_string()))
+			.await
+			.map_err(|e| anyhow::anyhow!("failed to send update event: {:?}", e))?;
+		Ok(())
+	}
+
+	// fn check_conflict(&mut self, listener: &inbound::Listener) -> bool {
+	//   if self.by_name.contains_key(&listener.name) {
+	//     return true;
+	//   }
+	//   false
+	// }
+}
+
 pub struct XdsStore {
 	pub targets: TargetStore,
 	pub policies: PolicyStore,
-	pub listener: inbound::Listener,
+	pub listeners: ListenerStore,
 }
 
 impl XdsStore {
-	pub fn new(listener: inbound::Listener) -> Self {
+	pub fn new(update_tx: tokio::sync::mpsc::Sender<UpdateEvent>) -> Self {
 		Self {
 			targets: TargetStore::new(),
 			policies: PolicyStore::new(),
-			listener,
+			listeners: ListenerStore::new(update_tx),
 		}
 	}
 }

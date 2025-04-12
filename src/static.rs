@@ -5,7 +5,6 @@ use crate::inbound;
 use crate::proto::aidp::dev::mcp::listener::Listener as XdsListener;
 use crate::proto::aidp::dev::mcp::rbac::{Rule as XdsRule, RuleSet as XdsRuleSet};
 use crate::proto::aidp::dev::mcp::target::Target as XdsTarget;
-use crate::relay;
 use crate::trcng;
 use crate::xds::XdsStore as ProxyState;
 #[derive(Default, Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -24,9 +23,9 @@ pub struct StaticConfig {
 pub async fn run_local_client(
 	cfg: &StaticConfig,
 	state_ref: Arc<tokio::sync::RwLock<ProxyState>>,
-	metrics: Arc<relay::metrics::Metrics>,
+	mut listener_manager: inbound::ListenerManager,
 	ct: tokio_util::sync::CancellationToken,
-) -> Result<(), crate::inbound::ServingError> {
+) -> Result<(), anyhow::Error> {
 	debug!(
 		"load local config: {}",
 		serde_yaml::to_string(&cfg).unwrap_or_default()
@@ -58,9 +57,5 @@ pub async fn run_local_client(
 		info!(%num_targets, %num_policies, "local config initialized");
 	}
 
-	let listener = inbound::Listener::from_xds(cfg.listener.clone())
-		.await
-		.unwrap();
-
-	listener.listen(state_ref, metrics, ct).await
+  listener_manager.run(ct).await
 }

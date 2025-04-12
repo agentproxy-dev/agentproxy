@@ -103,18 +103,33 @@ async fn main() -> Result<()> {
 			let mut run_set = JoinSet::new();
 
 			let cfg_clone = cfg.clone();
-			let listener = inbound::Listener::from_xds(cfg_clone.listener.clone())
-				.await
-				.unwrap();
-			let state = Arc::new(tokio::sync::RwLock::new(ProxyState::new(listener)));
 
-			let relay_metrics = relay::metrics::Metrics::new(&mut registry);
+			let (update_tx, update_rx) = tokio::sync::mpsc::channel(100);
+			let state = Arc::new(tokio::sync::RwLock::new(ProxyState::new(update_tx)));
+
+			let ct_clone = ct.clone();
+			let listener_manager = inbound::ListenerManager::new(
+				ct_clone,
+				state.clone(),
+				update_rx,
+				Arc::new(relay::metrics::Metrics::new(&mut registry)),
+			)
+			.await;
+
+			state
+				.write()
+				.await
+				.listeners
+				.insert(cfg_clone.listener)
+				.await
+				.expect("failed to insert listener");
+
 
 			let state_2 = state.clone();
 			let cfg_clone = cfg.clone();
 			let ct_clone = ct.clone();
 			run_set.spawn(async move {
-				run_local_client(&cfg_clone, state_2, Arc::new(relay_metrics), ct_clone)
+				run_local_client(&cfg_clone, state_2, listener_manager,  ct_clone)
 					.await
 					.map_err(|e| anyhow::anyhow!("error running local client: {:?}", e))
 			});
@@ -156,10 +171,27 @@ async fn main() -> Result<()> {
 			let ct = tokio_util::sync::CancellationToken::new();
 			let metrics = xds::metrics::Metrics::new(&mut registry);
 			let awaiting_ready = tokio::sync::watch::channel(()).0;
-			let listener = inbound::Listener::from_xds(cfg.listener.clone())
+
+			let (update_tx, update_rx) = tokio::sync::mpsc::channel(100);
+			let state = Arc::new(tokio::sync::RwLock::new(ProxyState::new(update_tx)));
+
+
+			let mut listener_manager = inbound::ListenerManager::new(
+				ct.clone(),
+				state.clone(),
+				update_rx,
+				Arc::new(relay::metrics::Metrics::new(&mut registry)),
+			).await;
+      
+			state
+				.write()
 				.await
-				.unwrap();
-			let state = Arc::new(tokio::sync::RwLock::new(ProxyState::new(listener.clone())));
+				.listeners
+				.insert(cfg.listener.clone())
+				.await
+				.expect("failed to insert listener");
+
+
 			let state_clone = state.clone();
 			let updater = ProxyStateUpdater::new(state_clone);
 			let cfg_clone = cfg.clone();
@@ -187,11 +219,9 @@ async fn main() -> Result<()> {
 					.map_err(|e| anyhow::anyhow!("error serving admin: {:?}", e))
 			});
 
-			let relay_metrics = relay::metrics::Metrics::new(&mut registry);
 			let ct_clone = ct.clone();
 			run_set.spawn(async move {
-				listener
-					.listen(state.clone(), Arc::new(relay_metrics), ct_clone)
+				listener_manager.run(ct_clone)
 					.await
 					.map_err(|e| anyhow::anyhow!("error serving static listener: {:?}", e))
 			});

@@ -6,8 +6,13 @@ import "common.proto";
 
 
 message Listener {
+  // The name of the listener.
+  // Must be unique across ALL listeners.
+  string name = 1;
   message SseListener { 
+    // The address of the listener.
     string address = 1;
+    // The port of the listener.
     uint32 port = 2;
 
     message TlsConfig {
@@ -37,7 +42,7 @@ message Listener {
   }
   
   oneof listener {
-    SseListener sse = 1;
-    StdioListener stdio = 2;
+    SseListener sse = 2;
+    StdioListener stdio = 3;
   }
 }

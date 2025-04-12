@@ -14,8 +14,10 @@ use crate::sse::App as SseApp;
 use crate::xds;
 use rmcp::service::serve_server_with_ct;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use tokio::task::AbortHandle;
 use tokio_rustls::{
 	TlsAcceptor,
 	rustls::ServerConfig,
@@ -266,5 +268,116 @@ pub enum ListenerMode {
 impl Default for Listener {
 	fn default() -> Self {
 		Self::Stdio {}
+	}
+}
+
+pub struct ListenerManager {
+	state: Arc<tokio::sync::RwLock<xds::XdsStore>>,
+	update_rx: tokio::sync::mpsc::Receiver<xds::UpdateEvent>,
+	metrics: Arc<relay::metrics::Metrics>,
+
+	running: HashMap<String, AbortHandle>,
+	run_set: tokio::task::JoinSet<Result<(), ServingError>>,
+}
+
+impl ListenerManager {
+	// Start all listeners in the state
+	// Consider these to be "static" listeners
+	pub async fn new(
+		ct: tokio_util::sync::CancellationToken,
+		state: Arc<tokio::sync::RwLock<xds::XdsStore>>,
+		update_rx: tokio::sync::mpsc::Receiver<xds::UpdateEvent>,
+		metrics: Arc<relay::metrics::Metrics>,
+	) -> Self {
+		// Start all listeners in the state
+		// Consider these to be "static" listeners
+		let mut run_set = tokio::task::JoinSet::new();
+		let mut running: HashMap<String, AbortHandle> = HashMap::new();
+
+		for (name, listener) in state.read().await.listeners.iter() {
+			let state_clone = state.clone();
+			let metrics_clone = metrics.clone();
+			let ct_clone = ct.clone();
+			let listener_clone = listener.clone();
+			let listener_name = name.clone();
+			let abort_handle = run_set.spawn(async move {
+				listener_clone
+					.listen(state_clone, metrics_clone, ct_clone)
+					.await
+			});
+			running.insert(listener_name, abort_handle);
+		}
+
+		// Start the update loop
+
+		Self {
+			state,
+			update_rx,
+			metrics,
+			running,
+			run_set,
+		}
+	}
+}
+
+impl ListenerManager {
+	pub async fn run(
+		&mut self,
+		ct: tokio_util::sync::CancellationToken,
+	) -> Result<(), anyhow::Error> {
+		loop {
+			tokio::select! {
+				result = self.run_set.join_next() => {
+					tracing::info!("run_set join_next returned {:?}", result);
+				}
+				update = self.update_rx.recv() => {
+					match update {
+						Some(xds::UpdateEvent::Insert(name)) => {
+							// Scope the read lock to get the listener and clone it
+							let listener_clone: Listener = {
+									let state = self.state.read().await;
+									// Check if listener exists before trying to clone
+									match state.listeners.get(&name).await {
+											Ok(listener_ref) => listener_ref.clone(), // Clone the listener
+											Err(e) => {
+													tracing::error!("Failed to get listener {} from state: {}", name, e);
+													continue; // Skip spawning if listener fetch failed
+											}
+									}
+							}; // Read lock dropped here
+
+							// Now use the owned listener_clone for spawning
+							let state_clone = self.state.clone();
+							let metrics_clone = self.metrics.clone();
+							let ct_clone = ct.clone();
+
+							// Spawn the task with the cloned listener and other cloned Arcs
+							let abort_handle = self.run_set.spawn(async move { // Add async move
+									listener_clone.listen(state_clone, metrics_clone, ct_clone).await
+							});
+							self.running.insert(name, abort_handle); // Store the JoinHandle
+						}
+						Some(xds::UpdateEvent::Remove(name)) => {
+								if let Some(handle) = self.running.remove(&name) {
+										handle.abort(); // Abort the task associated with the removed listener
+										tracing::info!("Aborted listener task for: {}", name);
+								} else {
+										tracing::warn!("Received remove event for {}, but no running task found.", name);
+								}
+						}
+						None => {
+							tracing::info!("update_rx closed");
+							break;
+						}
+					}
+				}
+				_ = ct.cancelled() => {
+					break;
+				}
+			}
+		}
+
+		self.run_set.shutdown().await;
+		Ok(())
 	}
 }
