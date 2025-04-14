@@ -1,5 +1,10 @@
 use crate::proto;
+use crate::proto::aidp::dev::a2a::target::Target as XdsA2aTarget;
+use crate::proto::aidp::dev::common::BackendAuth as XdsAuth;
+use crate::proto::aidp::dev::mcp::target::Target as McpXdsTarget;
 use crate::proto::aidp::dev::mcp::target::target::OpenApiTarget as XdsOpenAPITarget;
+use crate::proto::aidp::dev::mcp::target::target::SseTarget as XdsSseTarget;
+use crate::proto::aidp::dev::mcp::target::target::Target as XdsTarget;
 use openapiv3::OpenAPI;
 use rmcp::model::Tool;
 use serde::Serialize;
@@ -8,27 +13,108 @@ pub mod backend;
 pub mod openapi;
 
 #[derive(Clone, Serialize, Debug)]
-pub struct Target {
+pub struct Target<T> {
 	pub name: String,
 	pub listeners: Vec<String>,
-	pub spec: TargetSpec,
+	pub spec: T,
+}
+
+impl TryFrom<McpXdsTarget> for Target<McpTargetSpec> {
+	type Error = anyhow::Error;
+
+	fn try_from(value: McpXdsTarget) -> Result<Self, Self::Error> {
+		let target = match value.target {
+			Some(target) => target,
+			None => return Err(anyhow::anyhow!("target is None")),
+		};
+		Ok(Target {
+			name: value.name,
+			listeners: value.listeners,
+			spec: target.try_into()?,
+		})
+	}
 }
 
 #[derive(Clone, Serialize, Debug)]
-pub enum TargetSpec {
-	Sse {
-		host: String,
-		port: u32,
-		path: String,
-		headers: HashMap<String, String>,
-		backend_auth: Option<backend::BackendAuthConfig>,
-	},
+pub enum McpTargetSpec {
+	Sse(SseTargetSpec),
 	Stdio {
 		cmd: String,
 		args: Vec<String>,
 		env: HashMap<String, String>,
 	},
 	OpenAPI(OpenAPITarget),
+}
+
+impl TryFrom<XdsTarget> for McpTargetSpec {
+	type Error = anyhow::Error;
+
+	fn try_from(value: XdsTarget) -> Result<Self, Self::Error> {
+		let target = match value {
+			XdsTarget::Sse(sse) => McpTargetSpec::Sse(sse.try_into()?),
+			XdsTarget::Stdio(stdio) => McpTargetSpec::Stdio {
+				cmd: stdio.cmd,
+				args: stdio.args,
+				env: stdio.env,
+			},
+			XdsTarget::Openapi(openapi) => McpTargetSpec::OpenAPI(openapi.try_into()?),
+		};
+		Ok(target)
+	}
+}
+
+#[derive(Clone, Serialize, Debug)]
+pub struct A2aTargetSpec {
+	host: String,
+	port: u32,
+	headers: HashMap<String, String>,
+	backend_auth: Option<backend::BackendAuthConfig>,
+}
+
+impl TryFrom<XdsA2aTarget> for Target<A2aTargetSpec> {
+	type Error = anyhow::Error;
+
+	fn try_from(value: XdsA2aTarget) -> Result<Self, Self::Error> {
+		Ok(Target {
+			name: value.name,
+			listeners: value.listeners,
+			spec: A2aTargetSpec {
+				host: value.host,
+				port: value.port,
+				headers: proto::resolve_header_map(&value.headers)?,
+				backend_auth: match value.auth {
+					Some(auth) => XdsAuth::try_into(auth)?,
+					None => None,
+				},
+			},
+		})
+	}
+}
+
+#[derive(Clone, Serialize, Debug)]
+pub struct SseTargetSpec {
+	pub host: String,
+	pub port: u32,
+	pub path: String,
+	pub headers: HashMap<String, String>,
+	pub backend_auth: Option<backend::BackendAuthConfig>,
+}
+
+impl TryFrom<XdsSseTarget> for SseTargetSpec {
+	type Error = anyhow::Error;
+
+	fn try_from(value: XdsSseTarget) -> Result<Self, Self::Error> {
+		Ok(SseTargetSpec {
+			host: value.host,
+			port: value.port,
+			path: value.path,
+			headers: proto::resolve_header_map(&value.headers)?,
+			backend_auth: match value.auth {
+				Some(auth) => XdsAuth::try_into(auth)?,
+				None => None,
+			},
+		})
+	}
 }
 
 #[derive(Clone, Serialize, Debug)]

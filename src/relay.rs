@@ -1,7 +1,7 @@
 use crate::mtrcs::Recorder;
+use crate::outbound::McpTargetSpec;
 use crate::outbound::backend;
 use crate::outbound::openapi;
-use crate::outbound::{Target, TargetSpec};
 use crate::rbac;
 use crate::trcng;
 use crate::xds::XdsStore;

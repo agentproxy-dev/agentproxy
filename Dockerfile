@@ -10,6 +10,7 @@ WORKDIR /app
 COPY Cargo.toml Cargo.lock build.rs ./
 COPY proto ./proto
 COPY src ./src
+COPY a2a-sdk ./a2a-sdk
 COPY common ./common
 
 RUN cargo build --release

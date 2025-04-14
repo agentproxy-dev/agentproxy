@@ -15,5 +15,8 @@ pub(crate) mod envoy {
 	}
 }
 
-pub const TARGET_TYPE: Strng = strng::literal!("type.googleapis.com/aidp.dev.target.Target");
+pub const MCP_TARGET_TYPE: Strng =
+	strng::literal!("type.googleapis.com/aidp.dev.mcp.target.Target");
+pub const A2A_TARGET_TYPE: Strng =
+	strng::literal!("type.googleapis.com/aidp.dev.a2a.target.Target");
 pub const LISTENER_TYPE: Strng = strng::literal!("type.googleapis.com/aidp.dev.listener.Listener");

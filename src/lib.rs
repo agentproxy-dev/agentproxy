@@ -5,6 +5,7 @@ pub mod inbound;
 pub mod mtrcs;
 pub mod outbound;
 pub use outbound::backend;
+pub mod a2a;
 pub mod proto;
 pub mod proxyprotocol;
 pub mod rbac;

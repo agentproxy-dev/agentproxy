@@ -1,3 +1,5 @@
+use crate::outbound;
+
 use super::*;
 use futures::{FutureExt, StreamExt, future::BoxFuture, stream::BoxStream};
 use reqwest::{Client as HttpClient, IntoUrl, Url, header::ACCEPT};
@@ -29,10 +31,10 @@ impl ConnectionPool {
 		// Connect if it doesn't exist
 		if !self.by_name.contains_key(name) {
 			// Read target info and drop lock before calling connect
-			let target_info: Option<(Target, tokio_util::sync::CancellationToken)> = {
+			let target_info: Option<(McpTarget, tokio_util::sync::CancellationToken)> = {
 				let state = self.state.read().await;
 				state
-					.targets
+					.mcp_targets
 					.get(name, &self.listener_name)
 					.map(|(target, ct)| (target.clone(), ct.clone()))
 			};
@@ -66,11 +68,17 @@ impl ConnectionPool {
 		// Iterate through all state targets, and get the connection from the pool
 		// If the connection is not in the pool, connect to it and add it to the pool
 		// 1. Get target configurations (name, Target, CancellationToken) from the state's TargetStore
-		let targets_config: Vec<(String, (Target, tokio_util::sync::CancellationToken))> = {
+		let targets_config: Vec<(
+			String,
+			(
+				outbound::Target<outbound::McpTargetSpec>,
+				tokio_util::sync::CancellationToken,
+			),
+		)> = {
 			let state = self.state.read().await;
 			// Iterate the underlying HashMap directly to get the full tuple
 			state
-				.targets
+				.mcp_targets
 				.iter(&self.listener_name)
 				.map(|(name, target)| (name.clone(), target.clone()))
 				.collect()
@@ -114,7 +122,7 @@ impl ConnectionPool {
 		&mut self,
 		rq_ctx: &RqCtx,
 		ct: &tokio_util::sync::CancellationToken,
-		target: &Target,
+		target: &McpTarget,
 	) -> Result<(), anyhow::Error> {
 		// Already connected
 		if let Some(_transport) = self.by_name.get(&target.name) {
@@ -122,26 +130,20 @@ impl ConnectionPool {
 		}
 		tracing::trace!("connecting to target: {}", target.name);
 		let transport: upstream::UpstreamTarget = match &target.spec {
-			TargetSpec::Sse {
-				host,
-				port,
-				path,
-				backend_auth,
-				headers,
-			} => {
+			McpTargetSpec::Sse(sse) => {
 				tracing::trace!("starting sse transport for target: {}", target.name);
-				let path = match path.as_str() {
+				let path = match sse.path.as_str() {
 					"" => "/sse",
-					_ => path,
+					_ => sse.path.as_str(),
 				};
-				let scheme = match port {
+				let scheme = match sse.port {
 					443 => "https",
 					_ => "http",
 				};
 
-				let url = format!("{}://{}:{}{}", scheme, host, port, path);
-				let mut upstream_headers = get_default_headers(backend_auth, rq_ctx).await?;
-				for (key, value) in headers {
+				let url = format!("{}://{}:{}{}", scheme, sse.host, sse.port, path);
+				let mut upstream_headers = get_default_headers(&sse.backend_auth, rq_ctx).await?;
+				for (key, value) in sse.headers.iter() {
 					upstream_headers.insert(
 						HeaderName::from_bytes(key.as_bytes())?,
 						HeaderValue::from_str(value)?,
@@ -156,7 +158,7 @@ impl ConnectionPool {
 
 				upstream::UpstreamTarget::Mcp(serve_client_with_ct((), transport, ct.child_token()).await?)
 			},
-			TargetSpec::Stdio { cmd, args, env: _ } => {
+			McpTargetSpec::Stdio { cmd, args, env: _ } => {
 				tracing::trace!("starting stdio transport for target: {}", target.name);
 				upstream::UpstreamTarget::Mcp(
 					serve_client_with_ct(
@@ -167,7 +169,7 @@ impl ConnectionPool {
 					.await?,
 				)
 			},
-			TargetSpec::OpenAPI(open_api) => {
+			McpTargetSpec::OpenAPI(open_api) => {
 				tracing::info!("starting OpenAPI transport for target: {}", target.name);
 				let client = reqwest::Client::new();
 

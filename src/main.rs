@@ -19,6 +19,7 @@ use mcp_proxy::trcng;
 use mcp_proxy::xds;
 use mcp_proxy::xds::ProxyStateUpdater;
 use mcp_proxy::xds::XdsStore as ProxyState;
+use mcp_proxy::{a2a, inbound};
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
@@ -205,7 +206,7 @@ async fn main() -> Result<()> {
 			let cfg_clone = dynamic.clone();
 			let xds_config = xds::client::Config::new(Arc::new(cfg_clone));
 			let ads_client = xds_config
-				.with_watched_handler::<XdsTarget>(xds::TARGET_TYPE, updater.clone())
+				.with_watched_handler::<XdsTarget>(xds::MCP_TARGET_TYPE, updater.clone())
 				.with_watched_handler::<XdsListener>(xds::LISTENER_TYPE, updater)
 				.build(metrics, awaiting_ready);
 

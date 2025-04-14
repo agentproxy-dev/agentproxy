@@ -17,6 +17,7 @@ use opentelemetry_sdk::{
 };
 use serde::{Deserialize, Serialize};
 use std::sync::OnceLock;
+use tracing::info;
 
 pub fn get_tracer() -> &'static BoxedTracer {
 	static TRACER: OnceLock<BoxedTracer> = OnceLock::new();
@@ -82,6 +83,7 @@ pub fn init_tracer(config: Config) -> Result<SdkTracerProvider, ExporterBuildErr
 		Box::new(trace_context_propagator),
 	]);
 
+	info!(cfg=?config, "initializing tracer");
 	global::set_text_map_propagator(composite_propagator);
 	let builder = SpanExporter::builder();
 	let exporter = match config.tracer {

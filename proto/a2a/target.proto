@@ -16,7 +16,7 @@ message Target {
   // The port of the target.
   uint32 port = 4;
   // The headers of the target.
-  map<string, string> headers = 5;
+  repeated aidp.dev.common.Header headers = 5;
 
   aidp.dev.common.BackendAuth auth = 6;
 

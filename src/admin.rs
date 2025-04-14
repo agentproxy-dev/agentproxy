@@ -101,7 +101,7 @@ impl IntoResponse for ErrorResponse {
 async fn targets_list_handler(
 	State(app): State<App>,
 ) -> Result<String, (StatusCode, impl IntoResponse)> {
-	let targets = app.state.read().await.targets.clone();
+	let targets = app.state.read().await.mcp_targets.clone();
 	match serde_json::to_string(&targets) {
 		Ok(json_targets) => Ok(json_targets),
 		Err(e) => {
@@ -121,7 +121,7 @@ async fn targets_get_handler(
 	Path(name): Path<String>,
 ) -> Result<Json<Target>, (StatusCode, impl IntoResponse)> {
 	let state = app.state.read().await;
-	let target = state.targets.get_proto(&name);
+	let target = state.mcp_targets.get_proto(&name);
 	match target {
 		Some(target) => Ok(Json(target.clone())),
 		None => Err((
@@ -138,7 +138,7 @@ async fn targets_delete_handler(
 	Path(name): Path<String>,
 ) -> Result<(), (StatusCode, impl IntoResponse)> {
 	let mut state = app.state.write().await;
-	match state.targets.remove(&name) {
+	match state.mcp_targets.remove(&name) {
 		Ok(_) => Ok(()),
 		Err(e) => {
 			error!("error removing target from store: {:?}", e);
@@ -157,7 +157,7 @@ async fn targets_create_handler(
 	Json(target): Json<Target>,
 ) -> Result<(), (StatusCode, impl IntoResponse)> {
 	let mut state = app.state.write().await;
-	match state.targets.insert(target) {
+	match state.mcp_targets.insert(target) {
 		Ok(_) => Ok(()),
 		Err(e) => {
 			error!("error inserting target into store: {:?}", e);

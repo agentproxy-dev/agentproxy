@@ -32,7 +32,7 @@ pub async fn run_local_client(
 		for target in cfg.targets.clone() {
 			trace!("inserting target {}", &target.name);
 			state
-				.targets
+				.mcp_targets
 				.insert(target)
 				.expect("failed to insert target into store");
 		}

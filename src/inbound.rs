@@ -1,9 +1,10 @@
+use crate::a2a;
 use crate::authn;
 use crate::authn::JwtAuthenticator;
 use crate::proto;
 use crate::proto::aidp::dev::listener::{
 	Listener as XdsListener, SseListener as XdsSseListener, listener::Listener as XdsListenerSpec,
-	sse_listener::TlsConfig as XdsTlsConfig,
+	listener::Protocol as ListenerProtocol, sse_listener::TlsConfig as XdsTlsConfig,
 };
 use crate::proxyprotocol;
 use crate::rbac;
@@ -28,22 +29,37 @@ use tracing::info;
 pub enum Listener {
 	#[serde(rename = "sse")]
 	Sse(SseListener),
+	#[serde(rename = "a2a")]
+	A2a(SseListener),
 	#[serde(rename = "stdio")]
 	Stdio,
 }
 
 impl Listener {
 	pub async fn from_xds(value: XdsListener) -> Result<Self, anyhow::Error> {
-		Ok(match value.listener {
-			Some(XdsListenerSpec::Sse(sse)) => Listener::Sse(SseListener::from_xds(sse).await?),
-			Some(XdsListenerSpec::Stdio(_)) => Listener::Stdio,
-			_ => Listener::Stdio,
-		})
+		Ok(
+			match (
+				value.listener,
+				ListenerProtocol::try_from(value.protocol).unwrap(),
+			) {
+				(Some(XdsListenerSpec::Sse(sse)), ListenerProtocol::Mcp) => {
+					Listener::Sse(SseListener::from_xds(sse).await?)
+				},
+				(Some(XdsListenerSpec::Sse(sse)), ListenerProtocol::A2a) => {
+					Listener::A2a(SseListener::from_xds(sse).await?)
+				},
+				(Some(XdsListenerSpec::Stdio(_)), _) => Listener::Stdio,
+				_ => anyhow::bail!(
+					"invalid listener protocol {:?} for listener {:?}",
+					value.protocol,
+					value.name
+				),
+			},
+		)
 	}
 }
 
 #[derive(Clone, Serialize, Debug)]
-
 pub struct SseListener {
 	host: String,
 	port: u32,
@@ -54,6 +70,10 @@ pub struct SseListener {
 }
 
 impl SseListener {
+	pub fn url(&self, host: String) -> String {
+		let scheme = if self.tls.is_some() { "https" } else { "http" };
+		format!("{}://{}", scheme, host)
+	}
 	async fn from_xds(value: XdsSseListener) -> Result<Self, anyhow::Error> {
 		let tls = match value.tls {
 			Some(tls) => Some(from_xds_tls_config(tls)?),
@@ -85,6 +105,7 @@ impl SseListener {
 		})
 	}
 }
+
 #[derive(Clone, Debug)]
 pub struct TlsConfig {
 	pub(crate) inner: Arc<ServerConfig>,
@@ -148,6 +169,7 @@ impl Listener {
 		&self,
 		state: Arc<tokio::sync::RwLock<xds::XdsStore>>,
 		metrics: Arc<relay::metrics::Metrics>,
+		a2a_metrics: Arc<a2a::metrics::Metrics>,
 		ct: tokio_util::sync::CancellationToken,
 	) -> Result<(), ServingError> {
 		match self {
@@ -200,7 +222,14 @@ impl Listener {
 					.unwrap();
 				let listener = tokio::net::TcpListener::bind(socket_addr).await.unwrap();
 				let child_token = ct.child_token();
-				let app = SseApp::new(state.clone(), metrics, authenticator, child_token, sse_listener.rbac.clone(), "sse".to_string());
+				let app = SseApp::new(
+					state.clone(),
+					metrics,
+					authenticator,
+					child_token,
+					sse_listener.rbac.clone(),
+					"sse".to_string(),
+				);
 				let router = app.router();
 
 				info!("serving sse on {}:{}", sse_listener.host, sse_listener.port);
@@ -234,6 +263,94 @@ impl Listener {
 					},
 					None => {
 						let enable_proxy = Some(&ListenerMode::Proxy) == sse_listener.mode.as_ref();
+
+						let listener = proxyprotocol::Listener::new(listener, enable_proxy);
+						let svc: axum::extract::connect_info::IntoMakeServiceWithConnectInfo<
+							axum::Router,
+							proxyprotocol::Address,
+						> = router.into_make_service_with_connect_info::<proxyprotocol::Address>();
+						run_set.spawn(async move {
+							axum::serve(listener, svc)
+								.with_graceful_shutdown(async move {
+									child_token.cancelled().await;
+								})
+								.await
+								.map_err(ServingError::Sse)
+								.inspect_err(|e| {
+									tracing::error!("serving error: {:?}", e);
+								})
+								.map_err(|e| anyhow::anyhow!("serving error: {:?}", e))
+						});
+					},
+				}
+
+				while let Some(res) = run_set.join_next().await {
+					match res {
+						Ok(_) => {},
+						Err(e) => {
+							tracing::error!("serving error: {:?}", e);
+						},
+					}
+				}
+				Ok(())
+			},
+			Listener::A2a(a2a_listener) => {
+				let authenticator = match &a2a_listener.authn {
+					Some(authn) => Arc::new(tokio::sync::RwLock::new(Some(authn.clone()))),
+					None => Arc::new(tokio::sync::RwLock::new(None)),
+				};
+
+				let mut run_set: tokio::task::JoinSet<Result<(), anyhow::Error>> =
+					tokio::task::JoinSet::new();
+				let clone = authenticator.clone();
+
+				let child_token = ct.child_token();
+				run_set.spawn(async move {
+					authn::sync_jwks_loop(clone, child_token)
+						.await
+						.map_err(|e| anyhow::anyhow!("error syncing jwks: {:?}", e))
+				});
+
+				let socket_addr: SocketAddr = format!("{}:{}", a2a_listener.host, a2a_listener.port)
+					.as_str()
+					.parse()
+					.unwrap();
+				let listener = tokio::net::TcpListener::bind(socket_addr).await.unwrap();
+				let child_token = ct.child_token();
+				let app = a2a::handlers::App::new(state.clone(), a2a_metrics, authenticator, child_token);
+				let router = app.router();
+
+				info!("serving a2a on {}:{}", a2a_listener.host, a2a_listener.port);
+				let child_token = ct.child_token();
+				match &a2a_listener.tls {
+					Some(tls) => {
+						let tls_acceptor = TlsAcceptor::from(tls.inner.clone());
+						let axum_tls_acceptor = proxyprotocol::AxumTlsAcceptor::new(tls_acceptor);
+						let tls_listener = proxyprotocol::AxumTlsListener::new(
+							tls_listener::TlsListener::new(axum_tls_acceptor, listener),
+							socket_addr,
+							Some(&ListenerMode::Proxy) == a2a_listener.mode.as_ref(),
+						);
+
+						let svc: axum::extract::connect_info::IntoMakeServiceWithConnectInfo<
+							axum::Router,
+							proxyprotocol::Address,
+						> = router.into_make_service_with_connect_info::<proxyprotocol::Address>();
+						run_set.spawn(async move {
+							axum::serve(tls_listener, svc)
+								.with_graceful_shutdown(async move {
+									child_token.cancelled().await;
+								})
+								.await
+								.map_err(ServingError::Sse)
+								.inspect_err(|e| {
+									tracing::error!("serving error: {:?}", e);
+								})
+								.map_err(|e| anyhow::anyhow!("serving error: {:?}", e))
+						});
+					},
+					None => {
+						let enable_proxy = Some(&ListenerMode::Proxy) == a2a_listener.mode.as_ref();
 
 						let listener = proxyprotocol::Listener::new(listener, enable_proxy);
 						let svc: axum::extract::connect_info::IntoMakeServiceWithConnectInfo<

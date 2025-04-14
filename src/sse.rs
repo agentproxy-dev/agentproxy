@@ -29,6 +29,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::io::{self};
 use tokio::sync::RwLock;
+
 type SessionId = Arc<str>;
 
 fn session_id() -> SessionId {
@@ -197,7 +198,12 @@ async fn sse_handler(
 	{
 		let session = session.clone();
 		tokio::spawn(async move {
-			let relay = Relay::new(app.state.clone(), app.metrics.clone(), app.rbac.clone(), app.listener_name.clone());
+			let relay = Relay::new(
+				app.state.clone(),
+				app.metrics.clone(),
+				app.rbac.clone(),
+				app.listener_name.clone(),
+			);
 			let stream = ReceiverStream::new(from_client_rx);
 			let sink = PollSender::new(to_client_tx).sink_map_err(std::io::Error::other);
 			let result = serve_server(relay.clone(), (sink, stream))
@@ -212,7 +218,7 @@ async fn sse_handler(
 				return;
 			}
 			let state = app.state.read().await;
-			let mut rx: tokio::sync::broadcast::Receiver<String> = state.targets.subscribe();
+			let mut rx: tokio::sync::broadcast::Receiver<String> = state.mcp_targets.subscribe();
 			drop(state);
 			loop {
 				// Add a listener drain channel here.
