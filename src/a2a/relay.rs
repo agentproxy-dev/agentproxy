@@ -1,6 +1,6 @@
+use crate::a2a::metrics;
 use crate::inbound::Listener;
 use crate::outbound::{Target, TargetSpec};
-use crate::relay::metrics;
 use crate::xds::XdsStore;
 use crate::{a2a, backend, rbac};
 use a2a_sdk::AgentCard;
@@ -228,23 +228,20 @@ async fn get_default_headers(
 #[derive(Clone)]
 pub struct RqCtx {
 	identity: rbac::Identity,
-	_context: opentelemetry::Context,
+	pub context: opentelemetry::Context,
 }
 
 impl Default for RqCtx {
 	fn default() -> Self {
 		Self {
 			identity: rbac::Identity::default(),
-			_context: opentelemetry::Context::new(),
+			context: opentelemetry::Context::new(),
 		}
 	}
 }
 
 impl RqCtx {
 	pub fn new(identity: rbac::Identity, context: opentelemetry::Context) -> Self {
-		Self {
-			identity,
-			_context: context,
-		}
+		Self { identity, context }
 	}
 }

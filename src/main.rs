@@ -9,7 +9,6 @@ use tokio::task::JoinSet;
 use tracing_subscriber::{self, EnvFilter};
 
 use mcp_proxy::admin::App as AdminApp;
-use mcp_proxy::inbound;
 use mcp_proxy::metrics::App as MetricsApp;
 use mcp_proxy::proto::aidp::dev::mcp::rbac::RuleSet as XdsRbac;
 use mcp_proxy::proto::aidp::dev::mcp::target::Target as XdsTarget;
@@ -19,6 +18,7 @@ use mcp_proxy::trcng;
 use mcp_proxy::xds;
 use mcp_proxy::xds::ProxyStateUpdater;
 use mcp_proxy::xds::XdsStore as ProxyState;
+use mcp_proxy::{a2a, inbound};
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
@@ -109,14 +109,21 @@ async fn main() -> Result<()> {
 			let state = Arc::new(tokio::sync::RwLock::new(ProxyState::new(listener)));
 
 			let relay_metrics = relay::metrics::Metrics::new(&mut registry);
+			let a2a_metrics = a2a::metrics::Metrics::new(&mut registry);
 
 			let state_2 = state.clone();
 			let cfg_clone = cfg.clone();
 			let ct_clone = ct.clone();
 			run_set.spawn(async move {
-				run_local_client(&cfg_clone, state_2, Arc::new(relay_metrics), ct_clone)
-					.await
-					.map_err(|e| anyhow::anyhow!("error running local client: {:?}", e))
+				run_local_client(
+					&cfg_clone,
+					state_2,
+					Arc::new(relay_metrics),
+					Arc::new(a2a_metrics),
+					ct_clone,
+				)
+				.await
+				.map_err(|e| anyhow::anyhow!("error running local client: {:?}", e))
 			});
 
 			// Add metrics listener
@@ -188,10 +195,16 @@ async fn main() -> Result<()> {
 			});
 
 			let relay_metrics = relay::metrics::Metrics::new(&mut registry);
+			let a2a_metrics = a2a::metrics::Metrics::new(&mut registry);
 			let ct_clone = ct.clone();
 			run_set.spawn(async move {
 				listener
-					.listen(state.clone(), Arc::new(relay_metrics), ct_clone)
+					.listen(
+						state.clone(),
+						Arc::new(relay_metrics),
+						Arc::new(a2a_metrics),
+						ct_clone,
+					)
 					.await
 					.map_err(|e| anyhow::anyhow!("error serving static listener: {:?}", e))
 			});

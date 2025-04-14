@@ -1,4 +1,5 @@
 pub mod handlers;
+pub mod metrics;
 pub mod relay;
 
 use a2a_sdk::{A2aRequest, AgentCard};

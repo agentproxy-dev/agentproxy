@@ -183,6 +183,7 @@ impl Listener {
 		&self,
 		state: Arc<tokio::sync::RwLock<xds::XdsStore>>,
 		metrics: Arc<relay::metrics::Metrics>,
+		a2a_metrics: Arc<a2a::metrics::Metrics>,
 		ct: tokio_util::sync::CancellationToken,
 	) -> Result<(), ServingError> {
 		match self {
@@ -318,7 +319,7 @@ impl Listener {
 					.unwrap();
 				let listener = tokio::net::TcpListener::bind(socket_addr).await.unwrap();
 				let child_token = ct.child_token();
-				let app = a2a::handlers::App::new(state.clone(), metrics, authenticator, child_token);
+				let app = a2a::handlers::App::new(state.clone(), a2a_metrics, authenticator, child_token);
 				let router = app.router();
 
 				info!("serving a2a on {}:{}", a2a_listener.host, a2a_listener.port);

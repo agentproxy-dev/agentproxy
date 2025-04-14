@@ -19,36 +19,26 @@ Let's look at the config to understand what's going on. First off we have a list
   }
 ```
 
-Next we have a targets section, which tells the proxy how to proxy the incoming requests. In this case we're using the `everything` tool, which is a tool that can do everything.
+Next we have a targets section, which tells the proxy how to proxy the incoming requests.
+In this case, we are proxying to an agent we have named `google_adk`, listening on port 10002.
+To run this yourself, follow the [sample documentation](https://github.com/google/A2A/tree/main/samples/python/agents/google_adk).
 
 ```json
   "targets": [
     {
-      "name": "everything",
-      "stdio": {
-        "cmd": "npx",
-        "args": [
-          "@modelcontextprotocol/server-everything"
-        ]
+      "name": "google_adk",
+      "a2a": {
+        "host": "127.0.0.1",
+        "port": "10002"
       }
     }
   ]
 ```
 
-Now that we have the proxy running, we can use the [mcpinspector](https://github.com/modelcontextprotocol/inspector) to try it out.
+To test this, we can run the sample [`a2a` CLI](https://github.com/google/A2A/tree/main/samples/python/hosts/cli)
+
 ```bash
-npx @modelcontextprotocol/inspector
+uv run hosts/cli --agent http://localhost:3000/google_adk
 ```
-Once the inspector is running, it will present the port that it's running on, and then you can navigate to it in your browser.
 
-![Inspector](./img/connect.png)
-
-Once you're connected, you can navigate to the tools tab and see the available tools.
-
-![Tools](./img/tools.png)
-
-Let's try out one of the tools, like `everything:echo`.
-
-![Echo](./img/echo.png)
-
-That worked! The proxy was able to proxy the request to the `everything` tool and return the response.
+From here, you can send requests through the CLI and view them being proxied.

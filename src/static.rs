@@ -1,13 +1,13 @@
 use std::sync::Arc;
 use tracing::{debug, info, trace};
 
-use crate::inbound;
 use crate::proto::aidp::dev::mcp::listener::Listener as XdsListener;
 use crate::proto::aidp::dev::mcp::rbac::{Rule as XdsRule, RuleSet as XdsRuleSet};
 use crate::proto::aidp::dev::mcp::target::Target as XdsTarget;
 use crate::relay;
 use crate::trcng;
 use crate::xds::XdsStore as ProxyState;
+use crate::{a2a, inbound};
 #[derive(Default, Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct StaticConfig {
@@ -25,6 +25,7 @@ pub async fn run_local_client(
 	cfg: &StaticConfig,
 	state_ref: Arc<tokio::sync::RwLock<ProxyState>>,
 	metrics: Arc<relay::metrics::Metrics>,
+	a2a_metrics: Arc<a2a::metrics::Metrics>,
 	ct: tokio_util::sync::CancellationToken,
 ) -> Result<(), crate::inbound::ServingError> {
 	debug!(
@@ -62,5 +63,5 @@ pub async fn run_local_client(
 		.await
 		.unwrap();
 
-	listener.listen(state_ref, metrics, ct).await
+	listener.listen(state_ref, metrics, a2a_metrics, ct).await
 }

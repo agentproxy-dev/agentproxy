@@ -1,4 +1,6 @@
+use crate::a2a::metrics;
 use crate::a2a::relay;
+use crate::metrics::Recorder;
 use crate::sse::AuthError;
 use crate::{a2a, authn, proxyprotocol, rbac, trcng};
 use a2a_sdk::AgentCard;
@@ -15,13 +17,14 @@ use headers::Authorization;
 use headers::authorization::Bearer;
 use http::request::Parts;
 use http::{HeaderMap, StatusCode};
+use opentelemetry::trace::{Span, SpanKind, Tracer};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
 #[derive(Clone)]
 pub struct App {
 	state: Arc<tokio::sync::RwLock<crate::xds::XdsStore>>,
-	metrics: Arc<crate::relay::metrics::Metrics>,
+	metrics: Arc<crate::a2a::metrics::Metrics>,
 	authn: Arc<RwLock<Option<authn::JwtAuthenticator>>>,
 	_ct: tokio_util::sync::CancellationToken,
 }
@@ -56,7 +59,7 @@ impl OptionalFromRequestParts<App> for rbac::Claims {
 impl App {
 	pub fn new(
 		state: Arc<tokio::sync::RwLock<crate::xds::XdsStore>>,
-		metrics: Arc<crate::relay::metrics::Metrics>,
+		metrics: Arc<crate::a2a::metrics::Metrics>,
 		authn: Arc<RwLock<Option<authn::JwtAuthenticator>>>,
 		ct: tokio_util::sync::CancellationToken,
 	) -> Self {
@@ -84,16 +87,31 @@ async fn agent_card_handler(
 	claims: Option<rbac::Claims>,
 ) -> anyhow::Result<Json<AgentCard>, StatusCode> {
 	tracing::info!("new agent card request");
+
 	let relay = relay::Relay::new(app.state.clone(), app.metrics.clone());
 	let connection_id = connection.identity.clone().map(|i| i.to_string());
 	let claims = rbac::Identity::new(claims, connection_id);
 	let context = trcng::extract_context_from_request(&headers);
 	let rq_ctx = relay::RqCtx::new(claims, context);
+
+	let tracer = trcng::get_tracer();
+	let _span = trcng::get_tracer()
+		.span_builder("agent_card")
+		.with_attributes(vec![opentelemetry::KeyValue::new("agent", target.clone())])
+		.with_kind(SpanKind::Server)
+		.start_with_context(tracer, &rq_ctx.context);
 	let card = relay
 		.fetch_agent_card(host, &rq_ctx, &target)
 		.await
 		.map_err(|_e| StatusCode::INTERNAL_SERVER_ERROR)?;
 
+	app.metrics.clone().record(
+		&metrics::AgentCall {
+			agent: target.to_string(),
+			method: "agent_card".to_string(),
+		},
+		(),
+	);
 	Ok(Json(card))
 }
 
@@ -118,6 +136,29 @@ async fn agent_call_handler(
 	let claims = rbac::Identity::new(claims, connection_id);
 	let context = trcng::extract_context_from_request(&headers);
 	let rq_ctx = relay::RqCtx::new(claims, context);
+
+	let tracer = trcng::get_tracer();
+	let mut span = trcng::get_tracer()
+		.span_builder(request.method())
+		.with_attributes(vec![
+			opentelemetry::KeyValue::new("agent", target.clone()),
+			opentelemetry::KeyValue::new("method", request.method()),
+			opentelemetry::KeyValue::new("request.id", request.id()),
+			opentelemetry::KeyValue::new(
+				"session.id",
+				request.session_id().unwrap_or("none".to_string()),
+			),
+		])
+		.with_kind(SpanKind::Server)
+		.start_with_context(tracer, &rq_ctx.context);
+
+	app.metrics.clone().record(
+		&metrics::AgentCall {
+			agent: target.to_string(),
+			method: request.method().to_string(),
+		},
+		(),
+	);
 	let rx = relay
 		.proxy_request(request, &rq_ctx, target)
 		.await
@@ -126,7 +167,20 @@ async fn agent_call_handler(
 	// TODO: use cancellation token
 	match rx {
 		a2a::relay::Response::Streaming(rx) => {
-			let stream = rx.map(|message| Event::default().json_data(&message));
+			let stream = rx
+				.map(move |i| {
+					if let Some(resp) = i.response() {
+						span.add_event(
+							"received response",
+							vec![opentelemetry::KeyValue::new(
+								"request.id",
+								resp.id().unwrap_or("none".to_string()),
+							)],
+						)
+					}
+					i
+				})
+				.map(|message| Event::default().json_data(&message));
 			Ok(AxumEither::Left(Sse::new(stream)))
 		},
 		a2a::relay::Response::Single(item) => Ok(AxumEither::Right(Json(item))),

@@ -7,6 +7,9 @@ use std::sync::Arc;
 #[allow(dead_code)]
 pub trait ConstString: Default {
 	const VALUE: &str;
+	fn as_string(&self) -> &'static str {
+		Self::VALUE
+	}
 }
 #[macro_export]
 macro_rules! const_string {

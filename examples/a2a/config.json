@@ -1,5 +1,12 @@
 {
   "type": "static",
+  "tracing": {
+    "tracer":{
+      "Otlp": {
+        "endpoint": "http://localhost:4317"
+      }
+    }
+  },
   "listener": {
     "a2a": {
       "address": "0.0.0.0",

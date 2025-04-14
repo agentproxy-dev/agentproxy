@@ -18,6 +18,15 @@ pub enum JsonRpcMessage {
 	Response(JsonRpcResponse<A2aResponse>),
 }
 
+impl JsonRpcMessage {
+	pub fn response(&self) -> Option<&A2aResponse> {
+		match self {
+			JsonRpcMessage::Request(_) => None,
+			JsonRpcMessage::Response(resp) => Some(&resp.result),
+		}
+	}
+}
+
 // TODO: this is not complete, add the rest
 #[derive(serde::Deserialize, serde::Serialize, Clone, Debug)]
 #[serde(untagged)]
@@ -26,6 +35,31 @@ pub enum A2aRequest {
 	SendSubscribeTaskRequest(SendSubscribeTaskRequest),
 	GetTaskRequest(GetTaskRequest),
 }
+
+impl A2aRequest {
+	pub fn method(&self) -> &'static str {
+		match self {
+			A2aRequest::SendTaskRequest(i) => i.method.as_string(),
+			A2aRequest::SendSubscribeTaskRequest(i) => i.method.as_string(),
+			A2aRequest::GetTaskRequest(i) => i.method.as_string(),
+		}
+	}
+	pub fn id(&self) -> String {
+		match self {
+			A2aRequest::SendTaskRequest(i) => i.params.id.clone(),
+			A2aRequest::SendSubscribeTaskRequest(i) => i.params.id.clone(),
+			A2aRequest::GetTaskRequest(i) => i.params.id.clone(),
+		}
+	}
+	pub fn session_id(&self) -> Option<String> {
+		match self {
+			A2aRequest::SendTaskRequest(i) => i.params.session_id.clone(),
+			A2aRequest::SendSubscribeTaskRequest(i) => i.params.session_id.clone(),
+			A2aRequest::GetTaskRequest(_) => None,
+		}
+	}
+}
+
 // TODO: this is not complete, add the rest
 #[derive(serde::Deserialize, serde::Serialize, Clone, Debug)]
 #[serde(untagged)]
@@ -34,6 +68,20 @@ pub enum A2aResponse {
 	SendTaskUpdateResponse(SendTaskStreamingResponseResult),
 }
 
+impl A2aResponse {
+	pub fn id(&self) -> Option<String> {
+		match self {
+			A2aResponse::SendTaskResponse(i) => i.as_ref().map(|i| i.id.clone()),
+			A2aResponse::SendTaskUpdateResponse(SendTaskStreamingResponseResult::Status(i)) => {
+				Some(i.id.clone())
+			},
+			A2aResponse::SendTaskUpdateResponse(SendTaskStreamingResponseResult::Artifact(i)) => {
+				Some(i.id.clone())
+			},
+			A2aResponse::SendTaskUpdateResponse(SendTaskStreamingResponseResult::None) => None,
+		}
+	}
+}
 impl From<SendTaskRequest> for A2aRequest {
 	fn from(value: SendTaskRequest) -> Self {
 		Self::SendTaskRequest(value)
