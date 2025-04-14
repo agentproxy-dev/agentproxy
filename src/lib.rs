@@ -2,7 +2,7 @@ pub mod admin;
 pub mod authn;
 pub mod drain;
 pub mod inbound;
-pub mod metrics;
+pub mod mtrcs;
 pub mod outbound;
 pub use outbound::backend;
 pub mod proto;

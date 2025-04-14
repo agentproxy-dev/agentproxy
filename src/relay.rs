@@ -1,4 +1,4 @@
-use crate::metrics::Recorder;
+use crate::mtrcs::Recorder;
 use crate::outbound::backend;
 use crate::outbound::openapi;
 use crate::outbound::{Target, TargetSpec};

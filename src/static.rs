@@ -5,7 +5,6 @@ use crate::inbound;
 use crate::proto::aidp::dev::mcp::listener::Listener as XdsListener;
 use crate::proto::aidp::dev::mcp::rbac::{Rule as XdsRule, RuleSet as XdsRuleSet};
 use crate::proto::aidp::dev::mcp::target::Target as XdsTarget;
-use crate::trcng;
 use crate::xds::XdsStore as ProxyState;
 #[derive(Default, Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -16,8 +15,6 @@ pub struct StaticConfig {
 	pub policies: Vec<XdsRule>,
 	#[serde(default)]
 	pub listener: XdsListener,
-
-	pub tracing: Option<trcng::Config>,
 }
 
 pub async fn run_local_client(
@@ -57,5 +54,5 @@ pub async fn run_local_client(
 		info!(%num_targets, %num_policies, "local config initialized");
 	}
 
-  listener_manager.run(ct).await
+	listener_manager.run(ct).await
 }

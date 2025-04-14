@@ -1,4 +1,3 @@
-use prost::Message;
 use std::error::Error as StdErr;
 use std::fmt;
 use std::fmt::Formatter;
@@ -25,7 +24,6 @@ use std::collections::HashMap;
 
 use crate::inbound;
 use crate::outbound;
-use crate::trcng;
 use serde::{Deserialize, Serialize};
 
 pub mod client;
@@ -465,5 +463,4 @@ pub struct Config {
 	pub xds_address: String,
 	pub metadata: HashMap<String, String>,
 	pub listener: XdsListener,
-	pub tracing: Option<trcng::Config>,
 }

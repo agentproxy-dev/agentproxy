@@ -8,9 +8,9 @@ use std::sync::Arc;
 use tokio::task::JoinSet;
 use tracing_subscriber::{self, EnvFilter};
 
-use mcp_proxy::admin::App as AdminApp;
+use mcp_proxy::admin;
 use mcp_proxy::inbound;
-use mcp_proxy::metrics::App as MetricsApp;
+use mcp_proxy::mtrcs;
 use mcp_proxy::proto::aidp::dev::mcp::rbac::RuleSet as XdsRbac;
 use mcp_proxy::proto::aidp::dev::mcp::target::Target as XdsTarget;
 use mcp_proxy::relay;
@@ -33,11 +33,21 @@ struct Args {
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(tag = "type", deny_unknown_fields)]
-pub enum Config {
+pub enum ConfigType {
 	#[serde(rename = "static")]
 	Static(StaticConfig),
 	#[serde(rename = "xds")]
 	Xds(XdsConfig),
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct Config {
+	#[serde(flatten)]
+	pub config_type: ConfigType,
+
+	pub admin: Option<admin::Config>,
+	pub metrics: Option<mtrcs::Config>,
+	pub tracing: Option<trcng::Config>,
 }
 
 #[tokio::main]
@@ -98,11 +108,11 @@ async fn main() -> Result<()> {
 		ct_clone.cancel();
 	});
 
-	match cfg {
-		Config::Static(cfg) => {
+	match cfg.config_type {
+		ConfigType::Static(r#static) => {
 			let mut run_set = JoinSet::new();
 
-			let cfg_clone = cfg.clone();
+			let cfg_clone = r#static.clone();
 
 			let (update_tx, update_rx) = tokio::sync::mpsc::channel(100);
 			let state = Arc::new(tokio::sync::RwLock::new(ProxyState::new(update_tx)));
@@ -124,12 +134,11 @@ async fn main() -> Result<()> {
 				.await
 				.expect("failed to insert listener");
 
-
 			let state_2 = state.clone();
-			let cfg_clone = cfg.clone();
+			let cfg_clone = r#static.clone();
 			let ct_clone = ct.clone();
 			run_set.spawn(async move {
-				run_local_client(&cfg_clone, state_2, listener_manager,  ct_clone)
+				run_local_client(&cfg_clone, state_2, listener_manager, ct_clone)
 					.await
 					.map_err(|e| anyhow::anyhow!("error running local client: {:?}", e))
 			});
@@ -137,7 +146,7 @@ async fn main() -> Result<()> {
 			// Add metrics listener
 			let ct_clone = ct.clone();
 			run_set.spawn(async move {
-				start_metrics_service(Arc::new(registry), ct_clone)
+				mtrcs::start(Arc::new(registry), ct_clone, cfg.metrics)
 					.await
 					.map_err(|e| anyhow::anyhow!("error serving metrics: {:?}", e))
 			});
@@ -145,7 +154,7 @@ async fn main() -> Result<()> {
 			// Add admin listener
 			let ct_clone = ct.clone();
 			run_set.spawn(async move {
-				start_admin_service(state.clone(), ct_clone)
+				admin::start(state.clone(), ct_clone, cfg.admin)
 					.await
 					.map_err(|e| anyhow::anyhow!("error serving admin: {:?}", e))
 			});
@@ -167,7 +176,7 @@ async fn main() -> Result<()> {
 				result.unwrap();
 			}
 		},
-		Config::Xds(cfg) => {
+		ConfigType::Xds(dynamic) => {
 			let ct = tokio_util::sync::CancellationToken::new();
 			let metrics = xds::metrics::Metrics::new(&mut registry);
 			let awaiting_ready = tokio::sync::watch::channel(()).0;
@@ -175,26 +184,25 @@ async fn main() -> Result<()> {
 			let (update_tx, update_rx) = tokio::sync::mpsc::channel(100);
 			let state = Arc::new(tokio::sync::RwLock::new(ProxyState::new(update_tx)));
 
-
 			let mut listener_manager = inbound::ListenerManager::new(
 				ct.clone(),
 				state.clone(),
 				update_rx,
 				Arc::new(relay::metrics::Metrics::new(&mut registry)),
-			).await;
-      
+			)
+			.await;
+
 			state
 				.write()
 				.await
 				.listeners
-				.insert(cfg.listener.clone())
+				.insert(dynamic.listener.clone())
 				.await
 				.expect("failed to insert listener");
 
-
 			let state_clone = state.clone();
 			let updater = ProxyStateUpdater::new(state_clone);
-			let cfg_clone = cfg.clone();
+			let cfg_clone = dynamic.clone();
 			let xds_config = xds::client::Config::new(Arc::new(cfg_clone));
 			let ads_client = xds_config
 				.with_watched_handler::<XdsTarget>(xds::TARGET_TYPE, updater.clone())
@@ -214,14 +222,15 @@ async fn main() -> Result<()> {
 			let ct_clone = ct.clone();
 			let state_3 = state.clone();
 			run_set.spawn(async move {
-				start_admin_service(state_3, ct_clone)
+				admin::start(state_3, ct_clone, cfg.admin)
 					.await
 					.map_err(|e| anyhow::anyhow!("error serving admin: {:?}", e))
 			});
 
 			let ct_clone = ct.clone();
 			run_set.spawn(async move {
-				listener_manager.run(ct_clone)
+				listener_manager
+					.run(ct_clone)
 					.await
 					.map_err(|e| anyhow::anyhow!("error serving static listener: {:?}", e))
 			});
@@ -229,7 +238,7 @@ async fn main() -> Result<()> {
 			// Add metrics listener
 			let ct_clone = ct.clone();
 			run_set.spawn(async move {
-				start_metrics_service(Arc::new(registry), ct_clone)
+				mtrcs::start(Arc::new(registry), ct_clone, cfg.metrics)
 					.await
 					.map_err(|e| anyhow::anyhow!("error serving metrics: {:?}", e))
 			});
@@ -254,32 +263,4 @@ async fn main() -> Result<()> {
 	};
 
 	Ok(())
-}
-
-async fn start_metrics_service(
-	registry: Arc<Registry>,
-	ct: tokio_util::sync::CancellationToken,
-) -> Result<(), std::io::Error> {
-	let listener = tokio::net::TcpListener::bind("127.0.0.1:9091").await?;
-	let app = MetricsApp::new(registry);
-	let router = app.router();
-	axum::serve(listener, router)
-		.with_graceful_shutdown(async move {
-			ct.cancelled().await;
-		})
-		.await
-}
-
-async fn start_admin_service(
-	state: Arc<tokio::sync::RwLock<ProxyState>>,
-	ct: tokio_util::sync::CancellationToken,
-) -> Result<(), std::io::Error> {
-	let listener = tokio::net::TcpListener::bind("127.0.0.1:19000").await?;
-	let app = AdminApp::new(state);
-	let router = app.router();
-	axum::serve(listener, router)
-		.with_graceful_shutdown(async move {
-			ct.cancelled().await;
-		})
-		.await
 }

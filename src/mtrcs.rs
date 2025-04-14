@@ -4,6 +4,7 @@ use axum::{Router, extract::State, http::StatusCode, routing::get};
 
 use prometheus_client::encoding::text::encode;
 use prometheus_client::registry::Registry;
+use serde::{Deserialize, Serialize};
 use tracing::error;
 
 /// Creates a metrics sub registry for mcp-proxy.
@@ -79,15 +80,15 @@ where
 }
 
 #[derive(Clone, Default)]
-pub struct App {
+struct App {
 	registry: Arc<Registry>,
 }
 
 impl App {
-	pub fn new(registry: Arc<Registry>) -> Self {
+	fn new(registry: Arc<Registry>) -> Self {
 		Self { registry }
 	}
-	pub fn router(&self) -> Router {
+	fn router(&self) -> Router {
 		Router::new()
 			.route("/metrics", get(metrics_handler))
 			.with_state(self.clone())
@@ -103,4 +104,35 @@ async fn metrics_handler(State(app): State<App>) -> Result<String, StatusCode> {
 			Err(StatusCode::INTERNAL_SERVER_ERROR)
 		},
 	}
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct Config {
+	pub host: String,
+	pub port: u16,
+}
+
+impl Default for Config {
+	fn default() -> Self {
+		Self {
+			host: "127.0.0.1".to_string(),
+			port: 9091,
+		}
+	}
+}
+
+pub async fn start(
+	registry: Arc<Registry>,
+	ct: tokio_util::sync::CancellationToken,
+	cfg: Option<Config>,
+) -> Result<(), std::io::Error> {
+	let cfg = cfg.unwrap_or_default();
+	let listener = tokio::net::TcpListener::bind(format!("{}:{}", cfg.host, cfg.port)).await?;
+	let app = App::new(registry);
+	let router = app.router();
+	axum::serve(listener, router)
+		.with_graceful_shutdown(async move {
+			ct.cancelled().await;
+		})
+		.await
 }

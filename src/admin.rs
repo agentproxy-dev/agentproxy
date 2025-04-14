@@ -13,15 +13,15 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use tracing::error;
 #[derive(Clone)]
-pub struct App {
+struct App {
 	state: Arc<tokio::sync::RwLock<XdsStore>>,
 }
 
 impl App {
-	pub fn new(state: Arc<tokio::sync::RwLock<XdsStore>>) -> Self {
+	fn new(state: Arc<tokio::sync::RwLock<XdsStore>>) -> Self {
 		Self { state }
 	}
-	pub fn router(&self) -> Router {
+	fn router(&self) -> Router {
 		Router::new()
 			.route(
 				"/targets",
@@ -39,6 +39,37 @@ impl App {
 			.route("/listeners", get(listener_handler))
 			.with_state(self.clone())
 	}
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct Config {
+	pub host: String,
+	pub port: u16,
+}
+
+impl Default for Config {
+	fn default() -> Self {
+		Self {
+			host: "127.0.0.1".to_string(),
+			port: 19000,
+		}
+	}
+}
+
+pub async fn start(
+	state: Arc<tokio::sync::RwLock<XdsStore>>,
+	ct: tokio_util::sync::CancellationToken,
+	cfg: Option<Config>,
+) -> Result<(), std::io::Error> {
+	let cfg = cfg.unwrap_or_default();
+	let listener = tokio::net::TcpListener::bind(format!("{}:{}", cfg.host, cfg.port)).await?;
+	let app = App::new(state);
+	let router = app.router();
+	axum::serve(listener, router)
+		.with_graceful_shutdown(async move {
+			ct.cancelled().await;
+		})
+		.await
 }
 
 /// GET /targets  List all targets

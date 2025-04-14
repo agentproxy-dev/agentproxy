@@ -4,7 +4,7 @@ use prometheus_client::metrics::family::Family;
 use prometheus_client::registry::{Registry, Unit};
 
 use super::envoy::service::discovery::v3::DeltaDiscoveryResponse;
-use crate::metrics::Recorder;
+use crate::mtrcs::Recorder;
 
 pub struct Metrics {
 	pub connection_terminations: Family<ConnectionTermination, Counter>,
