@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use crate::proto::aidp::dev::mcp::rbac::RuleSet as Rbac;
 use crate::proto::aidp::dev::mcp::target::Target;
 use crate::xds::XdsStore;
 use axum::{
@@ -31,11 +30,11 @@ impl App {
 				"/targets/{name}",
 				get(targets_get_handler).delete(targets_delete_handler),
 			)
-			.route("/rbac", get(rbac_handler).post(rbac_create_handler))
-			.route(
-				"/rbac/{name}",
-				get(rbac_get_handler).delete(rbac_delete_handler),
-			)
+			// .route("/rbac", get(rbac_handler).post(rbac_create_handler))
+			// .route(
+			// 	"/rbac/{name}",
+			// 	get(rbac_get_handler).delete(rbac_delete_handler),
+			// )
 			.route("/listeners", get(listener_handler))
 			.with_state(self.clone())
 	}
@@ -172,61 +171,61 @@ async fn targets_create_handler(
 	}
 }
 
-async fn rbac_handler(State(app): State<App>) -> Result<String, (StatusCode, impl IntoResponse)> {
-	let rbac = app.state.read().await.policies.clone();
-	match serde_json::to_string(&rbac) {
-		Ok(json_rbac) => Ok(json_rbac),
-		Err(e) => {
-			error!("error serializing rbac: {:?}", e);
-			Err((
-				StatusCode::INTERNAL_SERVER_ERROR,
-				ErrorResponse {
-					message: "error serializing rbac".to_string(),
-				},
-			))
-		},
-	}
-}
+// async fn rbac_handler(State(app): State<App>) -> Result<String, (StatusCode, impl IntoResponse)> {
+// 	let rbac = app.state.read().await.policies.clone();
+// 	match serde_json::to_string(&rbac) {
+// 		Ok(json_rbac) => Ok(json_rbac),
+// 		Err(e) => {
+// 			error!("error serializing rbac: {:?}", e);
+// 			Err((
+// 				StatusCode::INTERNAL_SERVER_ERROR,
+// 				ErrorResponse {
+// 					message: "error serializing rbac".to_string(),
+// 				},
+// 			))
+// 		},
+// 	}
+// }
 
-async fn rbac_get_handler(
-	State(app): State<App>,
-	Path(name): Path<String>,
-) -> Result<Json<Rbac>, StatusCode> {
-	let state = app.state.read().await;
-	let rbac = state.policies.get_proto(&name);
-	match rbac {
-		Some(rbac) => Ok(Json(rbac.clone())),
-		None => Err(StatusCode::NOT_FOUND),
-	}
-}
+// async fn rbac_get_handler(
+// 	State(app): State<App>,
+// 	Path(name): Path<String>,
+// ) -> Result<Json<Rbac>, StatusCode> {
+// 	let state = app.state.read().await;
+// 	let rbac = state.policies.get_proto(&name);
+// 	match rbac {
+// 		Some(rbac) => Ok(Json(rbac.clone())),
+// 		None => Err(StatusCode::NOT_FOUND),
+// 	}
+// }
 
-async fn rbac_create_handler(
-	State(app): State<App>,
-	Json(rbac): Json<Rbac>,
-) -> Result<(), (StatusCode, impl IntoResponse)> {
-	let mut state = app.state.write().await;
-	match state.policies.insert(rbac) {
-		Ok(_) => Ok(()),
-		Err(e) => {
-			error!("error inserting rbac into store: {:?}", e);
-			Err((
-				StatusCode::INTERNAL_SERVER_ERROR,
-				ErrorResponse {
-					message: "error inserting rbac into store".to_string(),
-				},
-			))
-		},
-	}
-}
+// async fn rbac_create_handler(
+// 	State(app): State<App>,
+// 	Json(rbac): Json<Rbac>,
+// ) -> Result<(), (StatusCode, impl IntoResponse)> {
+// 	let mut state = app.state.write().await;
+// 	match state.policies.insert(rbac) {
+// 		Ok(_) => Ok(()),
+// 		Err(e) => {
+// 			error!("error inserting rbac into store: {:?}", e);
+// 			Err((
+// 				StatusCode::INTERNAL_SERVER_ERROR,
+// 				ErrorResponse {
+// 					message: "error inserting rbac into store".to_string(),
+// 				},
+// 			))
+// 		},
+// 	}
+// }
 
-async fn rbac_delete_handler(
-	State(app): State<App>,
-	Path(name): Path<String>,
-) -> Result<(), (StatusCode, impl IntoResponse)> {
-	let mut state = app.state.write().await;
-	state.policies.remove(&name);
-	Ok::<_, (StatusCode, String)>(())
-}
+// async fn rbac_delete_handler(
+// 	State(app): State<App>,
+// 	Path(name): Path<String>,
+// ) -> Result<(), (StatusCode, impl IntoResponse)> {
+// 	let mut state = app.state.write().await;
+// 	state.policies.remove(&name);
+// 	Ok::<_, (StatusCode, String)>(())
+// }
 
 async fn listener_handler(
 	State(app): State<App>,

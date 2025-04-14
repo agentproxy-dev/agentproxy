@@ -55,17 +55,25 @@ impl RqCtx {
 
 #[derive(Clone)]
 pub struct Relay {
-	state: Arc<tokio::sync::RwLock<XdsStore>>,
 	pool: Arc<RwLock<pool::ConnectionPool>>,
 	metrics: Arc<metrics::Metrics>,
+	policies: rbac::RuleSets,
 }
 
 impl Relay {
-	pub fn new(state: Arc<tokio::sync::RwLock<XdsStore>>, metrics: Arc<metrics::Metrics>) -> Self {
+	pub fn new(
+		state: Arc<tokio::sync::RwLock<XdsStore>>,
+		metrics: Arc<metrics::Metrics>,
+		policies: rbac::RuleSets,
+		listener_name: String,
+	) -> Self {
 		Self {
-			state: state.clone(),
-			pool: Arc::new(RwLock::new(pool::ConnectionPool::new(state.clone()))),
+			pool: Arc::new(RwLock::new(pool::ConnectionPool::new(
+				state.clone(),
+				listener_name,
+			))),
 			metrics,
+			policies,
 		}
 	}
 }
@@ -281,7 +289,7 @@ impl ServerHandler for Relay {
 			.span_builder("read_resource")
 			.with_kind(SpanKind::Server)
 			.start_with_context(tracer, &rq_ctx.context);
-		if !self.state.read().await.policies.validate(
+		if !self.policies.validate(
 			&rbac::ResourceType::Resource {
 				id: request.uri.to_string(),
 			},
@@ -337,7 +345,7 @@ impl ServerHandler for Relay {
 			.span_builder("get_prompt")
 			.with_kind(SpanKind::Server)
 			.start_with_context(tracer, &rq_ctx.context);
-		if !self.state.read().await.policies.validate(
+		if !self.policies.validate(
 			&rbac::ResourceType::Prompt {
 				id: request.name.to_string(),
 			},
@@ -447,7 +455,7 @@ impl ServerHandler for Relay {
 			.span_builder("call_tool")
 			.with_kind(SpanKind::Server)
 			.start_with_context(tracer, span_context);
-		if !self.state.read().await.policies.validate(
+		if !self.policies.validate(
 			&rbac::ResourceType::Tool {
 				id: request.name.to_string(),
 			},

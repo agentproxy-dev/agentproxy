@@ -1,14 +1,12 @@
 use crate::authn;
 use crate::authn::JwtAuthenticator;
 use crate::proto;
-use crate::proto::aidp::dev::mcp::listener::{
-	Listener as XdsListener,
-	listener::{
-		Listener as XdsListenerSpec, SseListener as XdsSseListener,
-		sse_listener::TlsConfig as XdsTlsConfig,
-	},
+use crate::proto::aidp::dev::listener::{
+	Listener as XdsListener, SseListener as XdsSseListener, listener::Listener as XdsListenerSpec,
+	sse_listener::TlsConfig as XdsTlsConfig,
 };
 use crate::proxyprotocol;
+use crate::rbac;
 use crate::relay;
 use crate::sse::App as SseApp;
 use crate::xds;
@@ -52,6 +50,7 @@ pub struct SseListener {
 	mode: Option<ListenerMode>,
 	authn: Option<JwtAuthenticator>,
 	tls: Option<TlsConfig>,
+	rbac: Vec<rbac::RuleSet>,
 }
 
 impl SseListener {
@@ -71,12 +70,18 @@ impl SseListener {
 			},
 			None => None,
 		};
+		let rbac = value
+			.rbac
+			.iter()
+			.map(rbac::RuleSet::try_from)
+			.collect::<Result<Vec<rbac::RuleSet>, anyhow::Error>>()?;
 		Ok(SseListener {
 			host: value.address,
 			port: value.port,
 			mode: None,
 			authn,
 			tls,
+			rbac,
 		})
 	}
 }
@@ -148,7 +153,12 @@ impl Listener {
 		match self {
 			Listener::Stdio => {
 				let relay = serve_server_with_ct(
-					relay::Relay::new(state.clone(), metrics),
+					relay::Relay::new(
+						state.clone(),
+						metrics,
+						Default::default(),
+						"stdio".to_string(),
+					),
 					(tokio::io::stdin(), tokio::io::stdout()),
 					ct,
 				)
@@ -190,7 +200,7 @@ impl Listener {
 					.unwrap();
 				let listener = tokio::net::TcpListener::bind(socket_addr).await.unwrap();
 				let child_token = ct.child_token();
-				let app = SseApp::new(state.clone(), metrics, authenticator, child_token);
+				let app = SseApp::new(state.clone(), metrics, authenticator, child_token, sse_listener.rbac.clone(), "sse".to_string());
 				let router = app.router();
 
 				info!("serving sse on {}:{}", sse_listener.host, sse_listener.port);

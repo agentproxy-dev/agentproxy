@@ -1,5 +1,5 @@
-use crate::proto::aidp::dev::mcp::rbac::rule;
-use crate::proto::aidp::dev::mcp::rbac::{Rule as XdsRule, RuleSet as XdsRuleSet};
+use crate::proto::aidp::dev::rbac::rule;
+use crate::proto::aidp::dev::rbac::{Rule as XdsRule, RuleSet as XdsRuleSet};
 use secrecy::SecretString;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -12,6 +12,23 @@ pub struct RuleSet {
 	pub rules: Vec<Rule>,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Default)]
+pub struct RuleSets(Vec<RuleSet>);
+
+impl From<Vec<RuleSet>> for RuleSets {
+	fn from(value: Vec<RuleSet>) -> Self {
+		Self(value)
+	}
+}
+
+impl RuleSets {
+	pub fn validate(&self, resource: &ResourceType, claims: &Identity) -> bool {
+		self
+			.0
+			.iter()
+			.any(|rule_set| rule_set.validate(resource, claims))
+	}
+}
 impl RuleSet {
 	pub fn new(name: String, namespace: String, rules: Vec<Rule>) -> Self {
 		Self {
@@ -91,14 +108,14 @@ pub enum ResourceType {
 impl TryFrom<&rule::Resource> for ResourceType {
 	type Error = anyhow::Error;
 	fn try_from(value: &rule::Resource) -> Result<Self, Self::Error> {
-		match value.r#type.try_into() {
-			Ok(rule::resource::ResourceType::Tool) => Ok(ResourceType::Tool {
+		match value.r#type.to_lowercase().as_str() {
+			"tool" => Ok(ResourceType::Tool {
 				id: value.id.clone(),
 			}),
-			Ok(rule::resource::ResourceType::Prompt) => Ok(ResourceType::Prompt {
+			"prompt" => Ok(ResourceType::Prompt {
 				id: value.id.clone(),
 			}),
-			Ok(rule::resource::ResourceType::Resource) => Ok(ResourceType::Resource {
+			"resource" => Ok(ResourceType::Resource {
 				id: value.id.clone(),
 			}),
 			_ => Err(anyhow::anyhow!("Invalid resource type")),

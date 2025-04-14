@@ -1,12 +1,30 @@
 syntax = "proto3";
 
-package aidp.dev.a2a.listener;
+package aidp.dev.listener;
 
 import "common.proto";
-
+import "rbac.proto";
 
 message Listener {
+  string name = 1;
+
+  enum Protocol {
+    MCP = 0;
+    A2A = 1;
+  }
+
+  Protocol protocol = 2;
+
+  oneof listener {
+    SseListener sse = 3;
+    StdioListener stdio = 4;
+  }
+}
+
+message SseListener { 
+  // The address of the listener.
   string address = 1;
+  // The port of the listener.
   uint32 port = 2;
 
   message TlsConfig {
@@ -30,4 +48,8 @@ message Listener {
   }
 
   Authn authn = 4;
+
+  repeated aidp.dev.rbac.RuleSet rbac = 5;
 }
+
+message StdioListener {}

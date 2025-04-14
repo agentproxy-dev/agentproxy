@@ -15,5 +15,5 @@ pub(crate) mod envoy {
 	}
 }
 
-pub const TARGET_TYPE: Strng = strng::literal!("type.googleapis.com/mcpproxy.dev.target.Target");
-pub const RBAC_TYPE: Strng = strng::literal!("type.googleapis.com/mcpproxy.dev.rbac.Config");
+pub const TARGET_TYPE: Strng = strng::literal!("type.googleapis.com/aidp.dev.target.Target");
+pub const LISTENER_TYPE: Strng = strng::literal!("type.googleapis.com/aidp.dev.listener.Listener");

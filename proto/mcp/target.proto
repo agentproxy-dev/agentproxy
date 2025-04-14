@@ -9,10 +9,13 @@ message Target {
   // The name of the target.
   string name = 1;
 
+  // The listeners which are allowed to connect to the target.
+  repeated string listeners = 2;
+
   oneof target {
-    SseTarget sse = 2;
-    OpenAPITarget openapi = 3;
-    StdioTarget stdio = 4;
+    SseTarget sse = 3;
+    OpenAPITarget openapi = 4;
+    StdioTarget stdio = 5;
   }
 
 

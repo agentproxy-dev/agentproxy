@@ -11,7 +11,7 @@ use tracing_subscriber::{self, EnvFilter};
 use mcp_proxy::admin;
 use mcp_proxy::inbound;
 use mcp_proxy::mtrcs;
-use mcp_proxy::proto::aidp::dev::mcp::rbac::RuleSet as XdsRbac;
+use mcp_proxy::proto::aidp::dev::listener::Listener as XdsListener;
 use mcp_proxy::proto::aidp::dev::mcp::target::Target as XdsTarget;
 use mcp_proxy::relay;
 use mcp_proxy::signal;
@@ -206,7 +206,7 @@ async fn main() -> Result<()> {
 			let xds_config = xds::client::Config::new(Arc::new(cfg_clone));
 			let ads_client = xds_config
 				.with_watched_handler::<XdsTarget>(xds::TARGET_TYPE, updater.clone())
-				.with_watched_handler::<XdsRbac>(xds::RBAC_TYPE, updater)
+				.with_watched_handler::<XdsListener>(xds::LISTENER_TYPE, updater)
 				.build(metrics, awaiting_ready);
 
 			let mut run_set = JoinSet::new();

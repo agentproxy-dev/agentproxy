@@ -2,8 +2,7 @@ use std::sync::Arc;
 use tracing::{debug, info, trace};
 
 use crate::inbound;
-use crate::proto::aidp::dev::mcp::listener::Listener as XdsListener;
-use crate::proto::aidp::dev::mcp::rbac::{Rule as XdsRule, RuleSet as XdsRuleSet};
+use crate::proto::aidp::dev::listener::Listener as XdsListener;
 use crate::proto::aidp::dev::mcp::target::Target as XdsTarget;
 use crate::xds::XdsStore as ProxyState;
 #[derive(Default, Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -11,8 +10,6 @@ use crate::xds::XdsStore as ProxyState;
 pub struct StaticConfig {
 	#[serde(default)]
 	pub targets: Vec<XdsTarget>,
-	#[serde(default)]
-	pub policies: Vec<XdsRule>,
 	#[serde(default)]
 	pub listener: XdsListener,
 }
@@ -32,7 +29,6 @@ pub async fn run_local_client(
 	{
 		let mut state = state_clone.write().await;
 		let num_targets = cfg.targets.len();
-		let num_policies = cfg.policies.len();
 		for target in cfg.targets.clone() {
 			trace!("inserting target {}", &target.name);
 			state
@@ -40,18 +36,7 @@ pub async fn run_local_client(
 				.insert(target)
 				.expect("failed to insert target into store");
 		}
-		if !cfg.policies.is_empty() {
-			let rule_set = XdsRuleSet {
-				name: "test".to_string(),
-				namespace: "test".to_string(),
-				rules: cfg.policies.clone(),
-			};
-			state
-				.policies
-				.insert(rule_set)
-				.expect("failed to insert rule set into store");
-		}
-		info!(%num_targets, %num_policies, "local config initialized");
+		info!(%num_targets, "local config initialized");
 	}
 
 	listener_manager.run(ct).await

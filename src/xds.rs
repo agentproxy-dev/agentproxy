@@ -14,10 +14,10 @@ use self::envoy::service::discovery::v3::DeltaDiscoveryRequest;
 use crate::proto;
 use crate::proto::aidp::dev::common::BackendAuth as XdsAuth;
 use crate::proto::aidp::dev::common::backend_auth::Auth as XdsAuthSpec;
-use crate::proto::aidp::dev::mcp::listener::Listener as XdsListener;
-use crate::proto::aidp::dev::mcp::rbac::RuleSet as XdsRbac;
+use crate::proto::aidp::dev::listener::Listener as XdsListener;
 use crate::proto::aidp::dev::mcp::target::Target as XdsTarget;
 use crate::proto::aidp::dev::mcp::target::target::Target as XdsTargetSpec;
+use crate::proto::aidp::dev::rbac::RuleSet as XdsRbac;
 use crate::rbac;
 use crate::strng::Strng;
 use std::collections::HashMap;
@@ -123,52 +123,60 @@ impl ProxyStateUpdateMutator {
 
 	#[instrument(
         level = Level::TRACE,
-        name="insert_rbac",
+        name="insert_listener",
         skip_all,
     )]
-	pub fn insert_rbac(&self, state: &mut XdsStore, rbac: XdsRbac) -> anyhow::Result<()> {
-		state.policies.insert(rbac)?;
-		Ok(())
+	pub async fn insert_listener(
+		&self,
+		state: &mut XdsStore,
+		listener: XdsListener,
+	) -> anyhow::Result<()> {
+		state.listeners.insert(listener).await
 	}
 
 	#[instrument(
         level = Level::TRACE,
-        name="remove_rbac",
+        name="remove_listener",
         skip_all,
         fields(name=%xds_name),
     )]
-	pub fn remove_rbac(&self, state: &mut XdsStore, xds_name: &Strng) {
-		state.policies.remove(xds_name);
+	pub async fn remove_listener(
+		&self,
+		state: &mut XdsStore,
+		xds_name: &Strng,
+	) -> anyhow::Result<()> {
+		state.listeners.remove(xds_name).await?;
+		Ok(())
 	}
 }
 
 #[async_trait::async_trait]
 impl Handler<XdsTarget> for ProxyStateUpdater {
 	async fn handle(&self, updates: Vec<XdsUpdate<XdsTarget>>) -> Result<(), Vec<RejectedConfig>> {
-		let mut state = self.state.write().await;
-		let handle = |res: XdsUpdate<XdsTarget>| {
+		let handle = |res: XdsUpdate<XdsTarget>| async {
+			let mut state = self.state.write().await;
 			match res {
 				XdsUpdate::Update(w) => self.updater.insert_target(&mut state, w.resource)?,
 				XdsUpdate::Remove(name) => self.updater.remove_target(&mut state, &name)?,
 			}
 			Ok(())
 		};
-		handle_single_resource(updates, handle)
+		handle_single_resource(updates, handle).await
 	}
 }
 
 #[async_trait::async_trait]
-impl Handler<XdsRbac> for ProxyStateUpdater {
-	async fn handle(&self, updates: Vec<XdsUpdate<XdsRbac>>) -> Result<(), Vec<RejectedConfig>> {
-		let mut state = self.state.write().await;
-		let handle = |res: XdsUpdate<XdsRbac>| {
+impl Handler<XdsListener> for ProxyStateUpdater {
+	async fn handle(&self, updates: Vec<XdsUpdate<XdsListener>>) -> Result<(), Vec<RejectedConfig>> {
+		let handle = |res: XdsUpdate<XdsListener>| async {
+			let mut state = self.state.write().await;
 			match res {
-				XdsUpdate::Update(w) => self.updater.insert_rbac(&mut state, w.resource)?,
-				XdsUpdate::Remove(name) => self.updater.remove_rbac(&mut state, &name),
+				XdsUpdate::Update(w) => self.updater.insert_listener(&mut state, w.resource).await?,
+				XdsUpdate::Remove(name) => self.updater.remove_listener(&mut state, &name).await?,
 			}
 			Ok(())
 		};
-		handle_single_resource(updates, handle)
+		handle_single_resource(updates, handle).await
 	}
 }
 
@@ -206,6 +214,7 @@ impl TryFrom<XdsTarget> for outbound::Target {
 		};
 		Ok(outbound::Target {
 			name: value.name.clone(),
+			listeners: value.listeners.clone(),
 			spec,
 		})
 	}
@@ -289,8 +298,15 @@ impl TargetStore {
 	pub fn get(
 		&self,
 		name: &str,
+		listener_name: &str,
 	) -> Option<(&outbound::Target, &tokio_util::sync::CancellationToken)> {
-		self.by_name.get(name).map(|(target, ct)| (target, ct))
+		let target = self.by_name.get(name).map(|(target, ct)| (target, ct));
+		if let Some((target, ct)) = target {
+			if target.listeners.contains(&listener_name.to_string()) || target.listeners.is_empty() {
+				return Some((target, ct));
+			}
+		}
+		None
 	}
 
 	pub fn get_proto(&self, name: &str) -> Option<&XdsTarget> {
@@ -299,6 +315,7 @@ impl TargetStore {
 
 	pub fn iter(
 		&self,
+		listener_name: &str,
 	) -> impl Iterator<
 		Item = (
 			String,
@@ -308,6 +325,9 @@ impl TargetStore {
 		self
 			.by_name
 			.iter()
+			.filter(move |(_, target)| {
+				target.0.listeners.contains(&listener_name.to_string()) || target.0.listeners.is_empty()
+			})
 			.map(|(name, target)| (name.clone(), target))
 	}
 
@@ -378,7 +398,7 @@ impl PolicyStore {
 #[derive(Clone)]
 pub struct ListenerStore {
 	by_name: HashMap<String, inbound::Listener>,
-	update_rx: tokio::sync::mpsc::Sender<UpdateEvent>,
+	update_tx: tokio::sync::mpsc::Sender<UpdateEvent>,
 }
 
 impl Serialize for ListenerStore {
@@ -395,10 +415,10 @@ pub enum UpdateEvent {
 }
 
 impl ListenerStore {
-	pub fn new(update_rx: tokio::sync::mpsc::Sender<UpdateEvent>) -> Self {
+	pub fn new(update_tx: tokio::sync::mpsc::Sender<UpdateEvent>) -> Self {
 		Self {
 			by_name: HashMap::new(),
-			update_rx,
+			update_tx,
 		}
 	}
 }
@@ -413,7 +433,7 @@ impl ListenerStore {
 		let xds_listener = inbound::Listener::from_xds(listener).await?;
 		self.by_name.insert(listener_name.clone(), xds_listener);
 		self
-			.update_rx
+			.update_tx
 			.send(UpdateEvent::Insert(listener_name))
 			.await
 			.map_err(|e| anyhow::anyhow!("failed to send update event: {:?}", e))?;
@@ -427,24 +447,16 @@ impl ListenerStore {
 	pub async fn remove(&mut self, listener_name: &str) -> anyhow::Result<()> {
 		self.by_name.remove(listener_name);
 		self
-			.update_rx
+			.update_tx
 			.send(UpdateEvent::Remove(listener_name.to_string()))
 			.await
 			.map_err(|e| anyhow::anyhow!("failed to send update event: {:?}", e))?;
 		Ok(())
 	}
-
-	// fn check_conflict(&mut self, listener: &inbound::Listener) -> bool {
-	//   if self.by_name.contains_key(&listener.name) {
-	//     return true;
-	//   }
-	//   false
-	// }
 }
 
 pub struct XdsStore {
 	pub targets: TargetStore,
-	pub policies: PolicyStore,
 	pub listeners: ListenerStore,
 }
 
@@ -452,7 +464,6 @@ impl XdsStore {
 	pub fn new(update_tx: tokio::sync::mpsc::Sender<UpdateEvent>) -> Self {
 		Self {
 			targets: TargetStore::new(),
-			policies: PolicyStore::new(),
 			listeners: ListenerStore::new(update_tx),
 		}
 	}

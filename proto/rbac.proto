@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package aidp.dev.a2a.rbac;
+package aidp.dev.rbac;
 
 // A rule that defines a resource type and a key-value pair 
 //that can be used to match against a resource.
@@ -14,14 +14,16 @@ message Rule {
   }
 
   message Resource {
-    // The type of resource that the rule applies to.
-    enum ResourceType {
-      TASK = 0;
-    }
-
     string id = 1;
     // The type of resource that the rule applies to.
-    ResourceType type = 2;
+    // This is a string that is used to identify the type of resource.
+    // For MCP, the supported types are:
+    // - tool
+    // - prompt
+    // - resource
+    // For A2A, the supported types are:
+    // - task
+    string type = 2;
   }
 
   // The key to use when finding the value in the claims.

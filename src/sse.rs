@@ -45,6 +45,8 @@ pub struct App {
 	metrics: Arc<relay::metrics::Metrics>,
 	authn: Arc<RwLock<Option<authn::JwtAuthenticator>>>,
 	ct: tokio_util::sync::CancellationToken,
+	rbac: rbac::RuleSets,
+	listener_name: String,
 }
 
 impl App {
@@ -53,6 +55,8 @@ impl App {
 		metrics: Arc<relay::metrics::Metrics>,
 		authn: Arc<RwLock<Option<authn::JwtAuthenticator>>>,
 		ct: tokio_util::sync::CancellationToken,
+		rbac: Vec<rbac::RuleSet>,
+		listener_name: String,
 	) -> Self {
 		Self {
 			state,
@@ -61,6 +65,8 @@ impl App {
 			authn,
 			connection_id: Arc::new(tokio::sync::RwLock::new(None)),
 			ct,
+			rbac: rbac::RuleSets::from(rbac),
+			listener_name,
 		}
 	}
 	pub fn router(&self) -> Router {
@@ -191,7 +197,7 @@ async fn sse_handler(
 	{
 		let session = session.clone();
 		tokio::spawn(async move {
-			let relay = Relay::new(app.state.clone(), app.metrics.clone());
+			let relay = Relay::new(app.state.clone(), app.metrics.clone(), app.rbac.clone(), app.listener_name.clone());
 			let stream = ReceiverStream::new(from_client_rx);
 			let sink = PollSender::new(to_client_tx).sink_map_err(std::io::Error::other);
 			let result = serve_server(relay.clone(), (sink, stream))

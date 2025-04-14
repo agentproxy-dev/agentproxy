@@ -10,6 +10,7 @@ pub mod openapi;
 #[derive(Clone, Serialize, Debug)]
 pub struct Target {
 	pub name: String,
+	pub listeners: Vec<String>,
 	pub spec: TargetSpec,
 }
 

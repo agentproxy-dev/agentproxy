@@ -7,13 +7,15 @@ use rmcp::transport::sse::{SseClient, SseTransportError};
 use sse_stream::{Error as SseError, Sse, SseStream};
 
 pub(crate) struct ConnectionPool {
+	listener_name: String,
 	state: Arc<tokio::sync::RwLock<XdsStore>>,
 	by_name: HashMap<String, Arc<upstream::UpstreamTarget>>,
 }
 
 impl ConnectionPool {
-	pub(crate) fn new(state: Arc<tokio::sync::RwLock<XdsStore>>) -> Self {
+	pub(crate) fn new(state: Arc<tokio::sync::RwLock<XdsStore>>, listener_name: String) -> Self {
 		Self {
+			listener_name,
 			state,
 			by_name: HashMap::new(),
 		}
@@ -31,7 +33,7 @@ impl ConnectionPool {
 				let state = self.state.read().await;
 				state
 					.targets
-					.get(name)
+					.get(name, &self.listener_name)
 					.map(|(target, ct)| (target.clone(), ct.clone()))
 			};
 
@@ -69,7 +71,7 @@ impl ConnectionPool {
 			// Iterate the underlying HashMap directly to get the full tuple
 			state
 				.targets
-				.iter()
+				.iter(&self.listener_name)
 				.map(|(name, target)| (name.clone(), target.clone()))
 				.collect()
 		};

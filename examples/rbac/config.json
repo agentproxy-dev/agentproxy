@@ -12,20 +12,20 @@
             "file_path": "manifests/jwt/pub-key"
           }
         }
-      }
+      },
+      "rbac": [
+        {
+          "key": "sub",
+          "value": "me",
+          "resource": {
+            "type": "TOOL",
+            "id": "everything:echo"
+          },
+          "matcher": "EQUALS"
+        }
+      ]
     }
   },
-  "policies": [
-    {
-      "key": "sub",
-      "value": "me",
-      "resource": {
-        "type": "TOOL",
-        "id": "everything:echo"
-      },
-      "matcher": "EQUALS"
-    }
-  ],
   "targets": [
     {
       "name": "everything",

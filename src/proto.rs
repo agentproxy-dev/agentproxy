@@ -8,38 +8,30 @@ pub mod aidp {
 			tonic::include_proto!("aidp.dev.common");
 			include!(concat!(env!("OUT_DIR"), "/aidp.dev.common.serde.rs"));
 		}
+
+		#[allow(clippy::all)]
+		pub mod listener {
+			tonic::include_proto!("aidp.dev.listener");
+			include!(concat!(env!("OUT_DIR"), "/aidp.dev.listener.serde.rs"));
+		}
+
+		#[allow(clippy::all)]
+		pub mod rbac {
+			tonic::include_proto!("aidp.dev.rbac");
+			include!(concat!(env!("OUT_DIR"), "/aidp.dev.rbac.serde.rs"));
+		}
 		pub mod mcp {
-			#[allow(clippy::all)]
-			pub mod rbac {
-				tonic::include_proto!("aidp.dev.mcp.rbac");
-				include!(concat!(env!("OUT_DIR"), "/aidp.dev.mcp.rbac.serde.rs"));
-			}
 			#[allow(clippy::all)]
 			pub mod target {
 				tonic::include_proto!("aidp.dev.mcp.target");
 				include!(concat!(env!("OUT_DIR"), "/aidp.dev.mcp.target.serde.rs"));
 			}
-			#[allow(clippy::all)]
-			pub mod listener {
-				tonic::include_proto!("aidp.dev.mcp.listener");
-				include!(concat!(env!("OUT_DIR"), "/aidp.dev.mcp.listener.serde.rs"));
-			}
 		}
 		pub mod a2a {
-			#[allow(clippy::all)]
-			pub mod listener {
-				tonic::include_proto!("aidp.dev.a2a.listener");
-				include!(concat!(env!("OUT_DIR"), "/aidp.dev.a2a.listener.serde.rs"));
-			}
 			#[allow(clippy::all)]
 			pub mod target {
 				tonic::include_proto!("aidp.dev.a2a.target");
 				include!(concat!(env!("OUT_DIR"), "/aidp.dev.a2a.target.serde.rs"));
-			}
-			#[allow(clippy::all)]
-			pub mod rbac {
-				tonic::include_proto!("aidp.dev.a2a.rbac");
-				include!(concat!(env!("OUT_DIR"), "/aidp.dev.a2a.rbac.serde.rs"));
 			}
 		}
 	}
