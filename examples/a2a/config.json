@@ -1,7 +1,7 @@
 {
   "type": "static",
   "tracing": {
-    "tracer":{
+    "tracer": {
       "otlp": {
         "endpoint": "http://localhost:4317"
       }
@@ -16,13 +16,13 @@
       }
     }
   ],
-  "targets": [
-    {
-      "name": "google_adk",
-      "a2a": {
+  "targets": {
+    "a2a": [
+      {
+        "name": "google_adk",
         "host": "127.0.0.1",
         "port": "10002"
       }
-    }
-  ]
+    ]
+  }
 }

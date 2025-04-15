@@ -29,6 +29,15 @@ struct Args {
 	/// Use config from file
 	#[arg(short, long, value_name = "file")]
 	file: Option<String>,
+
+	#[arg(short, long, default_value = "proxy")]
+	mode: Mode,
+}
+
+#[derive(Debug, Clone, Copy, clap::ValueEnum)]
+enum Mode {
+	Proxy,
+	Validate,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -74,13 +83,13 @@ async fn main() -> Result<()> {
 			// If filename is a URL, download it
 			match reqwest::Url::parse(&filename) {
 				Ok(url) => {
-					println!("Downloading config from URL: {}", url);
+					tracing::info!("Downloading config from URL: {}", url);
 					let response = reqwest::get(url).await?;
 					let body = response.text().await?;
 					serde_json::from_str(&body)?
 				},
 				Err(_) => {
-					println!("Reading config from file: {}", filename);
+					tracing::info!("Reading config from file: {}", filename);
 					let file = tokio::fs::read_to_string(filename).await?;
 					serde_json::from_str(&file)?
 				},
@@ -91,7 +100,7 @@ async fn main() -> Result<()> {
 			serde_json::from_str(&file)?
 		},
 		(Some(_), Some(_)) => {
-			eprintln!("config error: both --file and --config cannot be provided, exiting");
+			tracing::error!("config error: both --file and --config cannot be provided, exiting");
 			std::process::exit(1);
 		},
 		(None, None) => {
@@ -99,14 +108,20 @@ async fn main() -> Result<()> {
 			if let Ok(Some(config_dir)) = homedir::my_home() {
 				let config_dir = config_dir.join("config");
 				if config_dir.exists() {
-					eprintln!("Error: either --file or --config must be provided, exiting");
+					tracing::error!("Error: either --file or --config must be provided, exiting");
 					std::process::exit(1);
 				}
 			}
-			eprintln!("Error: either --file or --config must be provided, exiting");
+			tracing::error!("Error: either --file or --config must be provided, exiting");
 			std::process::exit(1);
 		},
 	};
+
+	// If we are in validate mode, reaching this point means the config has loaded successfully
+	if let Mode::Validate = args.mode {
+		tracing::info!("Config loaded successfully, exiting");
+		std::process::exit(0);
+	}
 
 	let ct = tokio_util::sync::CancellationToken::new();
 	let ct_clone = ct.clone();

@@ -106,16 +106,18 @@ data:
           }
         }
       ],
-      "targets": [
-        {
-          "name": "everything",
-          "stdio": {
+      "targets": {
+        "mcp": [
+          {
+            "name": "everything",
+            "stdio": {
             "cmd": "npx",
             "args": [
-              "@modelcontextprotocol/server-everything"
-            ]
+                "@modelcontextprotocol/server-everything"
+              ]
+            }
           }
-        }
-      ]
+        ]
+      }
     }
 

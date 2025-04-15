@@ -766,7 +766,6 @@ pub mod error {
 
 #[cfg(test)]
 mod tests {
-	use crate::{A2aResponse, TaskStatusUpdateEvent};
 
 	#[test]
 	fn test_serde() {
@@ -793,6 +792,6 @@ mod tests {
 			}
 		}
 		};
-		let got: crate::JsonRpcMessage = serde_json::from_value(js).unwrap();
+		let _: crate::JsonRpcMessage = serde_json::from_value(js).unwrap();
 	}
 }

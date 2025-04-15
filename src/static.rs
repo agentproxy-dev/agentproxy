@@ -2,16 +2,26 @@ use std::sync::Arc;
 use tracing::{debug, info, trace};
 
 use crate::inbound;
+use crate::proto::aidp::dev::a2a::target::Target as XdsA2aTarget;
 use crate::proto::aidp::dev::listener::Listener as XdsListener;
-use crate::proto::aidp::dev::mcp::target::Target as XdsTarget;
+use crate::proto::aidp::dev::mcp::target::Target as XdsMcpTarget;
 use crate::xds::XdsStore as ProxyState;
 #[derive(Default, Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct StaticConfig {
 	#[serde(default)]
-	pub targets: Vec<XdsTarget>,
+	targets: Targets,
 	#[serde(default)]
 	pub listeners: Vec<XdsListener>,
+}
+
+#[derive(Default, Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Targets {
+	#[serde(default)]
+	pub mcp: Vec<XdsMcpTarget>,
+	#[serde(default)]
+	pub a2a: Vec<XdsA2aTarget>,
 }
 
 pub async fn run_local_client(
@@ -28,16 +38,23 @@ pub async fn run_local_client(
 	let state_clone = state_ref.clone();
 	{
 		let mut state = state_clone.write().await;
-		let num_targets = cfg.targets.len();
-		for target in cfg.targets.clone() {
+		let num_mcp_targets = cfg.targets.mcp.len();
+		for target in cfg.targets.mcp.clone() {
 			trace!("inserting target {}", &target.name);
 			state
 				.mcp_targets
 				.insert(target)
 				.expect("failed to insert target into store");
 		}
-		info!(%num_targets, "local config initialized");
+		let num_a2a_targets = cfg.targets.a2a.len();
+		for target in cfg.targets.a2a.clone() {
+			trace!("inserting target {}", &target.name);
+			state
+				.a2a_targets
+				.insert(target)
+				.expect("failed to insert target into store");
+		}
+		info!(%num_mcp_targets, %num_a2a_targets, "local config initialized");
 	}
-
 	listener_manager.run(ct).await
 }

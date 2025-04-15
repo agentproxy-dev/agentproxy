@@ -38,3 +38,11 @@ test:
 .PHONY: clean
 clean:
 	cargo clean
+
+objects := $(wildcard examples/*/config.json)
+
+.PHONY: validate
+validate: $(objects)
+
+%/config.json:
+	cargo run -- --mode=validate -f $*/config.json

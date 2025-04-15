@@ -37,15 +37,17 @@
       }
     }
   ],
-  "targets": [
-    {
-      "name": "everything",
-      "stdio": {
-        "cmd": "npx",
-        "args": [
-          "@modelcontextprotocol/server-everything"
-        ]
+  "targets": {
+    "mcp": [
+      {
+        "name": "everything",
+        "stdio": {
+          "cmd": "npx",
+          "args": [
+            "@modelcontextprotocol/server-everything"
+          ]
+        }
       }
-    }
-  ]
+    ]
+  }
 }
