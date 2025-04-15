@@ -28,7 +28,7 @@ impl Metrics {
 	}
 }
 
-impl Recorder<AgentCall, ()> for Metrics {
+impl Recorder<&AgentCall, ()> for Metrics {
 	fn record(&self, call: &AgentCall, _: ()) {
 		self.agent_calls.get_or_create(call).inc();
 	}

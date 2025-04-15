@@ -64,7 +64,7 @@ impl Metrics {
 	}
 }
 
-impl Recorder<ConnectionTerminationReason, u64> for Metrics {
+impl Recorder<&ConnectionTerminationReason, u64> for Metrics {
 	fn record(&self, reason: &ConnectionTerminationReason, count: u64) {
 		self
 			.connection_terminations
@@ -73,7 +73,7 @@ impl Recorder<ConnectionTerminationReason, u64> for Metrics {
 	}
 }
 
-impl Recorder<DeltaDiscoveryResponse, ()> for Metrics {
+impl Recorder<&DeltaDiscoveryResponse, ()> for Metrics {
 	fn record(&self, response: &DeltaDiscoveryResponse, _: ()) {
 		let type_url = TypeUrl {
 			url: response.type_url.clone(),

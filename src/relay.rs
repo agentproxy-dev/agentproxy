@@ -200,10 +200,11 @@ impl ServerHandler for Relay {
 			.partition_result();
 
 		self.metrics.clone().record(
-			&metrics::ListCall {
+			metrics::ListCall {
 				resource_type: "resource_template".to_string(),
+				params: vec![],
 			},
-			(),
+			&rq_ctx.identity,
 		);
 
 		Ok(ListResourceTemplatesResult {
@@ -253,11 +254,12 @@ impl ServerHandler for Relay {
 			.into_iter()
 			.partition_result();
 
-		self.metrics.clone().record(
-			&metrics::ListCall {
+		self.metrics.record(
+			metrics::ListCall {
 				resource_type: "prompt".to_string(),
+				params: vec![],
 			},
-			(),
+			&rq_ctx.identity,
 		);
 		Ok(ListPromptsResult {
 			prompts: results.into_iter().flatten().collect(),
@@ -308,11 +310,12 @@ impl ServerHandler for Relay {
 		};
 
 		self.metrics.clone().record(
-			&metrics::GetResourceCall {
+			metrics::GetResourceCall {
 				server: service_name.to_string(),
 				uri: resource.to_string(),
+				params: vec![],
 			},
-			(),
+			&rq_ctx.identity,
 		);
 		match service_arc.read_resource(req, rq_ctx).await {
 			Ok(r) => Ok(r),
@@ -364,11 +367,12 @@ impl ServerHandler for Relay {
 		};
 
 		self.metrics.clone().record(
-			&metrics::GetPromptCall {
+			metrics::GetPromptCall {
 				server: service_name.to_string(),
 				name: prompt.to_string(),
+				params: vec![],
 			},
-			(),
+			&rq_ctx.identity,
 		);
 		match svc.get_prompt(req, rq_ctx).await {
 			Ok(r) => Ok(r),
@@ -418,10 +422,11 @@ impl ServerHandler for Relay {
 			.partition_result();
 
 		self.metrics.clone().record(
-			&metrics::ListCall {
+			metrics::ListCall {
 				resource_type: "tool".to_string(),
+				params: vec![],
 			},
-			(),
+			&rq_ctx.identity,
 		);
 
 		Ok(ListToolsResult {
@@ -472,24 +477,26 @@ impl ServerHandler for Relay {
 			arguments: request.arguments,
 		};
 
-		self.metrics.clone().record(
-			&metrics::ToolCall {
+		self.metrics.record(
+			metrics::ToolCall {
 				server: service_name.to_string(),
 				name: tool.to_string(),
+				params: vec![],
 			},
-			(),
+			&rq_ctx.identity,
 		);
 
 		match svc.call_tool(req, rq_ctx).await {
 			Ok(r) => Ok(r),
 			Err(e) => {
-				self.metrics.clone().record(
-					&metrics::ToolCallError {
+				self.metrics.record(
+					metrics::ToolCallError {
 						server: service_name.to_string(),
 						name: tool.to_string(),
 						error_type: e.error_code(),
+						params: vec![],
 					},
-					(),
+					&rq_ctx.identity,
 				);
 				Err(e.into())
 			},

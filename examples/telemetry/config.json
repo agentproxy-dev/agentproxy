@@ -37,6 +37,12 @@
       }
     }
   ],
+  "metrics": {
+    "tags": {
+      "source.user": "@sub",
+      "cluster": "static-name"
+    }
+  },
   "tracing": {
     "tracer": {
       "otlp": {

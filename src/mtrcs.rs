@@ -1,6 +1,6 @@
-use std::{mem, sync::Arc};
-
 use axum::{Router, extract::State, http::StatusCode, routing::get};
+use std::collections::HashMap;
+use std::{mem, sync::Arc};
 
 use prometheus_client::encoding::text::encode;
 use prometheus_client::registry::Registry;
@@ -62,19 +62,19 @@ pub trait DeferRecorder {
 
 pub trait Recorder<E, T> {
 	/// Record the given event
-	fn record(&self, event: &E, meta: T);
+	fn record(&self, event: E, meta: T);
 }
 
 pub trait IncrementRecorder<E>: Recorder<E, u64> {
 	/// Record the given event by incrementing the counter by count
-	fn increment(&self, event: &E);
+	fn increment(&self, event: E);
 }
 
 impl<E, R> IncrementRecorder<E> for R
 where
 	R: Recorder<E, u64>,
 {
-	fn increment(&self, event: &E) {
+	fn increment(&self, event: E) {
 		self.record(event, 1);
 	}
 }
@@ -106,17 +106,30 @@ async fn metrics_handler(State(app): State<App>) -> Result<String, StatusCode> {
 	}
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Config {
+	#[serde(default = "default_host")]
 	pub host: String,
+	#[serde(default = "default_port")]
 	pub port: u16,
+	#[serde(default)]
+	pub tags: HashMap<String, String>,
+}
+
+fn default_host() -> String {
+	"127.0.0.1".to_string()
+}
+
+fn default_port() -> u16 {
+	9091
 }
 
 impl Default for Config {
 	fn default() -> Self {
 		Self {
-			host: "127.0.0.1".to_string(),
-			port: 9091,
+			host: default_host(),
+			port: default_port(),
+			tags: HashMap::new(),
 		}
 	}
 }
@@ -126,6 +139,7 @@ pub async fn start(
 	ct: tokio_util::sync::CancellationToken,
 	cfg: Option<Config>,
 ) -> Result<(), std::io::Error> {
+	tracing::error!("howardjohn: START METRICS {cfg:?}");
 	let cfg = cfg.unwrap_or_default();
 	let listener = tokio::net::TcpListener::bind(format!("{}:{}", cfg.host, cfg.port)).await?;
 	let app = App::new(registry);
