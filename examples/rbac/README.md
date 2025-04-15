@@ -9,57 +9,64 @@ cargo run -- -f examples/rbac/config.json
 ```
 
 Let's look at the config to understand what's going on. First off we have a listener, which tells the proxy how to listen for incoming requests/connections. In this case we're using the `sse` listener, which is a simple HTTP listener that listens on port 3000. In addition we have a JWT authentication section, which tells the proxy how to authenticate the incoming requests. In this case we're using a local JWT public key file to authenticate the incoming requests.
+
+In addition, we have a RBAC section, which tells the proxy how to authorize the incoming requests. In this case we're using a static policy, which is a list of policies that are applied to the incoming requests.
 ```json
-  "listener": {
-    "sse": {
-      "host": "0.0.0.0",
-      "port": 3000,
-      "authn": {
-        "jwt": {
-          "issuer": ["me"],
-          "audience": ["me.com"],
-          "jwks": {
-            "local": {
-              "file": "manifests/jwt/pub-key"
+  "listeners": [
+    {
+      "sse": {
+        "address": "0.0.0.0",
+        "port": 3000,
+        "authn": {
+          "jwt": {
+            "issuer": [
+              "me"
+            ],
+            "audience": [
+              "me.com"
+            ],
+            "local_jwks": {
+              "file_path": "manifests/jwt/pub-key"
             }
           }
-        }
-      }
-    }
-  }
-```
-
-Next we have a policies section, which tells the proxy how to authorize the incoming requests. In this case we're using a static policy, which is a list of policies that are applied to the incoming requests.
-```json
-  "policies": [
-    {
-      "key": "sub",
-      "value": "me",
-      "resource": {
-        "tool": {
-          "id": "everything:echo"
-        }
-      },
-      "matcher": {
-        "equals": {}
-      }
-    }
-  ]
-```
-
-Finally we have a targets section, which tells the proxy how to proxy the incoming requests to the target. In this case we're proxying to the [Everything](https://github.com/modelcontextprotocol/servers/blob/main/src/everything) server.
-```json
-  "targets": [
-    {
-      "name": "everything",
-      "stdio": {
-        "cmd": "npx",
-        "args": [
-          "@modelcontextprotocol/server-everything"
+        },
+        "rbac": [
+          {
+            "name": "default",
+            "rules": [
+              {
+                "key": "sub",
+                "value": "me",
+                "resource": {
+                  "type": "TOOL",
+                  "id": "everything:echo"
+                },
+                "matcher": "EQUALS"
+              }
+            ]
+          }
         ]
       }
     }
   ]
+```
+
+
+Finally we have a targets section, which tells the proxy how to proxy the incoming requests to the target. In this case we're proxying to the [Everything](https://github.com/modelcontextprotocol/servers/blob/main/src/everything) server.
+```json
+  "targets": {
+    "mcp": [
+      {
+        "name": "everything",
+        "stdio": {
+          "cmd": "npx",
+          "args": [
+            "@modelcontextprotocol/server-everything"
+          ]
+        }
+      }
+    ]
+  }
 ```
 
 Now that we have the proxy running, we can use the [mcpinspector](https://github.com/modelcontextprotocol/inspector) to try it out.
