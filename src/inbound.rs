@@ -496,30 +496,19 @@ impl ListenerManager {
 				update = self.update_rx.recv() => {
 					match update {
 						Some(xds::UpdateEvent::Insert(name)) => {
-							// Scope the read lock to get the listener and clone it
-							let listener_clone: Listener = {
-									let state = self.state.read().await;
-									// Check if listener exists before trying to clone
-									match state.listeners.get(&name) {
-											Some(listener_ref) => listener_ref.clone(), // Clone the listener
-											None => {
-													tracing::error!("Failed to get listener {} from state", name);
-													continue; // Skip spawning if listener fetch failed
-											}
-									}
-							}; // Read lock dropped here
+							// Start the listener
+							self.start_listener(name, ct.child_token()).await;
+						}
+						Some(xds::UpdateEvent::Update(name)) => {
+							if let Some(handle) = self.running.remove(&name) {
+									handle.abort(); // Abort the task associated with the removed listener
+									tracing::info!("Aborted listener task for: {}", name);
+							} else {
+									tracing::warn!("Received remove event for {}, but no running task found.", name);
+							}
 
-							// Now use the owned listener_clone for spawning
-							let state_clone = self.state.clone();
-							let metrics_clone = self.mcp_metrics.clone();
-							let a2a_metrics_clone = self.a2a_metrics.clone();
-							let ct_clone = ct.clone();
-
-							// Spawn the task with the cloned listener and other cloned Arcs
-							let abort_handle = self.run_set.spawn(async move { // Add async move
-									listener_clone.listen(state_clone, metrics_clone, a2a_metrics_clone, ct_clone).await
-							});
-							self.running.insert(name, abort_handle); // Store the JoinHandle
+							// Start the listener
+							self.start_listener(name, ct.child_token()).await;
 						}
 						Some(xds::UpdateEvent::Remove(name)) => {
 								if let Some(handle) = self.running.remove(&name) {
@@ -543,5 +532,34 @@ impl ListenerManager {
 
 		self.run_set.shutdown().await;
 		Ok(())
+	}
+
+	async fn start_listener(&mut self, name: String, ct: tokio_util::sync::CancellationToken) {
+		// Scope the read lock to get the listener and clone it
+		let listener_clone: Listener = {
+			let state = self.state.read().await;
+			// Check if listener exists before trying to clone
+			match state.listeners.get(&name) {
+				Some(listener_ref) => listener_ref.clone(), // Clone the listener
+				None => {
+					tracing::error!("Failed to get listener {} from state", name);
+					return; // Skip spawning if listener fetch failed
+				},
+			}
+		}; // Read lock dropped here
+
+		// Now use the owned listener_clone for spawning
+		let state_clone = self.state.clone();
+		let metrics_clone = self.mcp_metrics.clone();
+		let a2a_metrics_clone = self.a2a_metrics.clone();
+
+		// Spawn the task with the cloned listener and other cloned Arcs
+		let abort_handle = self.run_set.spawn(async move {
+			// Add async move
+			listener_clone
+				.listen(state_clone, metrics_clone, a2a_metrics_clone, ct)
+				.await
+		});
+		self.running.insert(name, abort_handle); // Store the JoinHandle
 	}
 }

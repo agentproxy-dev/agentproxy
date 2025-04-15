@@ -11,7 +11,7 @@ pub struct StaticConfig {
 	#[serde(default)]
 	pub targets: Vec<XdsTarget>,
 	#[serde(default)]
-	pub listener: XdsListener,
+	pub listeners: Vec<XdsListener>,
 }
 
 pub async fn run_local_client(

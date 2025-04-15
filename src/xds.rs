@@ -413,6 +413,7 @@ impl Serialize for ListenerStore {
 }
 pub enum UpdateEvent {
 	Insert(String),
+	Update(String),
 	Remove(String),
 }
 
@@ -433,12 +434,22 @@ impl ListenerStore {
 	pub async fn insert(&mut self, listener: XdsListener) -> anyhow::Result<()> {
 		let listener_name = listener.name.clone();
 		let xds_listener = inbound::Listener::from_xds(listener).await?;
-		self.by_name.insert(listener_name.clone(), xds_listener);
-		self
-			.update_tx
-			.send(UpdateEvent::Insert(listener_name))
-			.await
-			.map_err(|e| anyhow::anyhow!("failed to send update event: {:?}", e))?;
+		match self.by_name.insert(listener_name.clone(), xds_listener) {
+			Some(_) => {
+				self
+					.update_tx
+					.send(UpdateEvent::Update(listener_name))
+					.await
+					.map_err(|e| anyhow::anyhow!("failed to send update event: {:?}", e))?;
+			},
+			None => {
+				self
+					.update_tx
+					.send(UpdateEvent::Insert(listener_name))
+					.await
+					.map_err(|e| anyhow::anyhow!("failed to send update event: {:?}", e))?;
+			},
+		}
 		Ok(())
 	}
 
@@ -477,5 +488,5 @@ impl XdsStore {
 pub struct Config {
 	pub xds_address: String,
 	pub metadata: HashMap<String, String>,
-	pub listener: XdsListener,
+	pub listeners: Vec<XdsListener>,
 }

@@ -95,6 +95,14 @@ async fn main() -> Result<()> {
 			std::process::exit(1);
 		},
 		(None, None) => {
+			// Check config dir
+			if let Ok(Some(config_dir)) = homedir::my_home() {
+				let config_dir = config_dir.join("config");
+				if config_dir.exists() {
+					eprintln!("Error: either --file or --config must be provided, exiting");
+					std::process::exit(1);
+				}
+			}
 			eprintln!("Error: either --file or --config must be provided, exiting");
 			std::process::exit(1);
 		},
@@ -117,9 +125,8 @@ async fn main() -> Result<()> {
 			let (update_tx, update_rx) = tokio::sync::mpsc::channel(100);
 			let state = Arc::new(tokio::sync::RwLock::new(ProxyState::new(update_tx)));
 
-			let ct_clone = ct.clone();
 			let listener_manager = inbound::ListenerManager::new(
-				ct_clone,
+				ct.child_token(),
 				state.clone(),
 				update_rx,
 				Arc::new(relay::metrics::Metrics::new(&mut registry)),
@@ -127,17 +134,20 @@ async fn main() -> Result<()> {
 			)
 			.await;
 
-			state
-				.write()
-				.await
-				.listeners
-				.insert(cfg_clone.listener)
-				.await
-				.expect("failed to insert listener");
+			{
+				let mut state = state.write().await;
+				for listener in cfg_clone.listeners {
+					state
+						.listeners
+						.insert(listener)
+						.await
+						.expect("failed to insert listener");
+				}
+			}
 
 			let state_2 = state.clone();
 			let cfg_clone = r#static.clone();
-			let ct_clone = ct.clone();
+			let ct_clone = ct.child_token();
 			run_set.spawn(async move {
 				run_local_client(&cfg_clone, state_2, listener_manager, ct_clone)
 					.await
@@ -145,7 +155,7 @@ async fn main() -> Result<()> {
 			});
 
 			// Add metrics listener
-			let ct_clone = ct.clone();
+			let ct_clone = ct.child_token();
 			run_set.spawn(async move {
 				mtrcs::start(Arc::new(registry), ct_clone, cfg.metrics)
 					.await
@@ -153,7 +163,7 @@ async fn main() -> Result<()> {
 			});
 
 			// Add admin listener
-			let ct_clone = ct.clone();
+			let ct_clone = ct.child_token();
 			run_set.spawn(async move {
 				admin::start(state.clone(), ct_clone, cfg.admin)
 					.await
@@ -162,7 +172,7 @@ async fn main() -> Result<()> {
 
 			if let Some(cfg) = cfg.tracing {
 				let provider = trcng::init_tracer(cfg)?;
-				let ct_clone = ct.clone();
+				let ct_clone = ct.child_token();
 				run_set.spawn(async move {
 					ct_clone.cancelled().await;
 					provider
@@ -186,7 +196,7 @@ async fn main() -> Result<()> {
 			let state = Arc::new(tokio::sync::RwLock::new(ProxyState::new(update_tx)));
 
 			let mut listener_manager = inbound::ListenerManager::new(
-				ct.clone(),
+				ct.child_token(),
 				state.clone(),
 				update_rx,
 				Arc::new(relay::metrics::Metrics::new(&mut registry)),
@@ -194,13 +204,18 @@ async fn main() -> Result<()> {
 			)
 			.await;
 
-			state
-				.write()
-				.await
-				.listeners
-				.insert(dynamic.listener.clone())
-				.await
-				.expect("failed to insert listener");
+			let cfg_clone = dynamic.clone();
+
+			{
+				let mut state = state.write().await;
+				for listener in cfg_clone.listeners {
+					state
+						.listeners
+						.insert(listener)
+						.await
+						.expect("failed to insert listener");
+				}
+			}
 
 			let state_clone = state.clone();
 			let updater = ProxyStateUpdater::new(state_clone);
@@ -221,7 +236,7 @@ async fn main() -> Result<()> {
 			});
 
 			// Add admin listener
-			let ct_clone = ct.clone();
+			let ct_clone = ct.child_token();
 			let state_3 = state.clone();
 			run_set.spawn(async move {
 				admin::start(state_3, ct_clone, cfg.admin)
@@ -229,7 +244,7 @@ async fn main() -> Result<()> {
 					.map_err(|e| anyhow::anyhow!("error serving admin: {:?}", e))
 			});
 
-			let ct_clone = ct.clone();
+			let ct_clone = ct.child_token();
 			run_set.spawn(async move {
 				listener_manager
 					.run(ct_clone)
@@ -238,7 +253,7 @@ async fn main() -> Result<()> {
 			});
 
 			// Add metrics listener
-			let ct_clone = ct.clone();
+			let ct_clone = ct.child_token();
 			run_set.spawn(async move {
 				mtrcs::start(Arc::new(registry), ct_clone, cfg.metrics)
 					.await
@@ -247,7 +262,7 @@ async fn main() -> Result<()> {
 
 			if let Some(cfg) = cfg.tracing {
 				let provider = trcng::init_tracer(cfg)?;
-				let ct_clone = ct.clone();
+				let ct_clone = ct.child_token();
 				run_set.spawn(async move {
 					ct_clone.cancelled().await;
 					provider
