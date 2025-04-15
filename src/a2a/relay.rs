@@ -1,6 +1,7 @@
 use crate::a2a::metrics;
 use crate::inbound::Listener;
-use crate::outbound::{McpTarget, McpTargetSpec};
+use crate::outbound;
+use crate::outbound::A2aTargetSpec;
 use crate::xds::XdsStore;
 use crate::{a2a, backend, rbac};
 use a2a_sdk::AgentCard;
@@ -157,10 +158,10 @@ mod pool {
 			rq_ctx: &RqCtx,
 			name: &str,
 		) -> Result<a2a::Client, anyhow::Error> {
-			let target_info: Option<(McpTarget, tokio_util::sync::CancellationToken)> = {
+			let target_info: Option<(outbound::Target<outbound::A2aTargetSpec>, tokio_util::sync::CancellationToken)> = {
 				let state = self.state.read().await;
 				state
-					.targets
+					.a2a_targets
 					.get(name, &self.listener_name)
 					.map(|(target, ct)| (target.clone(), ct.clone()))
 			};
@@ -175,22 +176,16 @@ mod pool {
 			};
 			tracing::trace!("connecting to target: {}", target.name);
 			let transport = match &target.spec {
-				McpTargetSpec::A2a {
-					host,
-					port,
-					path,
-					backend_auth,
-					headers,
-				} => {
+				A2aTargetSpec::Sse(sse) => {
 					tracing::info!("starting A2a transport for target: {}", target.name);
 
-					let scheme = match port {
+					let scheme = match sse.port {
 						443 => "https",
 						_ => "http",
 					};
-					let url = format!("{}://{}:{}{}", scheme, host, port, path);
-					let mut upstream_headers = get_default_headers(backend_auth, rq_ctx).await?;
-					for (key, value) in headers {
+					let url = format!("{}://{}:{}{}", scheme, sse.host, sse.port, sse.path);
+					let mut upstream_headers = get_default_headers(sse.backend_auth.as_ref(), rq_ctx).await?;
+					for (key, value) in sse.headers.iter() {
 						upstream_headers.insert(
 							HeaderName::from_bytes(key.as_bytes())?,
 							HeaderValue::from_str(value)?,
@@ -221,7 +216,7 @@ impl<T: Serialize> From<SerializeStream<T>> for bytes::Bytes {
 }
 
 async fn get_default_headers(
-	auth_config: &Option<backend::BackendAuthConfig>,
+	auth_config: Option<&backend::BackendAuthConfig>,
 	rq_ctx: &RqCtx,
 ) -> Result<HeaderMap, anyhow::Error> {
 	match auth_config {

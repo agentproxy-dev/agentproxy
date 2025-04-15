@@ -15,10 +15,13 @@ message Target {
   string host = 3;
   // The port of the target.
   uint32 port = 4;
+  // The path of the target.
+  string path = 5;
   // The headers of the target.
-  repeated aidp.dev.common.Header headers = 5;
+  repeated aidp.dev.common.Header headers = 6;
 
-  aidp.dev.common.BackendAuth auth = 6;
+  // The auth of the target.
+  aidp.dev.common.BackendAuth auth = 7;
 
 }
 

@@ -31,7 +31,7 @@ impl ConnectionPool {
 		// Connect if it doesn't exist
 		if !self.by_name.contains_key(name) {
 			// Read target info and drop lock before calling connect
-			let target_info: Option<(McpTarget, tokio_util::sync::CancellationToken)> = {
+			let target_info: Option<(outbound::Target<outbound::McpTargetSpec>, tokio_util::sync::CancellationToken)> = {
 				let state = self.state.read().await;
 				state
 					.mcp_targets
@@ -122,7 +122,7 @@ impl ConnectionPool {
 		&mut self,
 		rq_ctx: &RqCtx,
 		ct: &tokio_util::sync::CancellationToken,
-		target: &McpTarget,
+		target: &outbound::Target<outbound::McpTargetSpec>,
 	) -> Result<(), anyhow::Error> {
 		// Already connected
 		if let Some(_transport) = self.by_name.get(&target.name) {

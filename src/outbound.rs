@@ -64,11 +64,8 @@ impl TryFrom<XdsTarget> for McpTargetSpec {
 }
 
 #[derive(Clone, Serialize, Debug)]
-pub struct A2aTargetSpec {
-	host: String,
-	port: u32,
-	headers: HashMap<String, String>,
-	backend_auth: Option<backend::BackendAuthConfig>,
+pub enum A2aTargetSpec {
+  Sse(SseTargetSpec),
 }
 
 impl TryFrom<XdsA2aTarget> for Target<A2aTargetSpec> {
@@ -78,15 +75,16 @@ impl TryFrom<XdsA2aTarget> for Target<A2aTargetSpec> {
 		Ok(Target {
 			name: value.name,
 			listeners: value.listeners,
-			spec: A2aTargetSpec {
+			spec: A2aTargetSpec::Sse(SseTargetSpec {
 				host: value.host,
 				port: value.port,
+				path: value.path,
 				headers: proto::resolve_header_map(&value.headers)?,
 				backend_auth: match value.auth {
 					Some(auth) => XdsAuth::try_into(auth)?,
 					None => None,
 				},
-			},
+			}),
 		})
 	}
 }

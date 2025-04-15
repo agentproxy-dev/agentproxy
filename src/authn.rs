@@ -1,5 +1,5 @@
 use crate::proto::aidp::dev::common;
-use crate::proto::aidp::dev::listener::sse_listener;
+use crate::proto::aidp::dev::listener::sse_listener::authn;
 use jsonwebtoken::jwk::Jwk;
 use jsonwebtoken::{DecodingKey, Validation, decode, decode_header};
 use secrecy::SecretString;
