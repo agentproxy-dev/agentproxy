@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
-use crate::proto::aidp::dev::mcp::target::Target;
+use crate::proto::aidp::dev::a2a::target::Target as A2aTarget;
+use crate::proto::aidp::dev::listener::Listener;
+use crate::proto::aidp::dev::mcp::target::Target as McpTarget;
 use crate::xds::XdsStore;
 use axum::{
 	Json, Router,
@@ -23,19 +25,29 @@ impl App {
 	fn router(&self) -> Router {
 		Router::new()
 			.route(
-				"/targets",
-				get(targets_list_handler).post(targets_create_handler),
+				"/targets/mcp",
+				get(targets_mcp_list_handler).post(targets_mcp_create_handler),
 			)
 			.route(
-				"/targets/{name}",
-				get(targets_get_handler).delete(targets_delete_handler),
+				"/targets/mcp/{name}",
+				get(targets_mcp_get_handler).delete(targets_mcp_delete_handler),
 			)
-			// .route("/rbac", get(rbac_handler).post(rbac_create_handler))
-			// .route(
-			// 	"/rbac/{name}",
-			// 	get(rbac_get_handler).delete(rbac_delete_handler),
-			// )
-			.route("/listeners", get(listener_handler))
+			.route(
+				"/targets/a2a",
+				get(targets_a2a_list_handler).post(targets_a2a_create_handler),
+			)
+			.route(
+				"/targets/a2a/{name}",
+				get(targets_a2a_get_handler).delete(targets_a2a_delete_handler),
+			)
+			.route(
+				"/listeners",
+				get(listener_list_handler).post(listener_create_handler),
+			)
+			.route(
+				"/listeners/{name}",
+				get(listener_get_handler).delete(listener_delete_handler),
+			)
 			.with_state(self.clone())
 	}
 }
@@ -76,11 +88,6 @@ pub async fn start(
 /// POST /targets  Create/update a target
 /// DELETE /targets/:name  Delete a target
 ///
-/// GET /rbac  List all rbac policies
-/// GET /rbac/:name  Get a rbac policy by name
-/// POST /rbac  Create/update a rbac policy
-/// DELETE /rbac/:name  Delete a rbac policy
-///
 /// GET /listeners  List all listeners
 /// GET /listener/:name  Get a listener by name
 /// POST /listeners  Create/update a listener
@@ -98,7 +105,80 @@ impl IntoResponse for ErrorResponse {
 	}
 }
 
-async fn targets_list_handler(
+async fn targets_a2a_list_handler(
+	State(app): State<App>,
+) -> Result<String, (StatusCode, impl IntoResponse)> {
+	let targets = app.state.read().await.a2a_targets.clone();
+	match serde_json::to_string(&targets) {
+		Ok(json_targets) => Ok(json_targets),
+		Err(e) => {
+			error!("error serializing targets: {:?}", e);
+			Err((
+				StatusCode::INTERNAL_SERVER_ERROR,
+				ErrorResponse {
+					message: "error serializing targets".to_string(),
+				},
+			))
+		},
+	}
+}
+
+async fn targets_a2a_create_handler(
+	State(app): State<App>,
+	Json(target): Json<A2aTarget>,
+) -> Result<(), (StatusCode, impl IntoResponse)> {
+	let mut state = app.state.write().await;
+	match state.a2a_targets.insert(target) {
+		Ok(_) => Ok(()),
+		Err(e) => {
+			error!("error inserting target into store: {:?}", e);
+			Err((
+				StatusCode::INTERNAL_SERVER_ERROR,
+				ErrorResponse {
+					message: "error inserting target into store".to_string(),
+				},
+			))
+		},
+	}
+}
+
+async fn targets_a2a_get_handler(
+	State(app): State<App>,
+	Path(name): Path<String>,
+) -> Result<Json<A2aTarget>, (StatusCode, impl IntoResponse)> {
+	let state = app.state.read().await;
+	let target = state.a2a_targets.get_proto(&name);
+	match target {
+		Some(target) => Ok(Json(target.clone())),
+		None => Err((
+			StatusCode::NOT_FOUND,
+			ErrorResponse {
+				message: "target not found".to_string(),
+			},
+		)),
+	}
+}
+
+async fn targets_a2a_delete_handler(
+	State(app): State<App>,
+	Path(name): Path<String>,
+) -> Result<(), (StatusCode, impl IntoResponse)> {
+	let mut state = app.state.write().await;
+	match state.a2a_targets.remove(&name) {
+		Ok(_) => Ok(()),
+		Err(e) => {
+			error!("error removing target from store: {:?}", e);
+			Err((
+				StatusCode::INTERNAL_SERVER_ERROR,
+				ErrorResponse {
+					message: "error removing target from store".to_string(),
+				},
+			))
+		},
+	}
+}
+
+async fn targets_mcp_list_handler(
 	State(app): State<App>,
 ) -> Result<String, (StatusCode, impl IntoResponse)> {
 	let targets = app.state.read().await.mcp_targets.clone();
@@ -116,10 +196,10 @@ async fn targets_list_handler(
 	}
 }
 
-async fn targets_get_handler(
+async fn targets_mcp_get_handler(
 	State(app): State<App>,
 	Path(name): Path<String>,
-) -> Result<Json<Target>, (StatusCode, impl IntoResponse)> {
+) -> Result<Json<McpTarget>, (StatusCode, impl IntoResponse)> {
 	let state = app.state.read().await;
 	let target = state.mcp_targets.get_proto(&name);
 	match target {
@@ -133,7 +213,7 @@ async fn targets_get_handler(
 	}
 }
 
-async fn targets_delete_handler(
+async fn targets_mcp_delete_handler(
 	State(app): State<App>,
 	Path(name): Path<String>,
 ) -> Result<(), (StatusCode, impl IntoResponse)> {
@@ -152,9 +232,9 @@ async fn targets_delete_handler(
 	}
 }
 
-async fn targets_create_handler(
+async fn targets_mcp_create_handler(
 	State(app): State<App>,
-	Json(target): Json<Target>,
+	Json(target): Json<McpTarget>,
 ) -> Result<(), (StatusCode, impl IntoResponse)> {
 	let mut state = app.state.write().await;
 	match state.mcp_targets.insert(target) {
@@ -171,63 +251,7 @@ async fn targets_create_handler(
 	}
 }
 
-// async fn rbac_handler(State(app): State<App>) -> Result<String, (StatusCode, impl IntoResponse)> {
-// 	let rbac = app.state.read().await.policies.clone();
-// 	match serde_json::to_string(&rbac) {
-// 		Ok(json_rbac) => Ok(json_rbac),
-// 		Err(e) => {
-// 			error!("error serializing rbac: {:?}", e);
-// 			Err((
-// 				StatusCode::INTERNAL_SERVER_ERROR,
-// 				ErrorResponse {
-// 					message: "error serializing rbac".to_string(),
-// 				},
-// 			))
-// 		},
-// 	}
-// }
-
-// async fn rbac_get_handler(
-// 	State(app): State<App>,
-// 	Path(name): Path<String>,
-// ) -> Result<Json<Rbac>, StatusCode> {
-// 	let state = app.state.read().await;
-// 	let rbac = state.policies.get_proto(&name);
-// 	match rbac {
-// 		Some(rbac) => Ok(Json(rbac.clone())),
-// 		None => Err(StatusCode::NOT_FOUND),
-// 	}
-// }
-
-// async fn rbac_create_handler(
-// 	State(app): State<App>,
-// 	Json(rbac): Json<Rbac>,
-// ) -> Result<(), (StatusCode, impl IntoResponse)> {
-// 	let mut state = app.state.write().await;
-// 	match state.policies.insert(rbac) {
-// 		Ok(_) => Ok(()),
-// 		Err(e) => {
-// 			error!("error inserting rbac into store: {:?}", e);
-// 			Err((
-// 				StatusCode::INTERNAL_SERVER_ERROR,
-// 				ErrorResponse {
-// 					message: "error inserting rbac into store".to_string(),
-// 				},
-// 			))
-// 		},
-// 	}
-// }
-
-// async fn rbac_delete_handler(
-// 	State(app): State<App>,
-// 	Path(name): Path<String>,
-// ) -> Result<(), (StatusCode, impl IntoResponse)> {
-// 	let mut state = app.state.write().await;
-// 	state.policies.remove(&name);
-// 	Ok::<_, (StatusCode, String)>(())
-// }
-
-async fn listener_handler(
+async fn listener_list_handler(
 	State(app): State<App>,
 ) -> Result<String, (StatusCode, impl IntoResponse)> {
 	let listeners = app.state.read().await.listeners.clone();
@@ -239,6 +263,61 @@ async fn listener_handler(
 				StatusCode::INTERNAL_SERVER_ERROR,
 				ErrorResponse {
 					message: "error serializing listener".to_string(),
+				},
+			))
+		},
+	}
+}
+
+async fn listener_create_handler(
+	State(app): State<App>,
+	Json(listener): Json<Listener>,
+) -> Result<(), (StatusCode, impl IntoResponse)> {
+	let mut state = app.state.write().await;
+	match state.listeners.insert(listener).await {
+		Ok(_) => Ok(()),
+		Err(e) => {
+			error!("error inserting listener into store: {:?}", e);
+			Err((
+				StatusCode::INTERNAL_SERVER_ERROR,
+				ErrorResponse {
+					message: "error inserting listener into store".to_string(),
+				},
+			))
+		},
+	}
+}
+
+async fn listener_get_handler(
+	State(app): State<App>,
+	Path(name): Path<String>,
+) -> Result<Json<Listener>, (StatusCode, impl IntoResponse)> {
+	let state = app.state.read().await;
+	let listener = state.listeners.get_proto(&name);
+	match listener {
+		Some(listener) => Ok(Json(listener.clone())),
+		None => Err((
+			StatusCode::NOT_FOUND,
+			ErrorResponse {
+				message: "listener not found".to_string(),
+			},
+		)),
+	}
+}
+
+async fn listener_delete_handler(
+	State(app): State<App>,
+	Path(name): Path<String>,
+) -> Result<(), (StatusCode, impl IntoResponse)> {
+	let mut state = app.state.write().await;
+	match state.listeners.remove(&name).await {
+		Ok(_) => Ok(()),
+		Err(e) => {
+			error!("error removing listener from store: {:?}", e);
+			Err((
+				StatusCode::INTERNAL_SERVER_ERROR,
+				ErrorResponse {
+					message: "error removing listener from store".to_string(),
 				},
 			))
 		},

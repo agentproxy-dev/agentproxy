@@ -400,6 +400,7 @@ impl PolicyStore {
 #[derive(Clone)]
 pub struct ListenerStore {
 	by_name: HashMap<String, inbound::Listener>,
+	by_name_protos: HashMap<String, XdsListener>,
 	update_tx: tokio::sync::mpsc::Sender<UpdateEvent>,
 }
 
@@ -421,6 +422,7 @@ impl ListenerStore {
 	pub fn new(update_tx: tokio::sync::mpsc::Sender<UpdateEvent>) -> Self {
 		Self {
 			by_name: HashMap::new(),
+			by_name_protos: HashMap::new(),
 			update_tx,
 		}
 	}
@@ -433,6 +435,9 @@ impl ListenerStore {
 
 	pub async fn insert(&mut self, listener: XdsListener) -> anyhow::Result<()> {
 		let listener_name = listener.name.clone();
+		self
+			.by_name_protos
+			.insert(listener_name.clone(), listener.clone());
 		let xds_listener = inbound::Listener::from_xds(listener).await?;
 		match self.by_name.insert(listener_name.clone(), xds_listener) {
 			Some(_) => {
@@ -457,7 +462,12 @@ impl ListenerStore {
 		self.by_name.get(listener_name)
 	}
 
+	pub fn get_proto(&self, listener_name: &str) -> Option<&XdsListener> {
+		self.by_name_protos.get(listener_name)
+	}
+
 	pub async fn remove(&mut self, listener_name: &str) -> anyhow::Result<()> {
+		self.by_name_protos.remove(listener_name);
 		self.by_name.remove(listener_name);
 		self
 			.update_tx
