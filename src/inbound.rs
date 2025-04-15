@@ -26,13 +26,19 @@ use tracing::info;
 
 #[derive(Clone, Serialize, Debug)]
 #[allow(clippy::large_enum_variant)]
-pub enum Listener {
+pub enum ListenerType {
 	#[serde(rename = "sse")]
 	Sse(SseListener),
 	#[serde(rename = "a2a")]
 	A2a(SseListener),
 	#[serde(rename = "stdio")]
 	Stdio,
+}
+
+#[derive(Clone, Serialize, Debug)]
+pub struct Listener {
+	pub name: String,
+	pub spec: ListenerType,
 }
 
 impl Listener {
@@ -42,13 +48,18 @@ impl Listener {
 				value.listener,
 				ListenerProtocol::try_from(value.protocol).unwrap(),
 			) {
-				(Some(XdsListenerSpec::Sse(sse)), ListenerProtocol::Mcp) => {
-					Listener::Sse(SseListener::from_xds(sse).await?)
+				(Some(XdsListenerSpec::Sse(sse)), ListenerProtocol::Mcp) => Listener {
+					name: value.name,
+					spec: ListenerType::Sse(SseListener::from_xds(sse).await?),
 				},
-				(Some(XdsListenerSpec::Sse(sse)), ListenerProtocol::A2a) => {
-					Listener::A2a(SseListener::from_xds(sse).await?)
+				(Some(XdsListenerSpec::Sse(sse)), ListenerProtocol::A2a) => Listener {
+					name: value.name,
+					spec: ListenerType::A2a(SseListener::from_xds(sse).await?),
 				},
-				(Some(XdsListenerSpec::Stdio(_)), _) => Listener::Stdio,
+				(Some(XdsListenerSpec::Stdio(_)), _) => Listener {
+					name: value.name,
+					spec: ListenerType::Stdio,
+				},
 				_ => anyhow::bail!(
 					"invalid listener protocol {:?} for listener {:?}",
 					value.protocol,
@@ -66,7 +77,7 @@ pub struct SseListener {
 	mode: Option<ListenerMode>,
 	authn: Option<JwtAuthenticator>,
 	tls: Option<TlsConfig>,
-	rbac: Vec<rbac::RuleSet>,
+	rbac: rbac::RuleSets,
 }
 
 impl SseListener {
@@ -74,6 +85,11 @@ impl SseListener {
 		let scheme = if self.tls.is_some() { "https" } else { "http" };
 		format!("{}://{}", scheme, host)
 	}
+
+	pub fn policies(&self) -> &rbac::RuleSets {
+		&self.rbac
+	}
+
 	async fn from_xds(value: XdsSseListener) -> Result<Self, anyhow::Error> {
 		let tls = match value.tls {
 			Some(tls) => Some(from_xds_tls_config(tls)?),
@@ -101,7 +117,7 @@ impl SseListener {
 			mode: None,
 			authn,
 			tls,
-			rbac,
+			rbac: rbac::RuleSets::from(rbac),
 		})
 	}
 }
@@ -172,8 +188,8 @@ impl Listener {
 		a2a_metrics: Arc<a2a::metrics::Metrics>,
 		ct: tokio_util::sync::CancellationToken,
 	) -> Result<(), ServingError> {
-		match self {
-			Listener::Stdio => {
+		match &self.spec {
+			ListenerType::Stdio => {
 				let relay = serve_server_with_ct(
 					relay::Relay::new(
 						state.clone(),
@@ -199,7 +215,7 @@ impl Listener {
 						tracing::error!("serving error: {:?}", e);
 					})
 			},
-			Listener::Sse(sse_listener) => {
+			ListenerType::Sse(sse_listener) => {
 				let authenticator = match &sse_listener.authn {
 					Some(authn) => Arc::new(tokio::sync::RwLock::new(Some(authn.clone()))),
 					None => Arc::new(tokio::sync::RwLock::new(None)),
@@ -227,7 +243,6 @@ impl Listener {
 					metrics,
 					authenticator,
 					child_token,
-					sse_listener.rbac.clone(),
 					"sse".to_string(),
 				);
 				let router = app.router();
@@ -294,7 +309,7 @@ impl Listener {
 				}
 				Ok(())
 			},
-			Listener::A2a(a2a_listener) => {
+			ListenerType::A2a(a2a_listener) => {
 				let authenticator = match &a2a_listener.authn {
 					Some(authn) => Arc::new(tokio::sync::RwLock::new(Some(authn.clone()))),
 					None => Arc::new(tokio::sync::RwLock::new(None)),
@@ -317,7 +332,13 @@ impl Listener {
 					.unwrap();
 				let listener = tokio::net::TcpListener::bind(socket_addr).await.unwrap();
 				let child_token = ct.child_token();
-				let app = a2a::handlers::App::new(state.clone(), a2a_metrics, authenticator, child_token);
+				let app = a2a::handlers::App::new(
+					state.clone(),
+					a2a_metrics,
+					authenticator,
+					child_token,
+					self.name.clone(),
+				);
 				let router = app.router();
 
 				info!("serving a2a on {}:{}", a2a_listener.host, a2a_listener.port);
@@ -394,14 +415,18 @@ pub enum ListenerMode {
 
 impl Default for Listener {
 	fn default() -> Self {
-		Self::Stdio {}
+		Self {
+			name: "default".to_string(),
+			spec: ListenerType::Stdio,
+		}
 	}
 }
 
 pub struct ListenerManager {
 	state: Arc<tokio::sync::RwLock<xds::XdsStore>>,
 	update_rx: tokio::sync::mpsc::Receiver<xds::UpdateEvent>,
-	metrics: Arc<relay::metrics::Metrics>,
+	mcp_metrics: Arc<relay::metrics::Metrics>,
+	a2a_metrics: Arc<a2a::metrics::Metrics>,
 
 	running: HashMap<String, AbortHandle>,
 	run_set: tokio::task::JoinSet<Result<(), ServingError>>,
@@ -415,6 +440,7 @@ impl ListenerManager {
 		state: Arc<tokio::sync::RwLock<xds::XdsStore>>,
 		update_rx: tokio::sync::mpsc::Receiver<xds::UpdateEvent>,
 		metrics: Arc<relay::metrics::Metrics>,
+		a2a_metrics: Arc<a2a::metrics::Metrics>,
 	) -> Self {
 		// Start all listeners in the state
 		// Consider these to be "static" listeners
@@ -424,12 +450,13 @@ impl ListenerManager {
 		for (name, listener) in state.read().await.listeners.iter() {
 			let state_clone = state.clone();
 			let metrics_clone = metrics.clone();
+			let a2a_metrics_clone = a2a_metrics.clone();
 			let ct_clone = ct.clone();
 			let listener_clone = listener.clone();
 			let listener_name = name.clone();
 			let abort_handle = run_set.spawn(async move {
 				listener_clone
-					.listen(state_clone, metrics_clone, ct_clone)
+					.listen(state_clone, metrics_clone, a2a_metrics_clone, ct_clone)
 					.await
 			});
 			running.insert(listener_name, abort_handle);
@@ -440,7 +467,8 @@ impl ListenerManager {
 		Self {
 			state,
 			update_rx,
-			metrics,
+			mcp_metrics: metrics,
+			a2a_metrics,
 			running,
 			run_set,
 		}
@@ -464,10 +492,10 @@ impl ListenerManager {
 							let listener_clone: Listener = {
 									let state = self.state.read().await;
 									// Check if listener exists before trying to clone
-									match state.listeners.get(&name).await {
-											Ok(listener_ref) => listener_ref.clone(), // Clone the listener
-											Err(e) => {
-													tracing::error!("Failed to get listener {} from state: {}", name, e);
+									match state.listeners.get(&name) {
+											Some(listener_ref) => listener_ref.clone(), // Clone the listener
+											None => {
+													tracing::error!("Failed to get listener {} from state", name);
 													continue; // Skip spawning if listener fetch failed
 											}
 									}
@@ -475,12 +503,13 @@ impl ListenerManager {
 
 							// Now use the owned listener_clone for spawning
 							let state_clone = self.state.clone();
-							let metrics_clone = self.metrics.clone();
+							let metrics_clone = self.mcp_metrics.clone();
+							let a2a_metrics_clone = self.a2a_metrics.clone();
 							let ct_clone = ct.clone();
 
 							// Spawn the task with the cloned listener and other cloned Arcs
 							let abort_handle = self.run_set.spawn(async move { // Add async move
-									listener_clone.listen(state_clone, metrics_clone, ct_clone).await
+									listener_clone.listen(state_clone, metrics_clone, a2a_metrics_clone, ct_clone).await
 							});
 							self.running.insert(name, abort_handle); // Store the JoinHandle
 						}

@@ -11,13 +11,11 @@ pub use metrics::*;
 pub use types::*;
 
 use self::envoy::service::discovery::v3::DeltaDiscoveryRequest;
-use crate::proto;
 use crate::proto::aidp::dev::a2a::target::Target as A2aXdsTarget;
 use crate::proto::aidp::dev::common::BackendAuth as XdsAuth;
 use crate::proto::aidp::dev::common::backend_auth::Auth as XdsAuthSpec;
 use crate::proto::aidp::dev::listener::Listener as XdsListener;
 use crate::proto::aidp::dev::mcp::target::Target as McpXdsTarget;
-use crate::proto::aidp::dev::mcp::target::target::Target as XdsTargetSpec;
 use crate::proto::aidp::dev::rbac::RuleSet as XdsRbac;
 use crate::rbac;
 use crate::strng::Strng;
@@ -444,8 +442,8 @@ impl ListenerStore {
 		Ok(())
 	}
 
-	pub async fn get(&self, listener_name: &str) -> anyhow::Result<&inbound::Listener> {
-		Ok(self.by_name.get(listener_name).unwrap())
+	pub fn get(&self, listener_name: &str) -> Option<&inbound::Listener> {
+		self.by_name.get(listener_name)
 	}
 
 	pub async fn remove(&mut self, listener_name: &str) -> anyhow::Result<()> {

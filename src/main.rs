@@ -9,7 +9,6 @@ use tokio::task::JoinSet;
 use tracing_subscriber::{self, EnvFilter};
 
 use mcp_proxy::admin;
-use mcp_proxy::inbound;
 use mcp_proxy::mtrcs;
 use mcp_proxy::proto::aidp::dev::listener::Listener as XdsListener;
 use mcp_proxy::proto::aidp::dev::mcp::target::Target as XdsTarget;
@@ -124,6 +123,7 @@ async fn main() -> Result<()> {
 				state.clone(),
 				update_rx,
 				Arc::new(relay::metrics::Metrics::new(&mut registry)),
+				Arc::new(a2a::metrics::Metrics::new(&mut registry)),
 			)
 			.await;
 
@@ -190,6 +190,7 @@ async fn main() -> Result<()> {
 				state.clone(),
 				update_rx,
 				Arc::new(relay::metrics::Metrics::new(&mut registry)),
+				Arc::new(a2a::metrics::Metrics::new(&mut registry)),
 			)
 			.await;
 

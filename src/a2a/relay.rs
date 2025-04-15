@@ -1,5 +1,5 @@
 use crate::a2a::metrics;
-use crate::inbound::Listener;
+use crate::inbound;
 use crate::outbound;
 use crate::outbound::A2aTargetSpec;
 use crate::xds::XdsStore;
@@ -20,7 +20,6 @@ pub struct Relay {
 	state: Arc<tokio::sync::RwLock<XdsStore>>,
 	pool: pool::ConnectionPool,
 	listener_name: String,
-	host: String,
 	_metrics: Arc<metrics::Metrics>,
 }
 
@@ -58,15 +57,17 @@ impl Relay {
 			.fetch_agent_card()
 			.await?;
 		let state = self.state.read().await;
-		let url: String = match &state.listener {
-			Listener::A2a(a) => a.url(host),
-			_ => {
-				panic!("must be a2a")
-			},
+		let listener = state
+			.listeners
+			.get(&self.listener_name)
+			.expect("listener not found");
+		let (url, pols) = match &listener.spec {
+			inbound::ListenerType::A2a(a) => (a.url(host), a.policies()),
+			inbound::ListenerType::Sse(s) => (s.url(host), s.policies()),
+			inbound::ListenerType::Stdio => panic!("stdio listener not supported"),
 		};
 		card.url = format!("{}/{}", url, service_name);
 
-		let pols = &state.policies;
 		card.skills = card
 			.skills
 			.iter()
@@ -158,7 +159,10 @@ mod pool {
 			rq_ctx: &RqCtx,
 			name: &str,
 		) -> Result<a2a::Client, anyhow::Error> {
-			let target_info: Option<(outbound::Target<outbound::A2aTargetSpec>, tokio_util::sync::CancellationToken)> = {
+			let target_info: Option<(
+				outbound::Target<outbound::A2aTargetSpec>,
+				tokio_util::sync::CancellationToken,
+			)> = {
 				let state = self.state.read().await;
 				state
 					.a2a_targets
@@ -200,7 +204,6 @@ mod pool {
 						client,
 					}
 				},
-				_ => anyhow::bail!("only A2A target is supported"),
 			};
 			Ok(transport)
 		}

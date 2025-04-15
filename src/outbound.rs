@@ -65,7 +65,7 @@ impl TryFrom<XdsTarget> for McpTargetSpec {
 
 #[derive(Clone, Serialize, Debug)]
 pub enum A2aTargetSpec {
-  Sse(SseTargetSpec),
+	Sse(SseTargetSpec),
 }
 
 impl TryFrom<XdsA2aTarget> for Target<A2aTargetSpec> {

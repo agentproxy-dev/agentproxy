@@ -1,4 +1,5 @@
 use crate::authn;
+use crate::inbound;
 use crate::relay;
 use crate::relay::Relay;
 use crate::trcng;
@@ -46,7 +47,6 @@ pub struct App {
 	metrics: Arc<relay::metrics::Metrics>,
 	authn: Arc<RwLock<Option<authn::JwtAuthenticator>>>,
 	ct: tokio_util::sync::CancellationToken,
-	rbac: rbac::RuleSets,
 	listener_name: String,
 }
 
@@ -56,7 +56,6 @@ impl App {
 		metrics: Arc<relay::metrics::Metrics>,
 		authn: Arc<RwLock<Option<authn::JwtAuthenticator>>>,
 		ct: tokio_util::sync::CancellationToken,
-		rbac: Vec<rbac::RuleSet>,
 		listener_name: String,
 	) -> Self {
 		Self {
@@ -66,7 +65,6 @@ impl App {
 			authn,
 			connection_id: Arc::new(tokio::sync::RwLock::new(None)),
 			ct,
-			rbac: rbac::RuleSets::from(rbac),
 			listener_name,
 		}
 	}
@@ -197,11 +195,22 @@ async fn sse_handler(
 		.insert(session.clone(), from_client_tx);
 	{
 		let session = session.clone();
+		let policies = {
+			let state = app.state.read().await;
+			let listener = state
+				.listeners
+				.get(&app.listener_name)
+				.expect("listener not found, this should never happen");
+			match &listener.spec {
+				inbound::ListenerType::Sse(s) => s.policies().clone(),
+				_ => rbac::RuleSets::default(),
+			}
+		};
 		tokio::spawn(async move {
 			let relay = Relay::new(
 				app.state.clone(),
 				app.metrics.clone(),
-				app.rbac.clone(),
+				policies,
 				app.listener_name.clone(),
 			);
 			let stream = ReceiverStream::new(from_client_rx);
