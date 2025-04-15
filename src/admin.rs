@@ -41,6 +41,10 @@ impl App {
 				get(targets_a2a_get_handler).delete(targets_a2a_delete_handler),
 			)
 			.route(
+				"/listeners/{name}/targets",
+				get(listener_targets_list_handler),
+			)
+			.route(
 				"/listeners",
 				get(listener_list_handler).post(listener_create_handler),
 			)
@@ -83,10 +87,15 @@ pub async fn start(
 		.await
 }
 
-/// GET /targets  List all targets
-/// GET /targets/:name  Get a target by name
-/// POST /targets  Create/update a target
-/// DELETE /targets/:name  Delete a target
+/// GET /targets/mcp  List all MCP targets
+/// GET /targets/mcp/:name  Get a MCP target by name
+/// POST /targets/mcp  Create/update a MCP target
+/// DELETE /targets/mcp/:name  Delete a MCP target
+///
+/// GET /targets/a2a  List all A2A targets
+/// GET /targets/a2a/:name  Get an A2A target by name
+/// POST /targets/a2a  Create/update an A2A target
+/// DELETE /targets/a2a/:name  Delete an A2A target
 ///
 /// GET /listeners  List all listeners
 /// GET /listener/:name  Get a listener by name
@@ -251,6 +260,39 @@ async fn targets_mcp_create_handler(
 	}
 }
 
+async fn listener_targets_list_handler(
+	State(app): State<App>,
+	Path(name): Path<String>,
+) -> Result<String, (StatusCode, impl IntoResponse)> {
+	let state = app.state.read().await;
+	let listener = state.listeners.get(&name);
+	if listener.is_none() {
+		return Err((
+			StatusCode::NOT_FOUND,
+			ErrorResponse {
+				message: "listener not found".to_string(),
+			},
+		));
+	}
+	let listener = listener.unwrap();
+	let targets = state
+		.a2a_targets
+		.iter(&listener.name)
+		.map(|(_, target)| target.0.clone())
+		.collect::<Vec<_>>();
+	match serde_json::to_string(&targets) {
+		Ok(json_targets) => Ok(json_targets),
+		Err(e) => {
+			error!("error serializing targets: {:?}", e);
+			Err((
+				StatusCode::INTERNAL_SERVER_ERROR,
+				ErrorResponse {
+					message: "error serializing targets".to_string(),
+				},
+			))
+		},
+	}
+}
 async fn listener_list_handler(
 	State(app): State<App>,
 ) -> Result<String, (StatusCode, impl IntoResponse)> {

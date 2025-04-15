@@ -16,6 +16,7 @@ pub mod openapi;
 #[derive(Clone, Serialize, Debug)]
 pub struct Target<T> {
 	pub name: String,
+	#[serde(skip_serializing_if = "Vec::is_empty")]
 	pub listeners: Vec<String>,
 	pub spec: T,
 }
@@ -41,7 +42,9 @@ pub enum McpTargetSpec {
 	Sse(SseTargetSpec),
 	Stdio {
 		cmd: String,
+		#[serde(skip_serializing_if = "Vec::is_empty")]
 		args: Vec<String>,
+		#[serde(skip_serializing_if = "HashMap::is_empty")]
 		env: HashMap<String, String>,
 	},
 	OpenAPI(OpenAPITarget),
@@ -99,8 +102,11 @@ pub struct SseTargetSpec {
 	pub host: String,
 	pub port: u32,
 	pub path: String,
+	#[serde(skip_serializing_if = "HashMap::is_empty")]
 	pub headers: HashMap<String, String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	pub backend_auth: Option<backend::BackendAuthConfig>,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	pub tls: Option<TlsConfig>,
 }
 

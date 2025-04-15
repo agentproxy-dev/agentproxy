@@ -28,6 +28,10 @@ impl RuleSets {
 			.iter()
 			.any(|rule_set| rule_set.validate(resource, claims))
 	}
+
+	pub fn is_empty(&self) -> bool {
+		self.0.is_empty()
+	}
 }
 impl RuleSet {
 	pub fn new(name: String, namespace: String, rules: Vec<Rule>) -> Self {

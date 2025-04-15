@@ -74,9 +74,13 @@ impl Listener {
 pub struct SseListener {
 	host: String,
 	port: u32,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	mode: Option<ListenerMode>,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	authn: Option<JwtAuthenticator>,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	tls: Option<TlsConfig>,
+	#[serde(skip_serializing_if = "rbac::RuleSets::is_empty")]
 	rbac: rbac::RuleSets,
 }
 

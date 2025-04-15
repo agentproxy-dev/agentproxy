@@ -240,12 +240,20 @@ pub struct TargetStore<T, M: prost::Message + Serialize + Clone> {
 	broadcast_tx: tokio::sync::broadcast::Sender<String>,
 }
 
-impl<T, M: prost::Message + Serialize + Clone> Serialize for TargetStore<T, M> {
+impl<T: Clone, M: prost::Message + Serialize + Clone> Serialize for TargetStore<T, M>
+where
+	outbound::Target<T>: Serialize,
+{
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 	where
 		S: serde::Serializer,
 	{
-		self.by_name_protos.serialize(serializer)
+		self
+			.by_name
+			.iter()
+			.map(|(name, target)| (name.clone(), target.0.clone()))
+			.collect::<Vec<_>>()
+			.serialize(serializer)
 	}
 }
 
