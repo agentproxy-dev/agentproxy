@@ -483,15 +483,15 @@ impl ListenerManager {
 		loop {
 			tokio::select! {
 				result = self.run_set.join_next() => {
-          match result {
-            Some(Ok(_)) => {
-              tracing::info!("run_set join_next returned {:?}", result);
-            }
-            Some(Err(e)) => {
-              tracing::error!("run_set join_next returned {:?}", e);
-            }
-            None => {}
-          }
+					match result {
+						Some(Ok(_)) => {
+							tracing::info!("run_set join_next returned {:?}", result);
+						}
+						Some(Err(e)) => {
+							tracing::error!("run_set join_next returned {:?}", e);
+						}
+						None => {}
+					}
 				}
 				update = self.update_rx.recv() => {
 					match update {
