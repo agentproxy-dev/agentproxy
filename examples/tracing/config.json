@@ -1,0 +1,64 @@
+{
+  "type": "static",
+  "listeners": [
+    {
+      "sse": {
+        "address": "0.0.0.0",
+        "port": 3000,
+        "authn": {
+          "jwt": {
+            "issuer": [
+              "me"
+            ],
+            "audience": [
+              "me.com"
+            ],
+            "local_jwks": {
+              "file_path": "manifests/jwt/pub-key"
+            }
+          }
+        },
+        "rbac": [
+          {
+            "name": "default",
+            "rules": [
+              {
+                "key": "sub",
+                "value": "me",
+                "resource": {
+                  "type": "TOOL",
+                  "id": "everything:echo"
+                },
+                "matcher": "EQUALS"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "tracing": {
+    "tracer": {
+      "otlp": {
+        "endpoint": "http://localhost:4317"
+      }
+    },
+    "tags": {
+      "source.user": "@sub",
+      "cluster": "static-name"
+    }
+  },
+  "targets": {
+    "mcp": [
+      {
+        "name": "everything",
+        "stdio": {
+          "cmd": "npx",
+          "args": [
+            "@modelcontextprotocol/server-everything"
+          ]
+        }
+      }
+    ]
+  }
+}

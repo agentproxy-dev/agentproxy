@@ -1,4 +1,6 @@
+use crate::rbac;
 use http::HeaderMap;
+use opentelemetry::trace::{SpanBuilder, Tracer as _};
 use opentelemetry::{
 	Context, KeyValue,
 	baggage::BaggageExt,
@@ -16,12 +18,42 @@ use opentelemetry_sdk::{
 	trace::{SdkTracerProvider, SpanProcessor},
 };
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
+use std::collections::HashMap;
 use std::sync::OnceLock;
 use tracing::info;
 
 pub fn get_tracer() -> &'static BoxedTracer {
 	static TRACER: OnceLock<BoxedTracer> = OnceLock::new();
 	TRACER.get_or_init(|| global::tracer("mcp-proxy"))
+}
+
+// start_span starts a span that takes into account custom attributes
+pub fn start_span(
+	span_name: impl Into<Cow<'static, str>>,
+	context: &rbac::Identity,
+) -> SpanBuilder {
+	start_span_with_attributes(span_name, context, Default::default())
+}
+pub fn start_span_with_attributes(
+	span_name: impl Into<Cow<'static, str>>,
+	context: &rbac::Identity,
+	mut attrs: Vec<KeyValue>,
+) -> SpanBuilder {
+	let mut base = get_tracer().span_builder(span_name);
+	if let Some(tag_rules) = get_tag_rules() {
+		for (k, v) in tag_rules {
+			let v = if let Some((_, lookup)) = v.split_once("@") {
+				context.get_claim(lookup).unwrap_or("unknown").to_string()
+			} else {
+				// Insert directly
+				v
+			};
+			attrs.push(KeyValue::new(k, v))
+		}
+		base = base.with_attributes(attrs);
+	};
+	base
 }
 
 // Utility function to extract the context from the incoming request headers
@@ -36,6 +68,13 @@ pub fn add_context_to_request(req: &mut HeaderMap, ctx: &Context) {
 	req.insert("baggage", "is_synthetic=true".parse().unwrap());
 }
 
+static TAG_RULES: OnceLock<HashMap<String, String>> = OnceLock::new();
+fn get_tag_rules() -> Option<HashMap<String, String>> {
+	TAG_RULES.get().cloned()
+}
+fn set_tag_rules(rules: HashMap<String, String>) {
+	_ = TAG_RULES.get_or_init(|| (rules))
+}
 fn get_resource() -> Resource {
 	static RESOURCE: OnceLock<Resource> = OnceLock::new();
 	RESOURCE
@@ -68,6 +107,7 @@ impl SpanProcessor for EnrichWithBaggageSpanProcessor {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Config {
 	pub tracer: Tracer,
+	pub tags: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -105,5 +145,7 @@ pub fn init_tracer(config: Config) -> Result<SdkTracerProvider, ExporterBuildErr
 		.build();
 
 	global::set_tracer_provider(provider.clone());
+	// Usage of global is pretty bad here, but since we do it with provider it makes sense for this too.
+	set_tag_rules(config.tags);
 	Ok(provider)
 }

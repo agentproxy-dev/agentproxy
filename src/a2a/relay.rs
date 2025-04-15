@@ -236,7 +236,7 @@ async fn get_default_headers(
 }
 #[derive(Clone)]
 pub struct RqCtx {
-	identity: rbac::Identity,
+	pub identity: rbac::Identity,
 	pub context: opentelemetry::Context,
 }
 

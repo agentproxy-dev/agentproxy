@@ -191,7 +191,7 @@ impl Identity {
 			Matcher::Equals => self.get_claim(key) == Some(value),
 		}
 	}
-	fn get_claim(&self, key: &str) -> Option<&str> {
+	pub fn get_claim(&self, key: &str) -> Option<&str> {
 		match &self.claims {
 			Some(claims) => claims.inner.get(key).and_then(|v| v.as_str()),
 			None => None,

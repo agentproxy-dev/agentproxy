@@ -135,8 +135,7 @@ impl ServerHandler for Relay {
 			.get::<RqCtx>()
 			.unwrap_or(&DEFAULT_RQ_CTX);
 		let tracer = trcng::get_tracer();
-		let _span = trcng::get_tracer()
-			.span_builder("list_resources")
+		let _span = trcng::start_span("list_resources", &rq_ctx.identity)
 			.with_kind(SpanKind::Server)
 			.start_with_context(tracer, &rq_ctx.context);
 		let mut pool = self.pool.write().await;
@@ -177,8 +176,7 @@ impl ServerHandler for Relay {
 			.get::<RqCtx>()
 			.unwrap_or(&DEFAULT_RQ_CTX);
 		let tracer = trcng::get_tracer();
-		let _span = trcng::get_tracer()
-			.span_builder("list_resource_templates")
+		let _span = trcng::start_span("list_resource_templates", &rq_ctx.identity)
 			.with_kind(SpanKind::Server)
 			.start_with_context(tracer, &rq_ctx.context);
 		let mut pool = self.pool.write().await;
@@ -222,8 +220,7 @@ impl ServerHandler for Relay {
 	) -> std::result::Result<ListPromptsResult, McpError> {
 		let rq_ctx = context.extensions.get::<RqCtx>().unwrap_or(&DEFAULT_RQ_CTX);
 		let tracer = trcng::get_tracer();
-		let _span = trcng::get_tracer()
-			.span_builder("list_prompts")
+		let _span = trcng::start_span("list_prompts", &rq_ctx.identity)
 			.with_kind(SpanKind::Server)
 			.start_with_context(tracer, &rq_ctx.context);
 
@@ -285,8 +282,7 @@ impl ServerHandler for Relay {
 			.get::<RqCtx>()
 			.unwrap_or(&DEFAULT_RQ_CTX);
 		let tracer = trcng::get_tracer();
-		let _span = trcng::get_tracer()
-			.span_builder("read_resource")
+		let _span = trcng::start_span("read_resource", &rq_ctx.identity)
 			.with_kind(SpanKind::Server)
 			.start_with_context(tracer, &rq_ctx.context);
 		if !self.policies.validate(
@@ -341,8 +337,7 @@ impl ServerHandler for Relay {
 			.get::<RqCtx>()
 			.unwrap_or(&DEFAULT_RQ_CTX);
 		let tracer = trcng::get_tracer();
-		let _span = trcng::get_tracer()
-			.span_builder("get_prompt")
+		let _span = trcng::start_span("get_prompt", &rq_ctx.identity)
 			.with_kind(SpanKind::Server)
 			.start_with_context(tracer, &rq_ctx.context);
 		if !self.policies.validate(
@@ -389,8 +384,7 @@ impl ServerHandler for Relay {
 	) -> std::result::Result<ListToolsResult, McpError> {
 		let rq_ctx = context.extensions.get::<RqCtx>().unwrap_or(&DEFAULT_RQ_CTX);
 		let tracer = trcng::get_tracer();
-		let _span = trcng::get_tracer()
-			.span_builder("list_tools")
+		let _span = trcng::start_span("list_tools", &rq_ctx.identity)
 			.with_kind(SpanKind::Server)
 			.start_with_context(tracer, &rq_ctx.context);
 		let mut pool = self.pool.write().await;
@@ -451,8 +445,7 @@ impl ServerHandler for Relay {
 		let rq_ctx = context.extensions.get::<RqCtx>().unwrap_or(&DEFAULT_RQ_CTX);
 		let span_context: &Context = &rq_ctx.context;
 		let tracer = trcng::get_tracer();
-		let _span = trcng::get_tracer()
-			.span_builder("call_tool")
+		let _span = trcng::start_span("call_tool", &rq_ctx.identity)
 			.with_kind(SpanKind::Server)
 			.start_with_context(tracer, span_context);
 		if !self.policies.validate(

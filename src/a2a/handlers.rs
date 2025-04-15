@@ -17,7 +17,7 @@ use headers::Authorization;
 use headers::authorization::Bearer;
 use http::request::Parts;
 use http::{HeaderMap, StatusCode};
-use opentelemetry::trace::{Span, SpanKind, Tracer};
+use opentelemetry::trace::{Span, SpanKind};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -102,11 +102,13 @@ async fn agent_card_handler(
 	let rq_ctx = relay::RqCtx::new(claims, context);
 
 	let tracer = trcng::get_tracer();
-	let _span = trcng::get_tracer()
-		.span_builder("agent_card")
-		.with_attributes(vec![opentelemetry::KeyValue::new("agent", target.clone())])
-		.with_kind(SpanKind::Server)
-		.start_with_context(tracer, &rq_ctx.context);
+	let _span = trcng::start_span_with_attributes(
+		"agent_card",
+		&rq_ctx.identity,
+		vec![opentelemetry::KeyValue::new("agent", target.clone())],
+	)
+	.with_kind(SpanKind::Server)
+	.start_with_context(tracer, &rq_ctx.context);
 	let card = relay
 		.fetch_agent_card(host, &rq_ctx, &target)
 		.await
@@ -148,18 +150,17 @@ async fn agent_call_handler(
 	let context = trcng::extract_context_from_request(&headers);
 	let rq_ctx = relay::RqCtx::new(claims, context);
 
+	let attrs = vec![
+		opentelemetry::KeyValue::new("agent", target.clone()),
+		opentelemetry::KeyValue::new("method", request.method()),
+		opentelemetry::KeyValue::new("request.id", request.id()),
+		opentelemetry::KeyValue::new(
+			"session.id",
+			request.session_id().unwrap_or("none".to_string()),
+		),
+	];
 	let tracer = trcng::get_tracer();
-	let mut span = trcng::get_tracer()
-		.span_builder(request.method())
-		.with_attributes(vec![
-			opentelemetry::KeyValue::new("agent", target.clone()),
-			opentelemetry::KeyValue::new("method", request.method()),
-			opentelemetry::KeyValue::new("request.id", request.id()),
-			opentelemetry::KeyValue::new(
-				"session.id",
-				request.session_id().unwrap_or("none".to_string()),
-			),
-		])
+	let mut span = trcng::start_span_with_attributes(request.method(), &rq_ctx.identity, attrs)
 		.with_kind(SpanKind::Server)
 		.start_with_context(tracer, &rq_ctx.context);
 
