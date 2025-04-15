@@ -2,7 +2,7 @@
   "type": "static",
   "tracing": {
     "tracer":{
-      "Otlp": {
+      "otlp": {
         "endpoint": "http://localhost:4317"
       }
     }

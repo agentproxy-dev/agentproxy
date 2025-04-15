@@ -72,6 +72,7 @@ pub struct Config {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub enum Tracer {
+	#[serde(rename = "otlp")]
 	Otlp { endpoint: Option<String> },
 }
 
