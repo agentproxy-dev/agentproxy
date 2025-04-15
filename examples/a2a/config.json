@@ -7,13 +7,15 @@
       }
     }
   },
-  "listener": {
-    "protocol": "A2A",
-    "sse": {
-      "address": "0.0.0.0",
-      "port": 3000
+  "listeners": [
+    {
+      "protocol": "A2A",
+      "sse": {
+        "address": "0.0.0.0",
+        "port": 3000
+      }
     }
-  },
+  ],
   "targets": [
     {
       "name": "google_adk",

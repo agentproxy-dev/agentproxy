@@ -1,36 +1,42 @@
 {
   "type": "static",
-  "listener": {
-    "sse": {
-      "address": "0.0.0.0",
-      "port": 3000,
-      "authn": {
-        "jwt": {
-          "issuer": ["me"],
-          "audience": ["me.com"],
-          "local_jwks": {
-            "file_path": "manifests/jwt/pub-key"
-          }
-        }
-      },
-      "rbac": [
-        {
-          "name": "default",
-          "rules": [
-            {
-              "key": "sub",
-              "value": "me",
-              "resource": {
-                "type": "TOOL",
-                "id": "everything:echo"
-              },
-              "matcher": "EQUALS"
+  "listeners": [
+    {
+      "sse": {
+        "address": "0.0.0.0",
+        "port": 3000,
+        "authn": {
+          "jwt": {
+            "issuer": [
+              "me"
+            ],
+            "audience": [
+              "me.com"
+            ],
+            "local_jwks": {
+              "file_path": "manifests/jwt/pub-key"
             }
-          ]
-        }
-      ]
+          }
+        },
+        "rbac": [
+          {
+            "name": "default",
+            "rules": [
+              {
+                "key": "sub",
+                "value": "me",
+                "resource": {
+                  "type": "TOOL",
+                  "id": "everything:echo"
+                },
+                "matcher": "EQUALS"
+              }
+            ]
+          }
+        ]
+      }
     }
-  },
+  ],
   "targets": [
     {
       "name": "everything",
