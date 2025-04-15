@@ -26,6 +26,10 @@ message BackendAuth {
   }
 }
 
+message BackendTls {
+  bool insecure_skip_verify = 1;
+}
+
 message Header {
   string key = 1;
   oneof value {

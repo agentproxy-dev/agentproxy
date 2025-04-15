@@ -30,6 +30,8 @@ message Target {
     repeated aidp.dev.common.Header headers = 4;
 
     aidp.dev.common.BackendAuth auth = 5;
+
+    aidp.dev.common.BackendTls tls = 6;
   }
 
   message StdioTarget {
@@ -51,7 +53,9 @@ message Target {
 
     aidp.dev.common.BackendAuth auth = 4;
 
-    repeated aidp.dev.common.Header headers = 5;
+    aidp.dev.common.BackendTls tls = 5;
+
+    repeated aidp.dev.common.Header headers = 6;
   }
 }
 

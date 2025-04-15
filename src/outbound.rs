@@ -1,6 +1,7 @@
 use crate::proto;
 use crate::proto::aidp::dev::a2a::target::Target as XdsA2aTarget;
 use crate::proto::aidp::dev::common::BackendAuth as XdsAuth;
+use crate::proto::aidp::dev::common::BackendTls as XdsTls;
 use crate::proto::aidp::dev::mcp::target::Target as McpXdsTarget;
 use crate::proto::aidp::dev::mcp::target::target::OpenApiTarget as XdsOpenAPITarget;
 use crate::proto::aidp::dev::mcp::target::target::SseTarget as XdsSseTarget;
@@ -84,6 +85,10 @@ impl TryFrom<XdsA2aTarget> for Target<A2aTargetSpec> {
 					Some(auth) => XdsAuth::try_into(auth)?,
 					None => None,
 				},
+				tls: match value.tls {
+					Some(tls) => Some(TlsConfig::try_from(tls)?),
+					None => None,
+				},
 			}),
 		})
 	}
@@ -96,6 +101,22 @@ pub struct SseTargetSpec {
 	pub path: String,
 	pub headers: HashMap<String, String>,
 	pub backend_auth: Option<backend::BackendAuthConfig>,
+	pub tls: Option<TlsConfig>,
+}
+
+#[derive(Clone, Serialize, Debug)]
+pub struct TlsConfig {
+	pub insecure_skip_verify: bool,
+}
+
+impl TryFrom<XdsTls> for TlsConfig {
+	type Error = anyhow::Error;
+
+	fn try_from(value: XdsTls) -> Result<Self, Self::Error> {
+		Ok(TlsConfig {
+			insecure_skip_verify: value.insecure_skip_verify,
+		})
+	}
 }
 
 impl TryFrom<XdsSseTarget> for SseTargetSpec {
@@ -109,6 +130,10 @@ impl TryFrom<XdsSseTarget> for SseTargetSpec {
 			headers: proto::resolve_header_map(&value.headers)?,
 			backend_auth: match value.auth {
 				Some(auth) => XdsAuth::try_into(auth)?,
+				None => None,
+			},
+			tls: match value.tls {
+				Some(tls) => Some(TlsConfig::try_from(tls)?),
 				None => None,
 			},
 		})

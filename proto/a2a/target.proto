@@ -23,5 +23,8 @@ message Target {
   // The auth of the target.
   aidp.dev.common.BackendAuth auth = 7;
 
+  // The tls of the target.
+  aidp.dev.common.BackendTls tls = 8;
+
 }
 
