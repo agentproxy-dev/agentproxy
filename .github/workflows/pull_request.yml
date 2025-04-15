@@ -85,7 +85,7 @@ jobs:
     - name: Test
       run: make test
     - name: Validate
-      run: make validate
+      run: make validate -B
 
   docker:
     strategy:
