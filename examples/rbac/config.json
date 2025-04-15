@@ -15,13 +15,18 @@
       },
       "rbac": [
         {
-          "key": "sub",
-          "value": "me",
-          "resource": {
-            "type": "TOOL",
-            "id": "everything:echo"
-          },
-          "matcher": "EQUALS"
+          "name": "default",
+          "rules": [
+            {
+              "key": "sub",
+              "value": "me",
+              "resource": {
+                "type": "TOOL",
+                "id": "everything:echo"
+              },
+              "matcher": "EQUALS"
+            }
+          ]
         }
       ]
     }
