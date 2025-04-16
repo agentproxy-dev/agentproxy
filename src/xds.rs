@@ -282,12 +282,14 @@ where
 	pub fn remove(
 		&mut self,
 		name: &str,
-	) -> Result<usize, tokio::sync::broadcast::error::SendError<String>> {
+	) -> Result<(), tokio::sync::broadcast::error::SendError<String>> {
 		if let Some((_target, ct)) = self.by_name.remove(name) {
 			ct.cancel();
 		}
 		self.by_name_protos.remove(name);
-		self.broadcast_tx.send(name.to_string())
+		// Ignore the error, it's not critical, it just means there are clients using this target.
+		let _ = self.broadcast_tx.send(name.to_string());
+		Ok(())
 	}
 
 	#[instrument(
