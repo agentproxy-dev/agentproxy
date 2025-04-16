@@ -7,12 +7,12 @@ use crate::xds::XdsStore;
 use axum::{
 	Json, Router,
 	extract::{Path, State},
-	http::{StatusCode, Method, HeaderValue, HeaderName},
+	http::{HeaderName, HeaderValue, Method, StatusCode},
 	response::{IntoResponse, Response},
 	routing::get,
 };
-use tower_http::cors::CorsLayer;
 use serde::{Deserialize, Serialize};
+use tower_http::cors::CorsLayer;
 use tracing::error;
 #[derive(Clone)]
 struct App {

@@ -27,7 +27,10 @@ impl RuleSets {
 		if self.0.is_empty() {
 			return true;
 		}
-		self.0.iter().any(|rule_set| rule_set.validate(resource, claims))
+		self
+			.0
+			.iter()
+			.any(|rule_set| rule_set.validate(resource, claims))
 	}
 
 	pub fn is_empty(&self) -> bool {
