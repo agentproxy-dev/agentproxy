@@ -112,6 +112,13 @@ async fn main() -> Result<()> {
 			if let Ok(Some(config_dir)) = homedir::my_home() {
 				let config_dir = config_dir.join("aidp");
 				let config_file = config_dir.join("config.json");
+				
+				// Create the aidp directory if it doesn't exist
+				if !config_dir.exists() {
+					tracing::info!("Creating config directory: {}", config_dir.to_string_lossy());
+					tokio::fs::create_dir_all(&config_dir).await?;
+				}
+
 				if config_file.exists() {
 					tracing::info!(
 						"Reading config from cache_dir: {}",
