@@ -186,7 +186,9 @@ impl TryFrom<XdsOpenAPITarget> for OpenAPITarget {
 				None => None,
 			},
 			tls: match value.tls {
-				Some(tls) => Some(TlsConfig::try_from(tls).map_err(|_| openapi::ParseError::MissingSchema)?),
+				Some(tls) => {
+					Some(TlsConfig::try_from(tls).map_err(|_| openapi::ParseError::MissingSchema)?)
+				},
 				None => None,
 			},
 		})
