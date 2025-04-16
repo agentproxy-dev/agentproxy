@@ -150,7 +150,7 @@ impl TryFrom<XdsSseTarget> for SseTargetSpec {
 pub struct OpenAPITarget {
 	pub host: String,
 	pub prefix: String,
-	pub port: u16,
+	pub port: u32,
 	#[serde(skip_serializing_if = "Vec::is_empty")]
 	pub tools: Vec<(Tool, openapi::UpstreamOpenAPICall)>,
 	#[serde(skip_serializing_if = "HashMap::is_empty")]
@@ -176,7 +176,7 @@ impl TryFrom<XdsOpenAPITarget> for OpenAPITarget {
 		Ok(OpenAPITarget {
 			host: value.host.clone(),
 			prefix,
-			port: value.port as u16, // TODO: check if this is correct
+			port: value.port,
 			tools,
 			headers,
 			backend_auth: match value.auth {

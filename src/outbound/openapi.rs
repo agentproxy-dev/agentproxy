@@ -481,9 +481,8 @@ pub struct Handler {
 	pub scheme: String,
 	pub host: String,
 	pub prefix: String,
-	pub port: u16,
+	pub port: u32,
 	pub client: reqwest::Client,
-	pub headers: HeaderMap,
 	pub tools: Vec<(Tool, UpstreamOpenAPICall)>,
 }
 
@@ -794,9 +793,8 @@ mod tests {
 			scheme: parsed.scheme().to_string(),
 			host: parsed.host().unwrap().to_string(),
 			prefix: "".to_string(),
-			port: parsed.port().unwrap_or(8080),
+			port: parsed.port().unwrap_or(8080) as u32,
 			client,
-			headers: HeaderMap::new(),
 			tools: vec![
 				(test_tool_get, upstream_call_get),
 				(test_tool_post, upstream_call_post),

@@ -134,15 +134,13 @@ impl ConnectionPool {
 		tracing::trace!("connecting to target: {}", target.name);
 		let transport: upstream::UpstreamTarget = match &target.spec {
 			McpTargetSpec::Sse(sse) => {
-				tracing::trace!("starting sse transport for target: {}", target.name);
+				tracing::debug!("starting sse transport for target: {}", target.name);
 				let path = match sse.path.as_str() {
 					"" => "/sse",
 					_ => sse.path.as_str(),
 				};
-				let scheme = match sse.port {
-					443 => "https",
-					_ => "http",
-				};
+				let builder = reqwest::Client::builder();
+				let (scheme, builder) = tls_cfg(builder, &sse.tls, sse.port).await?;
 
 				let url = format!("{}://{}:{}{}", scheme, sse.host, sse.port, path);
 				let mut upstream_headers = get_default_headers(&sse.backend_auth, rq_ctx).await?;
@@ -152,34 +150,37 @@ impl ConnectionPool {
 						HeaderValue::from_str(value)?,
 					);
 				}
-				let client = reqwest::Client::builder()
-					.default_headers(upstream_headers)
-					.build()
-					.unwrap();
+				let client = builder.default_headers(upstream_headers).build()?;
 				let client = ReqwestSseClient::new_with_client(url.as_str(), client).await?;
 				let transport = SseTransport::start_with_client(client).await?;
 
 				upstream::UpstreamTarget::Mcp(serve_client_with_ct((), transport, ct.child_token()).await?)
 			},
 			McpTargetSpec::Stdio { cmd, args, env: _ } => {
-				tracing::trace!("starting stdio transport for target: {}", target.name);
+				tracing::debug!("starting stdio transport for target: {}", target.name);
 				upstream::UpstreamTarget::Mcp(
 					serve_client_with_ct(
 						(),
-						TokioChildProcess::new(Command::new(cmd).args(args)).unwrap(),
+						TokioChildProcess::new(Command::new(cmd).args(args))?,
 						ct.child_token(),
 					)
 					.await?,
 				)
 			},
 			McpTargetSpec::OpenAPI(open_api) => {
-				tracing::info!("starting OpenAPI transport for target: {}", target.name);
-				let client = reqwest::Client::new();
+				tracing::debug!("starting OpenAPI transport for target: {}", target.name);
 
-				let scheme = match open_api.port {
-					443 => "https",
-					_ => "http",
-				};
+				let builder = reqwest::Client::builder();
+				let (scheme, builder) = tls_cfg(builder, &open_api.tls, open_api.port).await?;
+
+				let mut headers = get_default_headers(&open_api.backend_auth, rq_ctx).await?;
+				for (key, value) in open_api.headers.iter() {
+					headers.insert(
+						HeaderName::from_bytes(key.as_bytes())?,
+						HeaderValue::from_str(value)?,
+					);
+				}
+				let client = builder.default_headers(headers).build()?;
 				upstream::UpstreamTarget::OpenAPI(openapi::Handler {
 					host: open_api.host.clone(),
 					client,
@@ -187,7 +188,6 @@ impl ConnectionPool {
 					scheme: scheme.to_string(),
 					prefix: open_api.prefix.clone(),
 					port: open_api.port,
-					headers: get_default_headers(&open_api.backend_auth, rq_ctx).await?,
 				})
 			},
 		};
@@ -198,6 +198,31 @@ impl ConnectionPool {
 	}
 }
 
+async fn tls_cfg(
+	builder: reqwest::ClientBuilder,
+	tls: &Option<outbound::TlsConfig>,
+	port: u32,
+) -> Result<(String, reqwest::ClientBuilder), anyhow::Error> {
+	match (port, tls) {
+		(443, None) => {
+			let builder = builder.https_only(true);
+			Ok(("https".to_string(), builder))
+		},
+		(443, Some(tls)) => {
+			let builder = builder
+				.https_only(true)
+				.danger_accept_invalid_hostnames(tls.insecure_skip_verify);
+			Ok(("https".to_string(), builder))
+		},
+		(_, None) => Ok(("http".to_string(), builder)),
+		(_, Some(tls)) => {
+			let builder = builder
+				.https_only(false)
+				.danger_accept_invalid_hostnames(tls.insecure_skip_verify);
+			Ok(("https".to_string(), builder))
+		},
+	}
+}
 async fn get_default_headers(
 	auth_config: &Option<backend::BackendAuthConfig>,
 	rq_ctx: &RqCtx,
