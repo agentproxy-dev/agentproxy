@@ -7,7 +7,7 @@ use crate::xds::XdsStore;
 use axum::{
 	Json, Router,
 	extract::{Path, State},
-	http::{HeaderValue, Method, StatusCode},
+	http::{HeaderName, HeaderValue, Method, StatusCode},
 	response::{IntoResponse, Response},
 	routing::get,
 };
@@ -26,6 +26,7 @@ impl App {
 	fn router(&self) -> Router {
 		let cors = CorsLayer::new()
 			.allow_origin("*".parse::<HeaderValue>().unwrap())
+			.allow_headers([HeaderName::from_static("content-type")])
 			.allow_methods([Method::GET, Method::POST, Method::DELETE]);
 
 		Router::new()

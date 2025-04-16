@@ -195,7 +195,7 @@ export function PoliciesConfig({
               <Input
                 id="name"
                 value={policyName}
-                onChange={e => setPolicyName(e.target.value)}
+                onChange={(e) => setPolicyName(e.target.value)}
                 placeholder="Enter policy name"
                 required
                 disabled={isUpdating}
@@ -218,7 +218,7 @@ export function PoliciesConfig({
         </DialogContent>
       </Dialog>
 
-      <Dialog open={policyToDelete !== null} onOpenChange={open => !open && cancelDelete()}>
+      <Dialog open={policyToDelete !== null} onOpenChange={(open) => !open && cancelDelete()}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Delete Security Policy</DialogTitle>

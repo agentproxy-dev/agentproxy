@@ -2,396 +2,288 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { PlusCircle, Server, Globe, Terminal, Loader2, Network } from "lucide-react";
-import { Target, TargetType, Header } from "@/lib/types";
-import { updateTarget } from "@/lib/api";
+import { PlusCircle, Loader2, Info, Edit2 } from "lucide-react";
+import { Target, Config } from "@/lib/types";
+import { updateTarget, createMcpTarget, createA2aTarget } from "@/lib/api";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import TargetItem from "./target-item";
+import { MCPTargetForm } from "./setup-wizard/targets/MCPTargetForm";
+import { A2ATargetForm } from "./setup-wizard/targets/A2ATargetForm";
+import { toast } from "@/lib/toast";
 
 interface TargetsConfigProps {
-  targets: Target[];
-  addTarget: (target: Target) => void;
-  removeTarget: (index: number) => void;
+  config: Config;
+  onConfigChange: (config: Config) => void;
   serverAddress?: string;
   serverPort?: number;
-  onConfigUpdate?: (success: boolean, message: string) => void;
 }
 
 export function TargetsConfig({
-  targets,
-  addTarget,
-  removeTarget,
-  serverAddress,
-  serverPort,
-  onConfigUpdate,
+  config,
+  onConfigChange,
+  serverAddress = "0.0.0.0",
+  serverPort = 19000,
 }: TargetsConfigProps) {
+  const [targetCategory, setTargetCategory] = useState<"mcp" | "a2a">("mcp");
+  const [targetName, setTargetName] = useState("");
   const [isAddingTarget, setIsAddingTarget] = useState(false);
-  const [serverType, setServerType] = useState<TargetType>("sse");
-  const [serverName, setServerName] = useState("");
-  const [url, setUrl] = useState("");
-  const [command, setCommand] = useState("npx");
-  const [args, setArgs] = useState("");
-  const [targetToDelete, setTargetToDelete] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingTarget, setEditingTarget] = useState<Target | undefined>(undefined);
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-
-    const targetConfig: Target = {
-      name: serverName,
+  const handleAddTarget = (target: Target) => {
+    const newConfig = {
+      ...config,
+      targets: [...config.targets, target],
     };
+    onConfigChange(newConfig);
+  };
 
-    if (serverType === "stdio") {
-      targetConfig.stdio = {
-        cmd: command,
-        args: args.split(" ").filter((arg) => arg.trim() !== ""),
-        env: {},
+  const handleRemoveTarget = (index: number) => {
+    const newConfig = {
+      ...config,
+      targets: config.targets.filter((_, i) => i !== index),
+    };
+    onConfigChange(newConfig);
+    toast.success("Target removed", {
+      description: "The target has been removed from your configuration.",
+    });
+  };
+
+  const handleCreateTarget = async (target: Target) => {
+    setIsAddingTarget(true);
+    setError(null);
+
+    try {
+      if (targetCategory === "a2a") {
+        await createA2aTarget(serverAddress, serverPort, target);
+      } else {
+        await createMcpTarget(serverAddress, serverPort, target);
+      }
+
+      handleAddTarget(target);
+      setTargetName("");
+      setIsDialogOpen(false);
+      toast.success("Target created", {
+        description: `Successfully created ${target.name} target.`,
+      });
+    } catch (err) {
+      console.error("Error creating target:", err);
+      setError(err instanceof Error ? err.message : "Failed to create target");
+      toast.error("Error creating target", {
+        description: err instanceof Error ? err.message : "Failed to create target",
+      });
+      throw err;
+    } finally {
+      setIsAddingTarget(false);
+    }
+  };
+
+  const handleUpdateTarget = async (target: Target) => {
+    setIsUpdating(true);
+    try {
+      await updateTarget(serverAddress, serverPort, target);
+
+      // Update the target in the config
+      const newConfig = {
+        ...config,
+        targets: config.targets.map((t) => (t.name === target.name ? target : t)),
       };
-    } else if (serverType === "sse") {
-      try {
-        const urlObj = new URL(url);
-        let port: number;
-        if (urlObj.port) {
-          port = parseInt(urlObj.port, 10);
-        } else {
-          port = urlObj.protocol === "https:" ? 443 : 80;
-        }
-        targetConfig.sse = {
-          host: urlObj.hostname,
-          port: port,
-          path: urlObj.pathname + urlObj.search,
-          headers: [],
-        };
-      } catch (error) {
-        console.error("Invalid URL:", error);
-        return;
-      }
-    } else if (serverType === "openapi") {
-      targetConfig.openapi = {
-        host: url,
-        port: 80,
-        schema: {
-          file_path: "",
-        },
-      };
-    } else if (serverType === "a2a") {
-      try {
-        const urlObj = new URL(url);
-        let port: number;
-        if (urlObj.port) {
-          port = parseInt(urlObj.port, 10);
-        } else {
-          port = urlObj.protocol === "https:" ? 443 : 80;
-        }
-        targetConfig.a2a = {
-          host: urlObj.hostname,
-          port: port,
-          path: urlObj.pathname + urlObj.search,
-          headers: [],
-        };
-      } catch (error) {
-        console.error("Invalid URL:", error);
-        return;
-      }
-    }
+      onConfigChange(newConfig);
 
-    // Add target to local state
-    addTarget(targetConfig);
-
-    // Update target on server
-    if (serverAddress && serverPort) {
-      setIsUpdating(true);
-      try {
-        await updateTarget(serverAddress, serverPort, targetConfig);
-        if (onConfigUpdate) {
-          onConfigUpdate(true, "Target added successfully");
-        }
-      } catch (error) {
-        console.error("Error adding target:", error);
-        if (onConfigUpdate) {
-          onConfigUpdate(false, error instanceof Error ? error.message : "Failed to add target");
-        }
-      } finally {
-        setIsUpdating(false);
-      }
-    }
-
-    resetForm();
-    setIsAddingTarget(false);
-  };
-
-  const resetForm = () => {
-    setServerName("");
-    setUrl("");
-    setCommand("npx");
-    setArgs("");
-  };
-
-  const handleDeleteTarget = (index: number) => {
-    setTargetToDelete(index);
-  };
-
-  const confirmDelete = async () => {
-    if (targetToDelete !== null) {
-      // Remove target from local state
-      removeTarget(targetToDelete);
-
-      // Update targets on server
-      if (serverAddress && serverPort) {
-        setIsUpdating(true);
-        try {
-          // For deletion, we need to update the entire targets list
-          // This is a limitation of the current API design
-          const updatedTargets = targets.filter((_, i) => i !== targetToDelete);
-          if (updatedTargets.length > 0) {
-            await updateTarget(serverAddress, serverPort, updatedTargets[0]);
-          }
-          if (onConfigUpdate) {
-            onConfigUpdate(true, "Target removed successfully");
-          }
-        } catch (error) {
-          console.error("Error removing target:", error);
-          if (onConfigUpdate) {
-            onConfigUpdate(
-              false,
-              error instanceof Error ? error.message : "Failed to remove target"
-            );
-          }
-        } finally {
-          setIsUpdating(false);
-        }
-      }
-
-      setTargetToDelete(null);
+      setIsDialogOpen(false);
+      setEditingTarget(undefined);
+      toast.success("Target updated", {
+        description: `Successfully updated ${target.name} target.`,
+      });
+    } catch (err) {
+      console.error("Error updating target:", err);
+      setError(err instanceof Error ? err.message : "Failed to update target");
+      toast.error("Error updating target", {
+        description: err instanceof Error ? err.message : "Failed to update target",
+      });
+    } finally {
+      setIsUpdating(false);
     }
   };
 
-  const cancelDelete = () => {
-    setTargetToDelete(null);
+  const openAddTargetDialog = () => {
+    setTargetName("");
+    setTargetCategory("mcp");
+    setEditingTarget(undefined);
+    setIsDialogOpen(true);
+  };
+
+  const openEditTargetDialog = (target: Target) => {
+    setTargetName(target.name);
+    setTargetCategory(target.a2a ? "a2a" : "mcp");
+    setEditingTarget(target);
+    setIsDialogOpen(true);
+  };
+
+  const handleDialogClose = () => {
+    setIsDialogOpen(false);
+    setEditingTarget(undefined);
+    setTargetName("");
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h3 className="text-lg font-medium mb-2">Target Servers</h3>
-        <p className="text-sm text-muted-foreground mb-4">
-          Configure servers that the proxy connects to
-        </p>
-      </div>
-
-      {isUpdating && (
-        <Alert>
-          <AlertDescription className="flex items-center">
-            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            Updating targets on server...
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {targets.length === 0 && !isAddingTarget ? (
-        <Alert>
-          <AlertDescription>
-            No target servers configured. Add a server to get started.
-          </AlertDescription>
-        </Alert>
-      ) : (
-        <div className="space-y-4">
-          {targets.map((target, index) => (
-            <TargetItem
-              key={index}
-              target={target}
-              index={index}
-              onDelete={handleDeleteTarget}
-              isUpdating={isUpdating}
-            />
-          ))}
+    <Card className="w-full">
+      <CardHeader>
+        <div className="flex justify-between items-center">
+          <div>
+            <CardTitle>Target Servers</CardTitle>
+            <CardDescription>
+              Configure the servers that your proxy will forward requests to
+            </CardDescription>
+          </div>
+          <Button onClick={openAddTargetDialog}>
+            <PlusCircle className="h-4 w-4 mr-2" />
+            Add Target
+          </Button>
         </div>
-      )}
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <h3 className="font-medium">What are Targets?</h3>
+            <p className="text-sm text-muted-foreground">
+              Targets are the destination servers that your proxy will forward requests to. You can
+              add multiple targets and configure their connection settings.
+            </p>
+          </div>
 
-      <Button
-        onClick={() => setIsAddingTarget(true)}
-        className="flex items-center"
-        disabled={isUpdating}
-      >
-        <PlusCircle className="h-4 w-4 mr-2" />
-        Add Target Server
-      </Button>
+          {error && (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
 
-      <Dialog open={isAddingTarget} onOpenChange={setIsAddingTarget}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Add Target Server</DialogTitle>
-            <DialogDescription>
-              Configure a new target server for the proxy to connect to.
-            </DialogDescription>
-          </DialogHeader>
+          {isUpdating && (
+            <Alert>
+              <AlertDescription className="flex items-center">
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Updating targets...
+              </AlertDescription>
+            </Alert>
+          )}
 
-          <form onSubmit={handleSubmit} className="space-y-4 mt-6">
-            <div className="space-y-2">
-              <Label htmlFor="name">Server Name</Label>
-              <Input
-                id="name"
-                value={serverName}
-                onChange={(e) => setServerName(e.target.value)}
-                placeholder="Enter server name"
-                required
-                disabled={isUpdating}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Server Type</Label>
-              <Tabs
-                value={serverType}
-                onValueChange={(value) => setServerType(value as TargetType)}
-              >
-                <TabsList className="grid grid-cols-4">
-                  <TabsTrigger value="sse" className="flex items-center">
-                    <Globe className="h-4 w-4 mr-2" />
-                    SSE
-                  </TabsTrigger>
-                  <TabsTrigger value="stdio" className="flex items-center">
-                    <Terminal className="h-4 w-4 mr-2" />
-                    stdio
-                  </TabsTrigger>
-                  <TabsTrigger value="openapi" className="flex items-center">
-                    <Server className="h-4 w-4 mr-2" />
-                    OpenAPI
-                  </TabsTrigger>
-                  <TabsTrigger value="a2a" className="flex items-center">
-                    <Network className="h-4 w-4 mr-2" />
-                    A2A
-                  </TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="sse" className="space-y-4 pt-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="url">Server URL</Label>
-                    <Input
-                      id="url"
-                      type="url"
-                      value={url}
-                      onChange={(e) => setUrl(e.target.value)}
-                      placeholder="http://localhost:3000/events"
-                      required
-                      disabled={isUpdating}
+          {config?.targets && config.targets.length > 0 ? (
+            <div className="mt-6">
+              <h3 className="font-medium mb-2">Configured Targets</h3>
+              <div className="space-y-2">
+                {config.targets.map((target, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center justify-between p-3 border rounded-md"
+                  >
+                    <TargetItem
+                      target={target}
+                      index={index}
+                      onDelete={handleRemoveTarget}
+                      isUpdating={isUpdating}
                     />
-                    <p className="text-sm text-muted-foreground">
-                      Enter the full URL including protocol, hostname, port, and path
-                    </p>
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="stdio" className="space-y-4 pt-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="command">Command</Label>
-                    <Input
-                      id="command"
-                      value={command}
-                      onChange={(e) => setCommand(e.target.value)}
-                      placeholder="npx"
-                      required
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => openEditTargetDialog(target)}
+                      className="h-8 w-8 ml-2"
                       disabled={isUpdating}
-                    />
+                    >
+                      <Edit2 className="h-4 w-4" />
+                    </Button>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="args">Arguments</Label>
-                    <Input
-                      id="args"
-                      value={args}
-                      onChange={(e) => setArgs(e.target.value)}
-                      placeholder="--port 3000"
-                      disabled={isUpdating}
-                    />
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="openapi" className="space-y-4 pt-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="openapi-url">Server URL</Label>
-                    <Input
-                      id="openapi-url"
-                      type="url"
-                      value={url}
-                      onChange={(e) => setUrl(e.target.value)}
-                      placeholder="http://localhost:3000"
-                      required
-                      disabled={isUpdating}
-                    />
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="a2a" className="space-y-4 pt-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="a2a-url">Server URL</Label>
-                    <Input
-                      id="a2a-url"
-                      type="url"
-                      value={url}
-                      onChange={(e) => setUrl(e.target.value)}
-                      placeholder="http://localhost:3000"
-                      required
-                      disabled={isUpdating}
-                    />
-                    <p className="text-sm text-muted-foreground">
-                      Enter the full URL including protocol, hostname, port, and path
-                    </p>
-                  </div>
-                </TabsContent>
-              </Tabs>
-
-              <div className="flex justify-end">
-                <Button type="submit" disabled={isUpdating}>
-                  {isUpdating ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Adding...
-                    </>
-                  ) : (
-                    "Add Server"
-                  )}
-                </Button>
+                ))}
               </div>
             </div>
-          </form>
-        </DialogContent>
-      </Dialog>
+          ) : (
+            <Alert>
+              <Info className="h-4 w-4" />
+              <AlertDescription>
+                No targets configured yet. Click <strong>Add Target</strong> to create your first
+                target.
+              </AlertDescription>
+            </Alert>
+          )}
+        </div>
+      </CardContent>
 
-      <Dialog open={targetToDelete !== null} onOpenChange={(open) => !open && cancelDelete()}>
-        <DialogContent>
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
-            <DialogTitle>Delete Target Server</DialogTitle>
+            <DialogTitle>{editingTarget ? "Edit Target" : "Add New Target"}</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete this target server? This action cannot be undone.
+              {editingTarget
+                ? "Update the configuration for your target server."
+                : "Configure a new target server for your proxy."}
             </DialogDescription>
           </DialogHeader>
-          <div className="flex justify-end gap-2 mt-4">
-            <Button variant="outline" onClick={cancelDelete} disabled={isUpdating}>
+
+          <Tabs
+            value={targetCategory}
+            onValueChange={(value) => setTargetCategory(value as "mcp" | "a2a")}
+          >
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="mcp">MCP Target</TabsTrigger>
+              <TabsTrigger value="a2a">A2A Target</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="mcp" className="space-y-4 pt-4">
+              <Alert>
+                <Info className="h-4 w-4" />
+                <AlertDescription>
+                  MCP (Model Control Protocol) targets are used to connect to AI model servers that
+                  support the MCP protocol. These are typically used for AI model inference and
+                  control.
+                </AlertDescription>
+              </Alert>
+
+              <MCPTargetForm
+                targetName={targetName}
+                onTargetNameChange={setTargetName}
+                onSubmit={editingTarget ? handleUpdateTarget : handleCreateTarget}
+                isLoading={isAddingTarget || isUpdating}
+                existingTarget={editingTarget}
+              />
+            </TabsContent>
+
+            <TabsContent value="a2a" className="space-y-4 pt-4">
+              <Alert>
+                <Info className="h-4 w-4" />
+                <AlertDescription>
+                  A2A (Agent-to-Agent) targets are used to connect to other agent systems that
+                  support the A2A protocol. These are typically used for agent-to-agent
+                  communication and collaboration.
+                </AlertDescription>
+              </Alert>
+
+              <A2ATargetForm
+                targetName={targetName}
+                onSubmit={editingTarget ? handleUpdateTarget : handleCreateTarget}
+                isLoading={isAddingTarget || isUpdating}
+                existingTarget={editingTarget}
+              />
+            </TabsContent>
+          </Tabs>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={handleDialogClose}>
               Cancel
             </Button>
-            <Button variant="destructive" onClick={confirmDelete} disabled={isUpdating}>
-              {isUpdating ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Deleting...
-                </>
-              ) : (
-                "Delete"
-              )}
-            </Button>
-          </div>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </Card>
   );
 }

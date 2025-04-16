@@ -14,118 +14,86 @@ import {
   SidebarMenuButton,
   SidebarMenuBadge,
   SidebarSeparator,
-  useSidebar,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { MCPLogo } from "@/components/mcp-logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Target } from "@/lib/types";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  Loader2,
-  Home,
-  Shield,
-  Headphones,
-  Server,
-  Code,
-  LogOut,
-  ChevronsUpDown,
-} from "lucide-react";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Loader2, Home, Shield, Headphones, Server, Code, Settings } from "lucide-react";
+import { fetchListeners, deleteListener } from "@/lib/api";
+import { useLoading } from "@/lib/loading-context";
+import { useRouter, usePathname } from "next/navigation";
+import { useServer } from "@/lib/server-context";
 
 interface AppSidebarProps {
-  isConnected: boolean;
-  serverAddress?: string;
-  serverPort?: number;
-  onConnect: (address: string, port: number) => Promise<boolean>;
-  onDisconnect: () => void;
   targets: any[];
+  listeners: any[];
   activeView: string;
   setActiveView: (view: string) => void;
   addTarget: (target: Target) => void;
+  onRestartWizard: () => void;
 }
 
 export function AppSidebar({
-  isConnected,
-  serverAddress,
-  serverPort,
-  onConnect,
-  onDisconnect,
   targets,
-  activeView,
+  listeners,
   setActiveView,
+  onRestartWizard,
 }: AppSidebarProps) {
-  const { isMobile } = useSidebar();
+  const { setIsLoading } = useLoading();
+  const [showRestartDialog, setShowRestartDialog] = useState(false);
+  const [isDeletingListeners, setIsDeletingListeners] = useState(false);
+  const router = useRouter();
+  const pathname = usePathname();
+  const {} = useServer();
+
+  const handleRestartWizard = () => {
+    setShowRestartDialog(true);
+  };
+
+  const confirmRestartWizard = async () => {
+    try {
+      setIsDeletingListeners(true);
+      setIsLoading(true);
+
+      // Fetch all listeners
+      const listeners = await fetchListeners("0.0.0.0", 19000);
+
+      // Delete each listener
+      for (const listener of listeners) {
+        // Create a unique identifier for each listener based on its properties
+        await deleteListener("0.0.0.0", 19000, listener);
+      }
+
+      // Call the parent component's onRestartWizard function
+      onRestartWizard();
+    } catch (error) {
+      console.error("Error restarting wizard:", error);
+    } finally {
+      setIsDeletingListeners(false);
+      setIsLoading(false);
+      setShowRestartDialog(false);
+    }
+  };
+
+  const navigateTo = (path: string) => {
+    router.push(path);
+    setActiveView(path.split("/").pop() || "home");
+  };
 
   return (
     <Sidebar>
       <SidebarHeader className="border-b">
-        <div className="p-2">
-          <div className="flex items-center justify-center mb-2">
-            <MCPLogo className="h-10 w-auto" />
-          </div>
-
-          <div className="mt-4 space-y-2">
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <SidebarMenuButton
-                      size="lg"
-                      className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
-                      aria-label="Server actions"
-                    >
-                      <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-                        <Server className="size-4" />
-                      </div>
-                      <div className="grid flex-1 text-left text-sm leading-tight">
-                        <span className="truncate font-semibold">
-                          {serverAddress}:{serverPort}
-                        </span>
-                        <span className="truncate text-xs">Connected</span>
-                      </div>
-                      <ChevronsUpDown className="ml-auto" />
-                    </SidebarMenuButton>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent
-                    className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg"
-                    align="start"
-                    side={isMobile ? "bottom" : "right"}
-                    sideOffset={4}
-                  >
-                    <DropdownMenuLabel className="text-xs text-muted-foreground">
-                      Server Actions
-                    </DropdownMenuLabel>
-                    <DropdownMenuItem
-                      onClick={() => {
-                        if (serverAddress && serverPort) {
-                          onConnect(serverAddress, serverPort);
-                        }
-                      }}
-                      className="gap-2 p-2"
-                    >
-                      <Loader2 className="size-4 animate-spin" />
-                      Refresh Connection
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      onClick={onDisconnect}
-                      className="gap-2 p-2 text-destructive"
-                    >
-                      <LogOut className="size-4" />
-                      Disconnect
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </div>
+        <div className="p-2 flex items-center justify-center mb-2">
+          <MCPLogo className="h-10 w-auto" />
         </div>
       </SidebarHeader>
 
@@ -137,8 +105,8 @@ export function AppSidebar({
               <SidebarMenuItem>
                 <SidebarMenuButton
                   tooltip="Home"
-                  isActive={activeView === "home"}
-                  onClick={() => setActiveView("home")}
+                  isActive={pathname === "/"}
+                  onClick={() => navigateTo("/")}
                   aria-label="Home"
                 >
                   <Home className="h-4 w-4" />
@@ -148,19 +116,20 @@ export function AppSidebar({
               <SidebarMenuItem>
                 <SidebarMenuButton
                   tooltip="Listener Settings"
-                  isActive={activeView === "listener"}
-                  onClick={() => setActiveView("listener")}
+                  isActive={pathname === "/listeners"}
+                  onClick={() => navigateTo("/listeners")}
                   aria-label="Listener Settings"
                 >
                   <Headphones className="h-4 w-4" />
                   <span>Listener</span>
+                  <SidebarMenuBadge>{listeners.length}</SidebarMenuBadge>
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton
                   tooltip="Target Servers"
-                  isActive={activeView === "targets"}
-                  onClick={() => setActiveView("targets")}
+                  isActive={pathname === "/targets"}
+                  onClick={() => navigateTo("/targets")}
                   aria-label="Target Servers"
                 >
                   <Server className="h-4 w-4" />
@@ -171,8 +140,8 @@ export function AppSidebar({
               <SidebarMenuItem>
                 <SidebarMenuButton
                   tooltip="Security Policies"
-                  isActive={activeView === "policies"}
-                  onClick={() => setActiveView("policies")}
+                  isActive={pathname === "/policies"}
+                  onClick={() => navigateTo("/policies")}
                   aria-label="Security Policies"
                 >
                   <Shield className="h-4 w-4" />
@@ -182,8 +151,8 @@ export function AppSidebar({
               <SidebarMenuItem>
                 <SidebarMenuButton
                   tooltip="JSON Configuration"
-                  isActive={activeView === "json"}
-                  onClick={() => setActiveView("json")}
+                  isActive={pathname === "/json"}
+                  onClick={() => navigateTo("/json")}
                   aria-label="JSON Configuration"
                 >
                   <Code className="h-4 w-4" />
@@ -200,12 +169,53 @@ export function AppSidebar({
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
+            <SidebarMenuButton
+              tooltip="Restart Setup Wizard"
+              onClick={handleRestartWizard}
+              aria-label="Restart Setup Wizard"
+            >
+              <Settings className="h-4 w-4" />
+              <span>Restart Setup</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
             <SidebarMenuButton tooltip="Theme">
               <ThemeToggle asChild className="flex items-center gap-2" />
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
+
+      <Dialog open={showRestartDialog} onOpenChange={setShowRestartDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Restart Setup Wizard</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to restart the setup wizard? This will reset all your current
+              configuration settings.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowRestartDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmRestartWizard}
+              disabled={isDeletingListeners}
+            >
+              {isDeletingListeners ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Restarting...
+                </>
+              ) : (
+                "Restart Wizard"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Sidebar>
   );
 }

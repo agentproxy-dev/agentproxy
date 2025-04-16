@@ -4,6 +4,9 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { LoadingWrapper } from "@/components/loading-wrapper";
 import { Toaster } from "@/components/ui/sonner";
+import { ServerProvider } from "@/lib/server-context";
+import { SidebarProvider } from "@/components/ui/sidebar";
+import { SidebarWrapper } from "@/components/sidebar-wrapper";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -16,8 +19,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "MCP Proxy Dashboard",
-  description: "MCP Proxy Dashboard",
+  title: "Agent-proxy Dashboard",
+  description: "Agent-proxy Dashboard",
   icons: {
     icon: "/favicon.svg",
   },
@@ -33,18 +36,25 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased h-full flex flex-col`}
       >
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange
-          storageKey="agentproxy-theme"
-        >
-          <LoadingWrapper>
-            <main className="flex-1 overflow-auto">{children}</main>
-            <Toaster />
-          </LoadingWrapper>
-        </ThemeProvider>
+        <ServerProvider>
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="system"
+            enableSystem
+            disableTransitionOnChange
+            storageKey="agentproxy-theme"
+          >
+            <LoadingWrapper>
+              <SidebarProvider>
+                <div className="flex min-h-screen w-full">
+                  <SidebarWrapper />
+                  <main className="flex-1 overflow-auto">{children}</main>
+                </div>
+              </SidebarProvider>
+              <Toaster />
+            </LoadingWrapper>
+          </ThemeProvider>
+        </ServerProvider>
       </body>
     </html>
   );

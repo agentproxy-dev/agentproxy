@@ -36,7 +36,7 @@ export function ConnectionForm({ onConnect, connectionError }: ConnectionFormPro
           <Input
             id="address"
             value={address}
-            onChange={e => setAddress(e.target.value)}
+            onChange={(e) => setAddress(e.target.value)}
             placeholder="localhost or IP address"
             required
           />
@@ -47,7 +47,7 @@ export function ConnectionForm({ onConnect, connectionError }: ConnectionFormPro
           <Input
             id="port"
             value={port}
-            onChange={e => setPort(parseInt(e.target.value))}
+            onChange={(e) => setPort(parseInt(e.target.value))}
             placeholder="Port number"
             required
           />
