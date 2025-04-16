@@ -6,8 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { PlusCircle, Server, Globe, Terminal, Loader2, Network } from "lucide-react";
-import { Target, TargetType, Header } from "@/lib/types";
+import { PlusCircle, Server, Globe, Terminal, Loader2, Network, ChevronDown, ChevronUp } from "lucide-react";
+import { Target, TargetType, Header, BackendAuth, BackendTls } from "@/lib/types";
 import { updateTarget } from "@/lib/api";
 import {
   Dialog,
@@ -17,6 +17,8 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import TargetItem from "./target-item";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 interface TargetsConfigProps {
   targets: Target[];
@@ -43,6 +45,14 @@ export function TargetsConfig({
   const [args, setArgs] = useState("");
   const [targetToDelete, setTargetToDelete] = useState<number | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
+  
+  // Advanced settings for SSE targets
+  const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
+  const [headers, setHeaders] = useState<Header[]>([]);
+  const [headerKey, setHeaderKey] = useState("");
+  const [headerValue, setHeaderValue] = useState("");
+  const [passthroughAuth, setPassthroughAuth] = useState(false);
+  const [insecureSkipVerify, setInsecureSkipVerify] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -66,12 +76,28 @@ export function TargetsConfig({
         } else {
           port = urlObj.protocol === "https:" ? 443 : 80;
         }
+        
+        // Create the SSE target with the parsed URL components
         targetConfig.sse = {
           host: urlObj.hostname,
           port: port,
           path: urlObj.pathname + urlObj.search,
-          headers: [],
+          headers: headers.length > 0 ? headers : undefined,
         };
+        
+        // Add auth if passthrough is enabled
+        if (passthroughAuth) {
+          targetConfig.sse.auth = {
+            passthrough: true
+          };
+        }
+        
+        // Add TLS config if insecure skip verify is enabled
+        if (insecureSkipVerify) {
+          targetConfig.sse.tls = {
+            insecure_skip_verify: true
+          };
+        }
       } catch (error) {
         console.error("Invalid URL:", error);
         return;
@@ -135,6 +161,24 @@ export function TargetsConfig({
     setUrl("");
     setCommand("npx");
     setArgs("");
+    setHeaders([]);
+    setHeaderKey("");
+    setHeaderValue("");
+    setPassthroughAuth(false);
+    setInsecureSkipVerify(false);
+    setShowAdvancedSettings(false);
+  };
+
+  const addHeader = () => {
+    if (headerKey && headerValue) {
+      setHeaders([...headers, { key: headerKey, value: { string_value: headerValue } }]);
+      setHeaderKey("");
+      setHeaderValue("");
+    }
+  };
+  
+  const removeHeader = (index: number) => {
+    setHeaders(headers.filter((_, i) => i !== index));
   };
 
   const handleDeleteTarget = (index: number) => {
@@ -290,6 +334,126 @@ export function TargetsConfig({
                       Enter the full URL including protocol, hostname, port, and path
                     </p>
                   </div>
+                  
+                  <Collapsible open={showAdvancedSettings} onOpenChange={setShowAdvancedSettings}>
+                    <CollapsibleTrigger asChild>
+                      <Button variant="ghost" className="flex items-center p-0 h-auto">
+                        {showAdvancedSettings ? (
+                          <ChevronUp className="h-4 w-4 mr-1" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4 mr-1" />
+                        )}
+                        Advanced Settings
+                      </Button>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="space-y-4 pt-2">
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <Label>Headers</Label>
+                          <div className="space-y-2">
+                            {headers.map((header, index) => (
+                              <div key={index} className="flex items-center gap-2">
+                                <div className="flex-1">
+                                  <Input
+                                    value={header.key}
+                                    disabled
+                                    placeholder="Header key"
+                                  />
+                                </div>
+                                <div className="flex-1">
+                                  <Input
+                                    value={header.value.string_value}
+                                    disabled
+                                    placeholder="Header value"
+                                  />
+                                </div>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="icon"
+                                  onClick={() => removeHeader(index)}
+                                  disabled={isUpdating}
+                                >
+                                  <span className="sr-only">Remove header</span>
+                                  <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    width="24"
+                                    height="24"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    className="h-4 w-4"
+                                  >
+                                    <path d="M18 6 6 18" />
+                                    <path d="m6 6 12 12" />
+                                  </svg>
+                                </Button>
+                              </div>
+                            ))}
+                            <div className="flex items-center gap-2">
+                              <div className="flex-1">
+                                <Input
+                                  value={headerKey}
+                                  onChange={(e) => setHeaderKey(e.target.value)}
+                                  placeholder="Header key"
+                                  disabled={isUpdating}
+                                />
+                              </div>
+                              <div className="flex-1">
+                                <Input
+                                  value={headerValue}
+                                  onChange={(e) => setHeaderValue(e.target.value)}
+                                  placeholder="Header value"
+                                  disabled={isUpdating}
+                                />
+                              </div>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={addHeader}
+                                disabled={isUpdating || !headerKey || !headerValue}
+                              >
+                                Add
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <Label>Authentication</Label>
+                          <div className="flex items-center space-x-2">
+                            <Checkbox
+                              id="passthrough-auth"
+                              checked={passthroughAuth}
+                              onCheckedChange={(checked: boolean | "indeterminate") => setPassthroughAuth(checked as boolean)}
+                              disabled={isUpdating}
+                            />
+                            <Label htmlFor="passthrough-auth" className="text-sm font-normal">
+                              Pass through authentication
+                            </Label>
+                          </div>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <Label>TLS Configuration</Label>
+                          <div className="flex items-center space-x-2">
+                            <Checkbox
+                              id="insecure-skip-verify"
+                              checked={insecureSkipVerify}
+                              onCheckedChange={(checked: boolean | "indeterminate") => setInsecureSkipVerify(checked as boolean)}
+                              disabled={isUpdating}
+                            />
+                            <Label htmlFor="insecure-skip-verify" className="text-sm font-normal">
+                              Insecure skip verify
+                            </Label>
+                          </div>
+                        </div>
+                      </div>
+                    </CollapsibleContent>
+                  </Collapsible>
                 </TabsContent>
 
                 <TabsContent value="stdio" className="space-y-4 pt-4">

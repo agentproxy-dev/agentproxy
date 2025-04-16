@@ -5,8 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { ListenerConfig } from "@/components/listener-config";
 import { TargetsConfig } from "@/components/targets-config";
-import { Config, Target, TargetType, Listener } from "@/lib/types";
-import { ArrowRight, ArrowLeft, Info, Globe, Server, Terminal, Trash2 } from "lucide-react";
+import { Config, Target, TargetType, Listener, Header, BackendAuth, BackendTls } from "@/lib/types";
+import { ArrowRight, ArrowLeft, Info, Globe, Server, Terminal, Trash2, ChevronDown, ChevronUp } from "lucide-react";
 import { MCPLogo } from "@/components/mcp-logo";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
@@ -14,6 +14,9 @@ import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { createMcpTarget, createA2aTarget, fetchListeners, createListener } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface SetupWizardProps {
   config: Config;
@@ -47,6 +50,15 @@ export function SetupWizard({
   const [listenerAddress, setListenerAddress] = useState("0.0.0.0");
   const [listenerPort, setListenerPort] = useState("5555");
   const [isUpdatingListener, setIsUpdatingListener] = useState(false);
+  
+  // New state variables for SSE URL and advanced settings
+  const [sseUrl, setSseUrl] = useState("");
+  const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
+  const [headers, setHeaders] = useState<Header[]>([]);
+  const [headerKey, setHeaderKey] = useState("");
+  const [headerValue, setHeaderValue] = useState("");
+  const [passthroughAuth, setPassthroughAuth] = useState(false);
+  const [insecureSkipVerify, setInsecureSkipVerify] = useState(false);
 
   // Function to update the listener configuration
   const updateListenerConfig = async () => {
@@ -178,25 +190,72 @@ export function SetupWizard({
           };
         } else {
           // Default to SSE
-          if (!targetHost || !targetPort) {
-            setError("Host and port are required for SSE targets");
-            setIsAddingTarget(false);
-            return;
+          if (targetType === "sse") {
+            if (!sseUrl) {
+              setError("URL is required for SSE targets");
+              setIsAddingTarget(false);
+              return;
+            }
+            
+            try {
+              const urlObj = new URL(sseUrl);
+              let port: number;
+              if (urlObj.port) {
+                port = parseInt(urlObj.port, 10);
+              } else {
+                port = urlObj.protocol === "https:" ? 443 : 80;
+              }
+              
+              newTarget = {
+                name: targetName,
+                sse: {
+                  host: urlObj.hostname,
+                  port: port,
+                  path: urlObj.pathname + urlObj.search,
+                  headers: headers.length > 0 ? headers : undefined,
+                },
+              };
+              
+              // Add auth if passthrough is enabled
+              if (passthroughAuth) {
+                newTarget.sse!.auth = {
+                  passthrough: true
+                };
+              }
+              
+              // Add TLS config if insecure skip verify is enabled
+              if (insecureSkipVerify) {
+                newTarget.sse!.tls = {
+                  insecure_skip_verify: true
+                };
+              }
+            } catch (err) {
+              setError("Invalid URL format. Please enter a valid URL including protocol (http:// or https://)");
+              setIsAddingTarget(false);
+              return;
+            }
+          } else {
+            // Fallback to the old method for other target types
+            if (!targetHost || !targetPort) {
+              setError("Host and port are required for SSE targets");
+              setIsAddingTarget(false);
+              return;
+            }
+            const port = parseInt(targetPort, 10);
+            if (isNaN(port)) {
+              setError("Port must be a valid number");
+              setIsAddingTarget(false);
+              return;
+            }
+            newTarget = {
+              name: targetName,
+              sse: {
+                host: targetHost,
+                port: port,
+                path: targetPath,
+              },
+            };
           }
-          const port = parseInt(targetPort, 10);
-          if (isNaN(port)) {
-            setError("Port must be a valid number");
-            setIsAddingTarget(false);
-            return;
-          }
-          newTarget = {
-            name: targetName,
-            sse: {
-              host: targetHost,
-              port: port,
-              path: targetPath,
-            },
-          };
         }
         
         // Push to proxy server
@@ -220,6 +279,25 @@ export function SetupWizard({
     setTargetPath("/");
     setCommand("npx");
     setArgs("");
+    setSseUrl("");
+    setHeaders([]);
+    setHeaderKey("");
+    setHeaderValue("");
+    setPassthroughAuth(false);
+    setInsecureSkipVerify(false);
+    setShowAdvancedSettings(false);
+  };
+  
+  const addHeader = () => {
+    if (headerKey && headerValue) {
+      setHeaders([...headers, { key: headerKey, value: { string_value: headerValue } }]);
+      setHeaderKey("");
+      setHeaderValue("");
+    }
+  };
+  
+  const removeHeader = (index: number) => {
+    setHeaders(headers.filter((_, i) => i !== index));
   };
 
   const getTargetIcon = (type: TargetType) => {
@@ -254,16 +332,16 @@ export function SetupWizard({
               <div className="flex justify-center mb-6">
                 <MCPLogo className="h-12" />
               </div>
-              <CardTitle className="text-center">Welcome to MCP Proxy</CardTitle>
+              <CardTitle className="text-center">Welcome to agent-proxy</CardTitle>
               <CardDescription className="text-center">
                 Let's get your proxy server up and running in just a few steps
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <h3 className="font-medium">What is MCP Proxy?</h3>
+                <h3 className="font-medium">What is agent-proxy?</h3>
                 <p className="text-sm text-muted-foreground">
-                  MCP Proxy is a powerful tool that helps you manage and secure your server connections.
+                  Agentproxy is a powerful tool that helps you manage and secure your server connections.
                   It allows you to configure listeners, set up target servers, and implement security policies.
                 </p>
               </div>
@@ -432,32 +510,134 @@ export function SetupWizard({
                           
                           <TabsContent value="sse" className="space-y-4 pt-4">
                             <div className="space-y-2">
-                              <Label htmlFor="sseHost">Host</Label>
+                              <Label htmlFor="sseUrl">Server URL</Label>
                               <Input
-                                id="sseHost"
-                                value={targetHost}
-                                onChange={(e) => setTargetHost(e.target.value)}
-                                placeholder="e.g., localhost"
+                                id="sseUrl"
+                                type="url"
+                                value={sseUrl}
+                                onChange={(e) => setSseUrl(e.target.value)}
+                                placeholder="http://localhost:3000/events"
+                                required
                               />
+                              <p className="text-sm text-muted-foreground">
+                                Enter the full URL including protocol, hostname, port, and path
+                              </p>
                             </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="ssePort">Port</Label>
-                              <Input
-                                id="ssePort"
-                                value={targetPort}
-                                onChange={(e) => setTargetPort(e.target.value)}
-                                placeholder="e.g., 8080"
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="ssePath">Path</Label>
-                              <Input
-                                id="ssePath"
-                                value={targetPath}
-                                onChange={(e) => setTargetPath(e.target.value)}
-                                placeholder="e.g., /"
-                              />
-                            </div>
+                            
+                            <Collapsible open={showAdvancedSettings} onOpenChange={setShowAdvancedSettings}>
+                              <CollapsibleTrigger asChild>
+                                <Button variant="ghost" className="flex items-center p-0 h-auto">
+                                  {showAdvancedSettings ? (
+                                    <ChevronUp className="h-4 w-4 mr-1" />
+                                  ) : (
+                                    <ChevronDown className="h-4 w-4 mr-1" />
+                                  )}
+                                  Advanced Settings
+                                </Button>
+                              </CollapsibleTrigger>
+                              <CollapsibleContent className="space-y-4 pt-2">
+                                <div className="space-y-4">
+                                  <div className="space-y-2">
+                                    <Label>Headers</Label>
+                                    <div className="space-y-2">
+                                      {headers.map((header, index) => (
+                                        <div key={index} className="flex items-center gap-2">
+                                          <div className="flex-1">
+                                            <Input
+                                              value={header.key}
+                                              disabled
+                                              placeholder="Header key"
+                                            />
+                                          </div>
+                                          <div className="flex-1">
+                                            <Input
+                                              value={header.value.string_value}
+                                              disabled
+                                              placeholder="Header value"
+                                            />
+                                          </div>
+                                          <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="icon"
+                                            onClick={() => removeHeader(index)}
+                                          >
+                                            <span className="sr-only">Remove header</span>
+                                            <svg
+                                              xmlns="http://www.w3.org/2000/svg"
+                                              width="24"
+                                              height="24"
+                                              viewBox="0 0 24 24"
+                                              fill="none"
+                                              stroke="currentColor"
+                                              strokeWidth="2"
+                                              strokeLinecap="round"
+                                              strokeLinejoin="round"
+                                              className="h-4 w-4"
+                                            >
+                                              <path d="M18 6 6 18" />
+                                              <path d="m6 6 12 12" />
+                                            </svg>
+                                          </Button>
+                                        </div>
+                                      ))}
+                                      <div className="flex items-center gap-2">
+                                        <div className="flex-1">
+                                          <Input
+                                            value={headerKey}
+                                            onChange={(e) => setHeaderKey(e.target.value)}
+                                            placeholder="Header key"
+                                          />
+                                        </div>
+                                        <div className="flex-1">
+                                          <Input
+                                            value={headerValue}
+                                            onChange={(e) => setHeaderValue(e.target.value)}
+                                            placeholder="Header value"
+                                          />
+                                        </div>
+                                        <Button
+                                          type="button"
+                                          variant="outline"
+                                          onClick={addHeader}
+                                          disabled={!headerKey || !headerValue}
+                                        >
+                                          Add
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="space-y-2">
+                                    <Label>Authentication</Label>
+                                    <div className="flex items-center space-x-2">
+                                      <Checkbox
+                                        id="passthrough-auth"
+                                        checked={passthroughAuth}
+                                        onCheckedChange={(checked: boolean | "indeterminate") => setPassthroughAuth(checked as boolean)}
+                                      />
+                                      <Label htmlFor="passthrough-auth" className="text-sm font-normal">
+                                        Pass through authentication
+                                      </Label>
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="space-y-2">
+                                    <Label>TLS Configuration</Label>
+                                    <div className="flex items-center space-x-2">
+                                      <Checkbox
+                                        id="insecure-skip-verify"
+                                        checked={insecureSkipVerify}
+                                        onCheckedChange={(checked: boolean | "indeterminate") => setInsecureSkipVerify(checked as boolean)}
+                                      />
+                                      <Label htmlFor="insecure-skip-verify" className="text-sm font-normal">
+                                        Insecure skip verify
+                                      </Label>
+                                    </div>
+                                  </div>
+                                </div>
+                              </CollapsibleContent>
+                            </Collapsible>
                           </TabsContent>
                           
                           <TabsContent value="stdio" className="space-y-4 pt-4">
@@ -593,12 +773,24 @@ export function SetupWizard({
                             {getTargetIcon(getTargetType(target))}
                             <div>
                               <div className="font-medium">{target.name}</div>
-                              <div className="text-xs text-muted-foreground">
-                                {target.sse && `${target.sse.host}:${target.sse.port}${target.sse.path}`}
-                                {target.stdio && `${target.stdio.cmd} ${target.stdio.args?.join(" ")}`}
-                                {target.openapi && `${target.openapi.host}:${target.openapi.port}`}
-                                {target.a2a && `${target.a2a.host}:${target.a2a.port}${target.a2a.path}`}
-                              </div>
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <div className="text-xs text-muted-foreground truncate max-w-[400px]">
+                                      {target.sse && `${target.sse.host}:${target.sse.port}${target.sse.path}`}
+                                      {target.stdio && `${target.stdio.cmd} ${target.stdio.args?.join(" ")}`}
+                                      {target.openapi && `${target.openapi.host}:${target.openapi.port}`}
+                                      {target.a2a && `${target.a2a.host}:${target.a2a.port}${target.a2a.path}`}
+                                    </div>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    {target.sse && `${target.sse.host}:${target.sse.port}${target.sse.path}`}
+                                    {target.stdio && `${target.stdio.cmd} ${target.stdio.args?.join(" ")}`}
+                                    {target.openapi && `${target.openapi.host}:${target.openapi.port}`}
+                                    {target.a2a && `${target.a2a.host}:${target.a2a.port}${target.a2a.path}`}
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
                             </div>
                           </div>
                           <div className="flex items-center space-x-2">

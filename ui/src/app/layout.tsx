@@ -16,8 +16,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "MCP Proxy Dashboard",
-  description: "MCP Proxy Dashboard",
+  title: "Agent-proxy Dashboard",
+  description: "Agent-proxy Dashboard",
   icons: {
     icon: "/favicon.svg",
   },
