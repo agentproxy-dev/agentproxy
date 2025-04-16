@@ -73,8 +73,13 @@ impl Relay {
 			.iter()
 			.filter(|s| {
 				// TODO for now we treat it as a 'tool'
-				let tool_name = format!("{}:{}", service_name, s.name);
-				pols.validate(&rbac::ResourceType::Tool { id: tool_name }, &ctx.identity)
+				pols.validate(
+					&rbac::ResourceType::Tool(rbac::ResourceId::new(
+						service_name.to_string(),
+						s.name.to_string(),
+					)),
+					&ctx.identity,
+				)
 			})
 			.cloned()
 			.collect();

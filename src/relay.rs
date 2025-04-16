@@ -289,17 +289,20 @@ impl ServerHandler for Relay {
 		let _span = trcng::start_span("read_resource", &rq_ctx.identity)
 			.with_kind(SpanKind::Server)
 			.start_with_context(tracer, &rq_ctx.context);
+		let uri = request.uri.to_string();
+		let (service_name, resource) = uri
+			.split_once(DELIMITER)
+			.ok_or(McpError::invalid_request("invalid resource name", None))?;
 		if !self.policies.validate(
-			&rbac::ResourceType::Resource {
-				id: request.uri.to_string(),
-			},
+			&rbac::ResourceType::Resource(rbac::ResourceId::new(
+				service_name.to_string(),
+				resource.to_string(),
+			)),
 			&rq_ctx.identity,
 		) {
 			return Err(McpError::invalid_request("not allowed", None));
 		}
 
-		let uri = request.uri.to_string();
-		let (service_name, resource) = uri.split_once(DELIMITER).unwrap();
 		let mut pool = self.pool.write().await;
 		let service_arc = pool
 			.get_or_create(rq_ctx, service_name)
@@ -345,17 +348,20 @@ impl ServerHandler for Relay {
 		let _span = trcng::start_span("get_prompt", &rq_ctx.identity)
 			.with_kind(SpanKind::Server)
 			.start_with_context(tracer, &rq_ctx.context);
+
+		let prompt_name = request.name.to_string();
+		let (service_name, prompt) = prompt_name
+			.split_once(DELIMITER)
+			.ok_or(McpError::invalid_request("invalid prompt name", None))?;
 		if !self.policies.validate(
-			&rbac::ResourceType::Prompt {
-				id: request.name.to_string(),
-			},
+			&rbac::ResourceType::Prompt(rbac::ResourceId::new(
+				service_name.to_string(),
+				prompt.to_string(),
+			)),
 			&rq_ctx.identity,
 		) {
 			return Err(McpError::invalid_request("not allowed", None));
 		}
-
-		let prompt_name = request.name.to_string();
-		let (service_name, prompt) = prompt_name.split_once(DELIMITER).unwrap();
 		let mut pool = self.pool.write().await;
 		let svc = pool
 			.get_or_create(rq_ctx, service_name)
@@ -455,18 +461,19 @@ impl ServerHandler for Relay {
 		let _span = trcng::start_span("call_tool", &rq_ctx.identity)
 			.with_kind(SpanKind::Server)
 			.start_with_context(tracer, span_context);
-		if !self.policies.validate(
-			&rbac::ResourceType::Tool {
-				id: request.name.to_string(),
-			},
-			&rq_ctx.identity,
-		) {
-			return Err(McpError::invalid_request("not allowed", None));
-		}
 		let tool_name = request.name.to_string();
 		let (service_name, tool) = tool_name
 			.split_once(DELIMITER)
 			.ok_or(McpError::invalid_request("invalid tool name", None))?;
+		if !self.policies.validate(
+			&rbac::ResourceType::Tool(rbac::ResourceId::new(
+				service_name.to_string(),
+				tool.to_string(),
+			)),
+			&rq_ctx.identity,
+		) {
+			return Err(McpError::invalid_request("not allowed", None));
+		}
 		let mut pool = self.pool.write().await;
 		let svc = pool
 			.get_or_create(rq_ctx, service_name)
