@@ -85,6 +85,7 @@ fn main() -> Result<(), anyhow::Error> {
 	let descriptor_set = std::fs::read(descriptor_path).expect("descriptors not present");
 	pbjson_build::Builder::new()
 		.register_descriptors(&descriptor_set)?
+		.preserve_proto_field_names()
 		.build(&[
 			".agentproxy.dev.a2a.target",
 			".agentproxy.dev.mcp.target",
