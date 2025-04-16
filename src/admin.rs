@@ -7,10 +7,11 @@ use crate::xds::XdsStore;
 use axum::{
 	Json, Router,
 	extract::{Path, State},
-	http::StatusCode,
+	http::{StatusCode, Method, HeaderValue, HeaderName},
 	response::{IntoResponse, Response},
 	routing::get,
 };
+use tower_http::cors::CorsLayer;
 use serde::{Deserialize, Serialize};
 use tracing::error;
 #[derive(Clone)]
@@ -23,6 +24,10 @@ impl App {
 		Self { state }
 	}
 	fn router(&self) -> Router {
+		let cors = CorsLayer::new()
+			.allow_origin("*".parse::<HeaderValue>().unwrap())
+			.allow_methods([Method::GET, Method::POST, Method::DELETE]);
+
 		Router::new()
 			.route(
 				"/targets/mcp",
@@ -52,6 +57,7 @@ impl App {
 				"/listeners/{name}",
 				get(listener_get_handler).delete(listener_delete_handler),
 			)
+			.layer(cors)
 			.with_state(self.clone())
 	}
 }
