@@ -7,7 +7,7 @@ use crate::xds::XdsStore;
 use axum::{
 	Json, Router,
 	extract::{Path, State},
-	http::{HeaderName, HeaderValue, Method, StatusCode},
+	http::{HeaderValue, Method, StatusCode},
 	response::{IntoResponse, Response},
 	routing::get,
 };
