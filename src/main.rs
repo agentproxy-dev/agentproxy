@@ -64,7 +64,11 @@ async fn main() -> Result<()> {
 	// Initialize logging
 	// Initialize the tracing subscriber with file and stdout logging
 	tracing_subscriber::fmt()
-		.with_env_filter(EnvFilter::from_default_env().add_directive(tracing::Level::INFO.into()))
+		.with_env_filter(
+			EnvFilter::from_default_env()
+				.add_directive(tracing::Level::INFO.into())
+				.add_directive("rmcp=warn".parse()?),
+		)
 		.with_writer(std::io::stderr)
 		.with_ansi(false)
 		.init();
@@ -108,6 +112,16 @@ async fn main() -> Result<()> {
 			if let Ok(Some(config_dir)) = homedir::my_home() {
 				let config_dir = config_dir.join("aidp");
 				let config_file = config_dir.join("config.json");
+
+				// Create the aidp directory if it doesn't exist
+				if !config_dir.exists() {
+					tracing::info!(
+						"Creating config directory: {}",
+						config_dir.to_string_lossy()
+					);
+					tokio::fs::create_dir_all(&config_dir).await?;
+				}
+
 				if config_file.exists() {
 					tracing::info!(
 						"Reading config from cache_dir: {}",

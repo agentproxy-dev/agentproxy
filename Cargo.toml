@@ -38,6 +38,7 @@ anyhow = "1.0"
 clap = { version = "4.5", features = ["derive"] }
 axum = { version = "0.8", features = ["macros"] }
 axum-extra = { version = "0.10", features = ["json-lines", "typed-header"] }
+tower-http = { version = "0.5", features = ["cors"] }
 headers = "0.4"
 tokio-stream = { version = "0.1" }
 tokio-util = { version = "0.7", features = ["codec"] }

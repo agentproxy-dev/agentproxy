@@ -23,6 +23,10 @@ impl From<Vec<RuleSet>> for RuleSets {
 
 impl RuleSets {
 	pub fn validate(&self, resource: &ResourceType, claims: &Identity) -> bool {
+		// If there are no rule sets, everyone has access
+		if self.0.is_empty() {
+			return true;
+		}
 		self
 			.0
 			.iter()
