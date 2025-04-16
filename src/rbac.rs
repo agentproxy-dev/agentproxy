@@ -5,7 +5,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use serde_json::map::Map;
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
-#[serde(rename_all = "camelCase")]
 pub struct RuleSet {
 	pub name: String,
 	pub namespace: String,
@@ -83,7 +82,6 @@ impl RuleSet {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
-#[serde(rename_all = "camelCase")]
 pub struct Rule {
 	key: String,
 	value: String,
@@ -106,7 +104,6 @@ impl TryFrom<&XdsRule> for Rule {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
-#[serde(rename_all = "camelCase")]
 pub enum ResourceType {
 	Tool(ResourceId),
 	Prompt(ResourceId),
@@ -114,7 +111,6 @@ pub enum ResourceType {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
-#[serde(rename_all = "camelCase")]
 pub struct ResourceId {
 	#[serde(default)]
 	target: String,
@@ -192,7 +188,6 @@ impl ResourceId {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
-#[serde(rename_all = "camelCase")]
 pub enum Matcher {
 	Equals,
 }
