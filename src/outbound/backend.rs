@@ -48,6 +48,7 @@ impl BackendAuthConfig {
 				})),
 				None => Err(anyhow::anyhow!("Passthrough auth requires a JWT token")),
 			},
+			#[cfg(feature = "gcp")]
 			BackendAuthConfig::GCP => Ok(Box::new(gcp::GCPBackend::new().await?)),
 			#[cfg(feature = "aws")]
 			BackendAuthConfig::AWS => {
