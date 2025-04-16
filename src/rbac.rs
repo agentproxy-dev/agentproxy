@@ -132,9 +132,18 @@ impl TryFrom<&rule::Resource> for ResourceType {
 	type Error = anyhow::Error;
 	fn try_from(value: &rule::Resource) -> Result<Self, Self::Error> {
 		match value.r#type.to_lowercase().as_str() {
-			"tool" => Ok(ResourceType::Tool(ResourceId::new(value.target.clone(), value.id.clone()))),
-			"prompt" => Ok(ResourceType::Prompt(ResourceId::new(value.target.clone(), value.id.clone()))),
-			"resource" => Ok(ResourceType::Resource(ResourceId::new(value.target.clone(), value.id.clone()))),
+			"tool" => Ok(ResourceType::Tool(ResourceId::new(
+				value.target.clone(),
+				value.id.clone(),
+			))),
+			"prompt" => Ok(ResourceType::Prompt(ResourceId::new(
+				value.target.clone(),
+				value.id.clone(),
+			))),
+			"resource" => Ok(ResourceType::Resource(ResourceId::new(
+				value.target.clone(),
+				value.id.clone(),
+			))),
 			_ => Err(anyhow::anyhow!("Invalid resource type")),
 		}
 	}
@@ -153,22 +162,22 @@ impl ResourceType {
 }
 
 impl ResourceId {
-  // This method must always be called from the rule context, never from the 
+	// This method must always be called from the rule context, never from the
 	fn matches(&self, other: &Self) -> bool {
-    // matching logic is as follows:
-    // If the id does not match or contain a wildcard, then the resource is not a match
-    // Empty string is a wildcard
-    if self.id != other.id && self.id != "*" && self.id != "" {
-      return false;
-    }
+		// matching logic is as follows:
+		// If the id does not match or contain a wildcard, then the resource is not a match
+		// Empty string is a wildcard
+		if self.id != other.id && self.id != "*" && self.id.is_empty() {
+			return false;
+		}
 
-    // If the target does not match or contain a wildcard, then the resource is not a match
-    // Empty string is a wildcard
-    if self.target != other.target && self.target != "*" && self.target != "" {
-      return false;
-    }
+		// If the target does not match or contain a wildcard, then the resource is not a match
+		// Empty string is a wildcard
+		if self.target != other.target && self.target != "*" && self.target.is_empty() {
+			return false;
+		}
 
-    return true;
+		true
 	}
 }
 
@@ -231,63 +240,96 @@ impl Identity {
 		}
 	}
 }
+#[cfg(test)]
 
 mod tests {
-  use super::*;
-  #[test]
-  fn test_rbac_reject_exact_match() {
-    let rules = vec![Rule {
-      key: "user".to_string(),
-      value: "admin".to_string(),
-      matcher: Matcher::Equals,
-      resource: ResourceType::Tool(ResourceId::new("server".to_string(), "increment".to_string())),
-    }];
-    let rbac = RuleSet::new("test".to_string(), "test".to_string(), rules);
-    let mut headers = Map::new();
-    headers.insert("sub".to_string(), "1234567890".to_string().into());
-    let id = Identity::new(
-      Some(Claims::new(headers, SecretString::new("".into()))),
-      None,
-    );
-    assert!(!rbac.validate(
-      &ResourceType::Tool(ResourceId::new("server".to_string(), "increment".to_string())),
-      &id
-    ));
-  }
-  
-  #[test]
-  fn test_rbac_check_exact_match() {
-    let rules = vec![Rule {
-      key: "sub".to_string(),
-      value: "1234567890".to_string(),
-      matcher: Matcher::Equals,
-      resource: ResourceType::Tool(ResourceId::new("server".to_string(), "increment".to_string())),
-    }];
-    let rbac = RuleSet::new("test".to_string(), "test".to_string(), rules);
-    let mut headers = Map::new();
-    headers.insert("sub".to_string(), "1234567890".to_string().into());
-    let id = Identity::new(
-      Some(Claims::new(headers, SecretString::new("".into()))),
-      None,
-    );
-    assert!(rbac.validate(
-      &ResourceType::Tool(ResourceId::new("server".to_string(), "increment".to_string())),
-      &id
-    ));
-  }
+	use super::*;
 
-  #[test]
-  fn test_rbac_check_wildcard_match() {
-    let cases: Vec<(ResourceId, ResourceId, bool)> = vec![
-      (ResourceId::new("server".to_string(), "increment".to_string()), ResourceId::new("server".to_string(), "increment".to_string()), true),
-      (ResourceId::new("server".to_string(), "*".to_string()), ResourceId::new("server".to_string(), "increment".to_string()), true),
-      (ResourceId::new("server".to_string(), "increment".to_string()), ResourceId::new("server".to_string(), "decrement".to_string()), false),
-      (ResourceId::new("".to_string(), "increment".to_string()), ResourceId::new("server".to_string(), "increment".to_string()), true),
-      (ResourceId::new("other_server".to_string(), "increment".to_string()), ResourceId::new("server".to_string(), "increment".to_string()), false),
-    ];
-    for (rule, other_rule, expected) in cases {
-      assert_eq!(rule.matches(&other_rule), expected);
-    }
-  }
-  
+	#[test]
+	fn test_rbac_reject_exact_match() {
+		let rules = vec![Rule {
+			key: "user".to_string(),
+			value: "admin".to_string(),
+			matcher: Matcher::Equals,
+			resource: ResourceType::Tool(ResourceId::new(
+				"server".to_string(),
+				"increment".to_string(),
+			)),
+		}];
+		let rbac = RuleSet::new("test".to_string(), "test".to_string(), rules);
+		let mut headers = Map::new();
+		headers.insert("sub".to_string(), "1234567890".to_string().into());
+		let id = Identity::new(
+			Some(Claims::new(headers, SecretString::new("".into()))),
+			None,
+		);
+		assert!(!rbac.validate(
+			&ResourceType::Tool(ResourceId::new(
+				"server".to_string(),
+				"increment".to_string()
+			)),
+			&id
+		));
+	}
+
+	#[test]
+	fn test_rbac_check_exact_match() {
+		let rules = vec![Rule {
+			key: "sub".to_string(),
+			value: "1234567890".to_string(),
+			matcher: Matcher::Equals,
+			resource: ResourceType::Tool(ResourceId::new(
+				"server".to_string(),
+				"increment".to_string(),
+			)),
+		}];
+		let rbac = RuleSet::new("test".to_string(), "test".to_string(), rules);
+		let mut headers = Map::new();
+		headers.insert("sub".to_string(), "1234567890".to_string().into());
+		let id = Identity::new(
+			Some(Claims::new(headers, SecretString::new("".into()))),
+			None,
+		);
+		assert!(rbac.validate(
+			&ResourceType::Tool(ResourceId::new(
+				"server".to_string(),
+				"increment".to_string()
+			)),
+			&id
+		));
+	}
+
+	#[test]
+	fn test_rbac_check_wildcard_match() {
+		let cases: Vec<(ResourceId, ResourceId, bool)> = vec![
+			(
+				ResourceId::new("server".to_string(), "increment".to_string()),
+				ResourceId::new("server".to_string(), "increment".to_string()),
+				true,
+			),
+			(
+				ResourceId::new("server".to_string(), "*".to_string()),
+				ResourceId::new("server".to_string(), "increment".to_string()),
+				true,
+			),
+			(
+				ResourceId::new("server".to_string(), "increment".to_string()),
+				ResourceId::new("server".to_string(), "decrement".to_string()),
+				false,
+			),
+			(
+				ResourceId::new("".to_string(), "increment".to_string()),
+				ResourceId::new("server".to_string(), "increment".to_string()),
+				true,
+			),
+			(
+				ResourceId::new("other_server".to_string(), "increment".to_string()),
+				ResourceId::new("server".to_string(), "increment".to_string()),
+				false,
+			),
+		];
+		for (rule, other_rule, expected) in cases {
+			assert_eq!(rule.matches(&other_rule), expected);
+		}
+	}
 }
