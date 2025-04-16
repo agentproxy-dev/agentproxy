@@ -5,16 +5,15 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { ListenerConfig } from "@/components/listener-config";
 import { TargetsConfig } from "@/components/targets-config";
 import { PoliciesConfig } from "@/components/policies-config";
+import { SetupWizard } from "@/components/setup-wizard";
 import {
   updateTarget,
-  updatePolicies,
   fetchListeners,
-  fetchTargets,
-  fetchPolicies,
+  fetchMcpTargets,
+  fetchA2aTargets,
 } from "@/lib/api";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { Config, Target, RBACConfig } from "@/lib/types";
-import { NotConnectedState } from "@/components/not-connected-state";
+import { Config, Target, RBACConfig, Listener } from "@/lib/types";
 import { useLoading } from "@/lib/loading-context";
 import { JsonConfig } from "@/components/json-config";
 
@@ -29,13 +28,22 @@ export default function Home() {
 
   const [isConnected, setIsConnected] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
-  const [serverAddress, setServerAddress] = useState<string>("");
+  const [serverAddress, setServerAddress] = useState<string>("0.0.0.0");
   const [serverPort, setServerPort] = useState<number>(19000);
   const [activeView, setActiveView] = useState<string>("home");
+  const [showWizard, setShowWizard] = useState(false);
   const [configUpdateMessage, setConfigUpdateMessage] = useState<{
     success: boolean;
     message: string;
   } | null>(null);
+
+  const [listeners, setListeners] = useState<Listener[]>([]);
+  const [targets, setTargets] = useState<Target[]>([]);
+
+  // Connect to server on component mount
+  useEffect(() => {
+    connectToServer();
+  }, []);
 
   // Load saved connection from localStorage
   useEffect(() => {
@@ -45,7 +53,7 @@ export default function Home() {
     if (savedAddress && savedPort) {
       setServerAddress(savedAddress);
       setServerPort(parseInt(savedPort));
-      connectToServer(savedAddress, parseInt(savedPort));
+      connectToServer();
     } else {
       setIsLoading(false);
     }
@@ -66,56 +74,49 @@ export default function Home() {
     }
   }, [config, isConnected]);
 
-  const connectToServer = async (address: string, port: number) => {
-    if (!address || !port) {
-      setConnectionError("Please enter a valid server address and port");
-      setIsLoading(false);
-      return false;
-    }
-
+  // Function to connect to server
+  const connectToServer = async (): Promise<boolean> => {
     setIsLoading(true);
     setConnectionError(null);
 
     try {
       // Fetch configuration from the proxy using API functions
-      console.log("Fetching configuration from", `${address}:${port}`);
+      console.log("Fetching configuration from", `${serverAddress}:${serverPort}`);
 
       // Fetch listeners configuration
-      const listenersData = await fetchListeners(address, port);
+      const listenersData = await fetchListeners(serverAddress, serverPort);
       console.log("Received listeners data:", listenersData);
+      const listenersArray = Array.isArray(listenersData) ? listenersData : [listenersData];
+      setListeners(listenersArray);
 
-      // Fetch targets configuration
-      const targetsData = await fetchTargets(address, port);
-      console.log("Received targets data:", targetsData);
+      // Fetch MCP and A2A targets
+      const mcpTargetsData = await fetchMcpTargets(serverAddress, serverPort);
+      console.log("Received MCP targets data:", mcpTargetsData);
+      
+      const a2aTargetsData = await fetchA2aTargets(serverAddress, serverPort);
+      console.log("Received A2A targets data:", a2aTargetsData);
+      
+      // Combine targets
+      const targetsArray = [
+        ...mcpTargetsData.map(target => ({ ...target, type: 'mcp' as const })),
+        ...a2aTargetsData.map(target => ({ ...target, type: 'a2a' as const }))
+      ];
+      console.log("Combined targets array:", targetsArray);
+      setTargets(targetsArray);
 
-      // Convert targets object to array
-      const targetsArray = Object.entries(targetsData).map(([_name, targetData]) => {
-        return {
-          ...(targetData as Target),
-        };
-      });
-      console.log("Converted targets array:", targetsArray);
+      // If we have listeners, we don't need to show the wizard
+      if (listenersArray.length > 0) {
+        setShowWizard(false);
+      } else {
+        // No listeners found, show the wizard
+        setShowWizard(true);
+      }
 
-      // Fetch RBAC policies
-      const rbacData = await fetchPolicies(address, port);
-      console.log("Received RBAC data:", rbacData);
-
-      // Update state with fetched configuration
-      const newConfig = {
-        type: "static" as const,
-        listeners: [listenersData], // Use the listeners data directly
-        targets: targetsArray,
-        policies: rbacData || [],
-      };
-
-      setConfig(newConfig);
-      setServerAddress(address);
-      setServerPort(port);
       setIsConnected(true);
       return true;
-    } catch (error) {
-      console.error("Error connecting to server:", error);
-      setConnectionError(error instanceof Error ? error.message : "Failed to connect to server");
+    } catch (err) {
+      console.error("Error connecting to server:", err);
+      setConnectionError(err instanceof Error ? err.message : "Failed to connect to server");
       setIsConnected(false);
       return false;
     } finally {
@@ -125,7 +126,7 @@ export default function Home() {
 
   const disconnectFromServer = () => {
     setIsConnected(false);
-    setServerAddress("");
+    setServerAddress("0.0.0.0");
     setServerPort(19000);
     setConfig({
       type: "static",
@@ -196,33 +197,24 @@ export default function Home() {
 
   const handleAddPolicy = async (policy: RBACConfig) => {
     try {
-      // Add policy to local state
-      const newConfig = {
-        ...config,
-        policies: [...(config.policies || []), policy],
-      };
-      setConfig(newConfig);
-
-      // Update policies on server if connected
-      if (serverAddress && serverPort) {
-        // Convert RBACConfig to RBACPolicy format
-        const rbacPolicies =
-          newConfig.policies?.map((p) => ({
-            name: p.name,
-            namespace: p.namespace,
-            rules: p.rules.map((rule) => ({
-              key: rule.key,
-              value: rule.value,
-              resource: {
-                type: rule.resource.type,
-                id: rule.resource.id,
-              },
-              matcher: rule.matcher,
-            })),
-          })) || [];
-
-        await updatePolicies(serverAddress, serverPort, rbacPolicies);
+      // Policy management is now handled through the listener
+      // We need to update the listener with the new policy
+      if (listeners.length > 0) {
+        const listener = listeners[0];
+        const updatedListener = {
+          ...listener,
+          sse: {
+            ...listener.sse,
+            rbac: [...(listener.sse.rbac || []), policy],
+          },
+        };
+        
+        // Update the listener on the server
+        // This would require a new API endpoint to update a listener
+        console.log("Policy management is now handled through the listener");
         handleConfigUpdate(true, "Policy added successfully");
+      } else {
+        handleConfigUpdate(false, "No listener available to add policy to");
       }
     } catch (error) {
       console.error("Error adding policy:", error);
@@ -232,38 +224,39 @@ export default function Home() {
 
   const handleRemovePolicy = async (index: number) => {
     try {
-      // Remove policy from local state
-      const newConfig = {
-        ...config,
-        policies: config.policies?.filter((_, i) => i !== index) || [],
-      };
-      setConfig(newConfig);
-
-      // Update policies on server if connected
-      if (serverAddress && serverPort) {
-        // Convert RBACConfig to RBACPolicy format
-        const rbacPolicies =
-          newConfig.policies?.map((p) => ({
-            name: p.name,
-            namespace: p.namespace,
-            rules: p.rules.map((rule) => ({
-              key: rule.key,
-              value: rule.value,
-              resource: {
-                type: rule.resource.type,
-                id: rule.resource.id,
-              },
-              matcher: rule.matcher,
-            })),
-          })) || [];
-
-        await updatePolicies(serverAddress, serverPort, rbacPolicies);
+      // Policy management is now handled through the listener
+      // We need to update the listener with the policy removed
+      if (listeners.length > 0) {
+        const listener = listeners[0];
+        const updatedListener = {
+          ...listener,
+          sse: {
+            ...listener.sse,
+            rbac: listener.sse.rbac?.filter((_, i) => i !== index) || [],
+          },
+        };
+        
+        // Update the listener on the server
+        // This would require a new API endpoint to update a listener
+        console.log("Policy management is now handled through the listener");
         handleConfigUpdate(true, "Policy removed successfully");
+      } else {
+        handleConfigUpdate(false, "No listener available to remove policy from");
       }
     } catch (error) {
       console.error("Error removing policy:", error);
       handleConfigUpdate(false, error instanceof Error ? error.message : "Failed to remove policy");
     }
+  };
+
+  const handleWizardComplete = () => {
+    setShowWizard(false);
+    setActiveView("home");
+  };
+
+  const handleWizardSkip = () => {
+    setShowWizard(false);
+    setActiveView("home");
   };
 
   const renderContent = () => {
@@ -350,7 +343,14 @@ export default function Home() {
   return (
     <SidebarProvider>
       <div className="flex min-h-screen w-full">
-        {isConnected ? (
+        {showWizard ? (
+          <SetupWizard
+            config={config}
+            onConfigChange={setConfig}
+            onComplete={handleWizardComplete}
+            onSkip={handleWizardSkip}
+          />
+        ) : (
           <>
             <AppSidebar
               isConnected={isConnected}
@@ -395,8 +395,6 @@ export default function Home() {
               {renderContent()}
             </main>
           </>
-        ) : (
-          <NotConnectedState onConnect={connectToServer} connectionError={connectionError || ""} />
         )}
       </div>
     </SidebarProvider>

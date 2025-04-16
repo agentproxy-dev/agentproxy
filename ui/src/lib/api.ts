@@ -1,23 +1,4 @@
-import { Target, RBACConfig, Listener } from "./types";
-
-/**
- * Fetches the targets configuration from the MCP proxy server
- */
-export async function fetchTargets(address: string, port: number): Promise<Target[]> {
-  try {
-    const response = await fetch(`http://${address}:${port}/targets`);
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch targets: ${response.status} ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error("Error fetching targets:", error);
-    throw error;
-  }
-}
+import { Target, RBACConfig, Listener, RuleSet } from "./types";
 
 /**
  * Updates a single target on the MCP proxy server
@@ -43,105 +24,283 @@ export async function updateTarget(address: string, port: number, target: Target
 }
 
 /**
- * Fetches the RBAC policies from the MCP proxy server
+ * Fetches the listener configuration from the MCP proxy server
  */
-export async function fetchPolicies(address: string, port: number): Promise<RBACConfig[]> {
+export async function fetchListeners(address: string, port: number): Promise<Listener[]> {
   try {
-    const response = await fetch(`http://${address}:${port}/rbac`);
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch policies: ${response.status} ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    return data.policies || [];
-  } catch (error) {
-    console.error("Error fetching policies:", error);
-    throw error;
-  }
-}
-
-/**
- * Updates the RBAC policies on the MCP proxy server
- */
-export async function updatePolicies(
-  address: string,
-  port: number,
-  policies: RBACConfig[]
-): Promise<void> {
-  try {
-    const response = await fetch(`http://${address}:${port}/rbac`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(policies),
+    const response = await fetch(`http://${address}:${port}/listeners`, {
     });
 
     if (!response.ok) {
-      throw new Error(`Failed to update policies: ${response.status} ${response.statusText}`);
-    }
-  } catch (error) {
-    console.error("Error updating policies:", error);
-    throw error;
-  }
-}
-
-/**
- * Fetches the listener configuration from the MCP proxy server
- */
-export async function fetchListeners(address: string, port: number): Promise<Listener> {
-  try {
-    const response = await fetch(`http://${address}:${port}/listeners`);
-
-    if (!response.ok) {
+      console.error("Failed to fetch listeners:", response);
       throw new Error(`Failed to fetch listeners: ${response.status} ${response.statusText}`);
     }
 
     const data = await response.json();
     console.log("Raw listeners data from API:", data);
 
-    // Ensure the data has the correct structure
-    if (data && typeof data === "object") {
-      // If the response already has the SSE property, return it directly
-      if (data.sse) {
-        console.log("API returned data with SSE property:", data.sse);
-
-        // Check if the SSE data has 'host' instead of 'address'
-        if (data.sse.host !== undefined && data.sse.address === undefined) {
-          console.log("Converting 'host' to 'address' in SSE data");
+    // The API will return an array of listeners
+    if (Array.isArray(data)) {
+      return data.map(listener => {
+        if (listener.sse && listener.sse.host !== undefined && listener.sse.address === undefined) {
           return {
+            ...listener,
             sse: {
-              address: data.sse.host,
-              port: data.sse.port,
-              tls: data.sse.tls,
+              address: listener.sse.host,
+              port: listener.sse.port,
+              tls: listener.sse.tls,
+              rbac: listener.sse.rbac,
             },
           };
         }
-
-        return data as Listener;
-      } else {
-        // Otherwise, create a proper structure
-        console.log("API returned data without SSE property, creating structure");
-        return {
-          sse: {
-            address: data.address || data.host || "0.0.0.0",
-            port: data.port || 5555,
-          },
-        };
-      }
+        return listener;
+      });
     } else {
-      // Fallback if the response is not in the expected format
-      console.log("API returned unexpected data format, using fallback");
-      return {
-        sse: {
-          address: "0.0.0.0",
-          port: 5555,
-        },
-      };
+      // If the API returns a single object instead of an array, wrap it
+      return [data];
     }
   } catch (error) {
     console.error("Error fetching listeners:", error);
+    throw error;
+  }
+}
+
+/**
+ * Fetches all MCP targets from the proxy server
+ */
+export async function fetchMcpTargets(address: string, port: number): Promise<any[]> {
+  try {
+    const response = await fetch(`http://${address}:${port}/targets/mcp`, {
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch MCP targets: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error("Error fetching MCP targets:", error);
+    throw error;
+  }
+}
+
+/**
+ * Creates or updates an MCP target on the proxy server
+ */
+export async function createMcpTarget(address: string, port: number, target: any): Promise<void> {
+  try {
+    const response = await fetch(`http://${address}:${port}/targets/mcp`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(target),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to create MCP target: ${response.status} ${response.statusText}`);
+    }
+  } catch (error) {
+    console.error("Error creating MCP target:", error);
+    throw error;
+  }
+}
+
+/**
+ * Fetches a specific MCP target by name
+ */
+export async function getMcpTarget(address: string, port: number, name: string): Promise<any> {
+  try {
+    const response = await fetch(`http://${address}:${port}/targets/mcp/${name}`, {
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch MCP target: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error("Error fetching MCP target:", error);
+    throw error;
+  }
+}
+
+/**
+ * Deletes an MCP target by name
+ */
+export async function deleteMcpTarget(address: string, port: number, name: string): Promise<void> {
+  try {
+    const response = await fetch(`http://${address}:${port}/targets/mcp/${name}`, {
+      method: "DELETE",
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to delete MCP target: ${response.status} ${response.statusText}`);
+    }
+  } catch (error) {
+    console.error("Error deleting MCP target:", error);
+    throw error;
+  }
+}
+
+/**
+ * Fetches all A2A targets from the proxy server
+ */
+export async function fetchA2aTargets(address: string, port: number): Promise<any[]> {
+  try {
+    const response = await fetch(`http://${address}:${port}/targets/a2a`, {
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch A2A targets: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error("Error fetching A2A targets:", error);
+    throw error;
+  }
+}
+
+/**
+ * Creates or updates an A2A target on the proxy server
+ */
+export async function createA2aTarget(address: string, port: number, target: any): Promise<void> {
+  try {
+    const response = await fetch(`http://${address}:${port}/targets/a2a`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(target),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to create A2A target: ${response.status} ${response.statusText}`);
+    }
+  } catch (error) {
+    console.error("Error creating A2A target:", error);
+    throw error;
+  }
+}
+
+/**
+ * Fetches a specific A2A target by name
+ */
+export async function getA2aTarget(address: string, port: number, name: string): Promise<any> {
+  try {
+    const response = await fetch(`http://${address}:${port}/targets/a2a/${name}`, {
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch A2A target: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error("Error fetching A2A target:", error);
+    throw error;
+  }
+}
+
+/**
+ * Deletes an A2A target by name
+ */
+export async function deleteA2aTarget(address: string, port: number, name: string): Promise<void> {
+  try {
+    const response = await fetch(`http://${address}:${port}/targets/a2a/${name}`, {
+      method: "DELETE",
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to delete A2A target: ${response.status} ${response.statusText}`);
+    }
+  } catch (error) {
+    console.error("Error deleting A2A target:", error);
+    throw error;
+  }
+}
+
+/**
+ * Fetches targets associated with a specific listener
+ */
+export async function fetchListenerTargets(address: string, port: number, listenerName: string): Promise<any[]> {
+  try {
+    const response = await fetch(`http://${address}:${port}/listeners/${listenerName}/targets`, {
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch listener targets: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error("Error fetching listener targets:", error);
+    throw error;
+  }
+}
+
+/**
+ * Fetches a specific listener by name
+ */
+export async function getListener(address: string, port: number, name: string): Promise<Listener> {
+  try {
+    const response = await fetch(`http://${address}:${port}/listeners/${name}`, {
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch listener: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error("Error fetching listener:", error);
+    throw error;
+  }
+}
+
+/**
+ * Creates or updates a listener on the proxy server
+ */
+export async function createListener(address: string, port: number, listener: Listener): Promise<void> {
+  try {
+    const response = await fetch(`http://${address}:${port}/listeners`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(listener),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to create listener: ${response.status} ${response.statusText}`);
+    }
+  } catch (error) {
+    console.error("Error creating listener:", error);
+    throw error;
+  }
+}
+
+/**
+ * Deletes a listener by name
+ */
+export async function deleteListener(address: string, port: number, name: string): Promise<void> {
+  try {
+    const response = await fetch(`http://${address}:${port}/listeners/${name}`, {
+      method: "DELETE",
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to delete listener: ${response.status} ${response.statusText}`);
+    }
+  } catch (error) {
+    console.error("Error deleting listener:", error);
     throw error;
   }
 }

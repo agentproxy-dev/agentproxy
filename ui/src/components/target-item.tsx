@@ -1,7 +1,7 @@
 import { Target, TargetType } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Trash2, Globe, Terminal, Server, Power, Wrench } from "lucide-react";
+import { Trash2, Globe, Terminal, Server, Power, Wrench, Network } from "lucide-react";
 import { useMCPServer } from "@/hooks/use-mcp-server";
 import { useState, useRef } from "react";
 import {
@@ -36,6 +36,8 @@ const getTargetIcon = (type: TargetType) => {
       return <Terminal className="h-4 w-4" />;
     case "openapi":
       return <Server className="h-4 w-4" />;
+    case "a2a":
+      return <Network className="h-4 w-4" />;
     default:
       return <Server className="h-4 w-4" />;
   }
@@ -45,6 +47,7 @@ const getTargetType = (target: Target): TargetType => {
   if (target.stdio) return "stdio";
   if (target.sse) return "sse";
   if (target.openapi) return "openapi";
+  if (target.a2a) return "a2a";
   return "sse";
 };
 
@@ -55,6 +58,10 @@ export default function TargetItem({ target, index, onDelete, isUpdating }: Targ
       // construct the url from the target (if the port is 80 or 443, don't include it, just make sure the scheme is correct)
       const scheme = target.sse.port === 80 || target.sse.port === 443 ? "https" : "http";
       return `${scheme}://${target.sse.host}:${target.sse.port}${target.sse.path}`;
+    } else if (target.a2a) {
+      // construct the url from the A2A target
+      const scheme = target.a2a.port === 80 || target.a2a.port === 443 ? "https" : "http";
+      return `${scheme}://${target.a2a.host}:${target.a2a.port}${target.a2a.path}`;
     }
     return "";
   };

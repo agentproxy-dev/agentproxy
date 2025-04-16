@@ -4,9 +4,9 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Config } from "@/lib/types";
+import { Config, Listener } from "@/lib/types";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertCircle, Info } from "lucide-react";
+import { AlertCircle } from "lucide-react";
 import { fetchListeners } from "@/lib/api";
 
 interface ListenerConfigProps {
@@ -33,15 +33,15 @@ export function ListenerConfig({ config, serverAddress, serverPort }: ListenerCo
       setError(null);
 
       try {
-        const data = await fetchListeners(serverAddress, serverPort);
-        console.log("ListenerConfig received data:", data);
+        const listeners = await fetchListeners(serverAddress, serverPort);
+        console.log("ListenerConfig received data:", listeners);
 
         // Extract the listener configuration from the response
-        if (data && data.sse) {
+        if (listeners && listeners.length > 0 && listeners[0].sse) {
           // Use address if available, otherwise fall back to host
-          const address = data.sse.address || data.sse.host || "0.0.0.0";
+          const address = listeners[0].sse.address || listeners[0].sse.host || "0.0.0.0";
           setAddress(address);
-          setPort(data.sse.port?.toString() || "5555");
+          setPort(listeners[0].sse.port?.toString() || "5555");
         } else {
           // Fallback to the config prop if the API response doesn't have the expected format
           setAddress(
@@ -102,13 +102,6 @@ export function ListenerConfig({ config, serverAddress, serverPort }: ListenerCo
                 The port number the listener is using.
               </p>
             </div>
-            <Alert className="bg-blue-50 text-blue-800 border-blue-200">
-              <Info className="h-4 w-4" />
-              <AlertDescription>
-                This configuration is read-only. Changes to the listener configuration require
-                server restart.
-              </AlertDescription>
-            </Alert>
           </>
         )}
       </CardContent>

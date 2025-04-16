@@ -6,8 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { PlusCircle, Server, Globe, Terminal, Loader2 } from "lucide-react";
-import { Target, TargetType } from "@/lib/types";
+import { PlusCircle, Server, Globe, Terminal, Loader2, Network } from "lucide-react";
+import { Target, TargetType, Header } from "@/lib/types";
 import { updateTarget } from "@/lib/api";
 import {
   Dialog,
@@ -70,7 +70,7 @@ export function TargetsConfig({
           host: urlObj.hostname,
           port: port,
           path: urlObj.pathname + urlObj.search,
-          headers: {},
+          headers: [],
         };
       } catch (error) {
         console.error("Invalid URL:", error);
@@ -84,6 +84,25 @@ export function TargetsConfig({
           file_path: "",
         },
       };
+    } else if (serverType === "a2a") {
+      try {
+        const urlObj = new URL(url);
+        let port: number;
+        if (urlObj.port) {
+          port = parseInt(urlObj.port, 10);
+        } else {
+          port = urlObj.protocol === "https:" ? 443 : 80;
+        }
+        targetConfig.a2a = {
+          host: urlObj.hostname,
+          port: port,
+          path: urlObj.pathname + urlObj.search,
+          headers: [],
+        };
+      } catch (error) {
+        console.error("Invalid URL:", error);
+        return;
+      }
     }
 
     // Add target to local state
@@ -166,7 +185,7 @@ export function TargetsConfig({
       <div>
         <h3 className="text-lg font-medium mb-2">Target Servers</h3>
         <p className="text-sm text-muted-foreground mb-4">
-          Configure MCP servers that the proxy connects to
+          Configure servers that the proxy connects to
         </p>
       </div>
 
@@ -236,7 +255,7 @@ export function TargetsConfig({
                 value={serverType}
                 onValueChange={(value) => setServerType(value as TargetType)}
               >
-                <TabsList className="grid grid-cols-3">
+                <TabsList className="grid grid-cols-4">
                   <TabsTrigger value="sse" className="flex items-center">
                     <Globe className="h-4 w-4 mr-2" />
                     SSE
@@ -248,6 +267,10 @@ export function TargetsConfig({
                   <TabsTrigger value="openapi" className="flex items-center">
                     <Server className="h-4 w-4 mr-2" />
                     OpenAPI
+                  </TabsTrigger>
+                  <TabsTrigger value="a2a" className="flex items-center">
+                    <Network className="h-4 w-4 mr-2" />
+                    A2A
                   </TabsTrigger>
                 </TabsList>
 
@@ -305,6 +328,24 @@ export function TargetsConfig({
                       required
                       disabled={isUpdating}
                     />
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="a2a" className="space-y-4 pt-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="a2a-url">Server URL</Label>
+                    <Input
+                      id="a2a-url"
+                      type="url"
+                      value={url}
+                      onChange={(e) => setUrl(e.target.value)}
+                      placeholder="http://localhost:3000"
+                      required
+                      disabled={isUpdating}
+                    />
+                    <p className="text-sm text-muted-foreground">
+                      Enter the full URL including protocol, hostname, port, and path
+                    </p>
                   </div>
                 </TabsContent>
               </Tabs>

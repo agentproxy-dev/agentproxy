@@ -2,13 +2,17 @@ export interface Target {
   // The name of the target.
   name: string;
 
+  // The listeners which are allowed to connect to the target.
+  listeners?: string[];
+
   // Only one of these fields will be set
   sse?: SseTarget;
   openapi?: OpenAPITarget;
   stdio?: StdioTarget;
+  a2a?: A2aTarget;
 }
 
-export type TargetType = "sse" | "openapi" | "stdio";
+export type TargetType = "sse" | "openapi" | "stdio" | "a2a";
 
 export interface SseTarget {
   // The host of the target.
@@ -18,7 +22,11 @@ export interface SseTarget {
   // The path of the target.
   path: string;
   // The headers of the target.
-  headers?: { [key: string]: string };
+  headers?: Header[];
+  // The auth of the target.
+  auth?: BackendAuth;
+  // The tls of the target.
+  tls?: BackendTls;
 }
 
 export interface StdioTarget {
@@ -43,6 +51,43 @@ export interface OpenAPITarget {
   port: number;
   // The schema of the target.
   schema: LocalDataSource;
+  // The auth of the target.
+  auth?: BackendAuth;
+  // The tls of the target.
+  tls?: BackendTls;
+  // The headers of the target.
+  headers?: Header[];
+}
+
+export interface A2aTarget {
+  // The host of the target.
+  host: string;
+  // The port of the target.
+  port: number;
+  // The path of the target.
+  path: string;
+  // The headers of the target.
+  headers?: Header[];
+  // The auth of the target.
+  auth?: BackendAuth;
+  // The tls of the target.
+  tls?: BackendTls;
+}
+
+export interface Header {
+  key: string;
+  value: {
+    string_value?: string;
+    env_value?: string;
+  };
+}
+
+export interface BackendAuth {
+  passthrough?: boolean;
+}
+
+export interface BackendTls {
+  insecure_skip_verify: boolean;
 }
 
 export interface Listener {
@@ -56,6 +101,8 @@ export interface SseListener {
   host?: string;
   port: number;
   tls?: TlsConfig;
+  // RBAC configuration is now part of the listener
+  rbac?: RuleSet[];
 }
 
 export interface TlsConfig {
@@ -94,6 +141,12 @@ export interface Rule {
 }
 
 export interface RBACConfig {
+  name: string;
+  namespace: string;
+  rules: Rule[];
+}
+
+export interface RuleSet {
   name: string;
   namespace: string;
   rules: Rule[];
