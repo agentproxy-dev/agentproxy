@@ -251,7 +251,6 @@ impl Identity {
 	}
 }
 #[cfg(test)]
-
 mod tests {
 	use super::*;
 
