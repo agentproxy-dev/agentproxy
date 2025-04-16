@@ -167,13 +167,23 @@ impl ResourceId {
 		// matching logic is as follows:
 		// If the id does not match or contain a wildcard, then the resource is not a match
 		// Empty string is a wildcard
-		if self.id != other.id && self.id != "*" && self.id.is_empty() {
+		if !match (self.id.as_str(), other.id.as_str()) {
+			("*", _) => true,
+			("", _) => true,
+			(id1, id2) if id1 == id2 => true,
+			_ => false,
+		} {
 			return false;
 		}
 
 		// If the target does not match or contain a wildcard, then the resource is not a match
 		// Empty string is a wildcard
-		if self.target != other.target && self.target != "*" && self.target.is_empty() {
+		if !match (self.target.as_str(), other.target.as_str()) {
+			("*", _) => true,
+			("", _) => true,
+			(target1, target2) if target1 == target2 => true,
+			_ => false,
+		} {
 			return false;
 		}
 
@@ -329,7 +339,13 @@ mod tests {
 			),
 		];
 		for (rule, other_rule, expected) in cases {
-			assert_eq!(rule.matches(&other_rule), expected);
+			assert_eq!(
+				rule.matches(&other_rule),
+				expected,
+				"rule: {:?}, other_rule: {:?}",
+				rule,
+				other_rule
+			);
 		}
 	}
 }

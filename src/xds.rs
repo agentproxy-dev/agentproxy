@@ -249,9 +249,9 @@ where
 		S: serde::Serializer,
 	{
 		self
-			.by_name
+			.by_name_protos
 			.values()
-			.map(|(target, _)| target.clone())
+			.cloned()
 			.collect::<Vec<_>>()
 			.serialize(serializer)
 	}
