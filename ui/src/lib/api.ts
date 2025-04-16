@@ -1,4 +1,4 @@
-import { Target, RBACConfig, Listener, RuleSet } from "./types";
+import { Target, RBACConfig, Listener, RuleSet, Config } from "./types";
 
 /**
  * Updates a single target on the MCP proxy server
@@ -288,11 +288,36 @@ export async function createListener(address: string, port: number, listener: Li
 }
 
 /**
- * Deletes a listener by name
+ * Creates a new listener on the MCP proxy server
  */
-export async function deleteListener(address: string, port: number, name: string): Promise<void> {
+export async function addListener(address: string, port: number, listener: Listener): Promise<void> {
   try {
-    const response = await fetch(`http://${address}:${port}/listeners/${name}`, {
+    const response = await fetch(`http://${address}:${port}/listeners`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(listener),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to add listener: ${response.status} ${response.statusText}`);
+    }
+  } catch (error) {
+    console.error("Error adding listener:", error);
+    throw error;
+  }
+}
+
+/**
+ * Deletes a listener from the MCP proxy server
+ */
+export async function deleteListener(address: string, port: number, listener: Listener): Promise<void> {
+  try {
+    // Extract the listener name or use a default if not available
+    const listenerName = listener.name || "default";
+    
+    const response = await fetch(`http://${address}:${port}/listeners/${listenerName}`, {
       method: "DELETE",
     });
 
@@ -302,5 +327,26 @@ export async function deleteListener(address: string, port: number, name: string
   } catch (error) {
     console.error("Error deleting listener:", error);
     throw error;
+  }
+}
+
+export async function getConfig(): Promise<Config> {
+  const response = await fetch("/api/config");
+  if (!response.ok) {
+    throw new Error("Failed to fetch configuration");
+  }
+  return response.json();
+}
+
+export async function updateConfig(config: Config): Promise<void> {
+  const response = await fetch("/api/config", {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(config),
+  });
+  if (!response.ok) {
+    throw new Error("Failed to update configuration");
   }
 }

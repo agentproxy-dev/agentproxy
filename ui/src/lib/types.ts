@@ -91,6 +91,8 @@ export interface BackendTls {
 }
 
 export interface Listener {
+  // The name of the listener
+  name?: string;
   // SSE is the only listener we can configure through UI
   sse: SseListener;
 }
