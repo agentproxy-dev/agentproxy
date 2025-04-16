@@ -41,7 +41,7 @@ export function SocialLinks({ className = "", animated = true }: SocialLinksProp
           }
         : {})}
     >
-      {links.map(link => (
+      {links.map((link) => (
         <Link
           key={link.label}
           href={link.href}

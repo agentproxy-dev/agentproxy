@@ -15,13 +15,13 @@ interface SetupWizardProps {
   serverPort?: number;
 }
 
-export function SetupWizard({ 
-  config, 
-  onConfigChange, 
-  onComplete, 
+export function SetupWizard({
+  config,
+  onConfigChange,
+  onComplete,
   onSkip,
   serverAddress = "0.0.0.0",
-  serverPort = 19000
+  serverPort = 19000,
 }: SetupWizardProps) {
   const [step, setStep] = useState(1);
   const totalSteps = 3;
@@ -29,12 +29,7 @@ export function SetupWizard({
   const renderStep = () => {
     switch (step) {
       case 1:
-        return (
-          <WelcomeStep
-            onNext={() => setStep(2)}
-            onSkip={onSkip}
-          />
-        );
+        return <WelcomeStep onNext={() => setStep(2)} onSkip={onSkip} />;
       case 2:
         return (
           <ListenerStep
@@ -71,9 +66,7 @@ export function SetupWizard({
             {Array.from({ length: totalSteps }).map((_, i) => (
               <div
                 key={i}
-                className={`h-2 w-2 rounded-full ${
-                  i + 1 === step ? "bg-primary" : "bg-muted"
-                }`}
+                className={`h-2 w-2 rounded-full ${i + 1 === step ? "bg-primary" : "bg-muted"}`}
               />
             ))}
           </div>
@@ -81,4 +74,4 @@ export function SetupWizard({
       </div>
     </div>
   );
-} 
+}

@@ -1,4 +1,4 @@
-import { Toaster as SonnerToaster } from 'sonner';
+import { Toaster as SonnerToaster } from "sonner";
 
 export function Toaster() {
   return (
@@ -7,11 +7,11 @@ export function Toaster() {
       toastOptions={{
         duration: 5000,
         style: {
-          background: 'hsl(var(--background))',
-          color: 'hsl(var(--foreground))',
-          border: '1px solid hsl(var(--border))',
+          background: "hsl(var(--background))",
+          color: "hsl(var(--foreground))",
+          border: "1px solid hsl(var(--border))",
         },
       }}
     />
   );
-} 
+}

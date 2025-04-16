@@ -45,18 +45,16 @@ export function ServerProvider({ children }: { children: React.ReactNode }) {
         // Fetch MCP and A2A targets
         const mcpTargetsData = await fetchMcpTargets(DEFAULT_HOST, DEFAULT_PORT);
         const a2aTargetsData = await fetchA2aTargets(DEFAULT_HOST, DEFAULT_PORT);
-        
+
         // Combine targets
         const targetsArray = [
-          ...mcpTargetsData.map(target => ({ ...target, type: 'mcp' as const })),
-          ...a2aTargetsData.map(target => ({ ...target, type: 'a2a' as const }))
+          ...mcpTargetsData.map((target) => ({ ...target, type: "mcp" as const })),
+          ...a2aTargetsData.map((target) => ({ ...target, type: "a2a" as const })),
         ];
         setTargets(targetsArray);
 
         // Extract policies from listeners
-        const allPolicies = listenersArray.flatMap(listener => 
-          listener.sse?.rbac || []
-        );
+        const allPolicies = listenersArray.flatMap((listener) => listener.sse?.rbac || []);
         setPolicies(allPolicies);
 
         setIsConnected(true);
@@ -101,4 +99,4 @@ export function useServer() {
     throw new Error("useServer must be used within a ServerProvider");
   }
   return context;
-} 
+}

@@ -8,9 +8,9 @@ import { Button } from "@/components/ui/button";
 import { useState } from "react";
 
 export default function ListenersPage() {
-  const { config, connectionError, isConnected } = useServer();
+  const { connectionError } = useServer();
   const [isAddingListener, setIsAddingListener] = useState(false);
-  
+
   // Default server address and port
   const serverAddress = "0.0.0.0";
   const serverPort = 19000;
@@ -36,14 +36,13 @@ export default function ListenersPage() {
           <AlertDescription>{connectionError}</AlertDescription>
         </Alert>
       ) : (
-          <ListenerConfig 
-            config={config}
-            serverAddress={serverAddress}
-            serverPort={serverPort}
-            isAddingListener={isAddingListener}
-            setIsAddingListener={setIsAddingListener}
-          />
+        <ListenerConfig
+          serverAddress={serverAddress}
+          serverPort={serverPort}
+          isAddingListener={isAddingListener}
+          setIsAddingListener={setIsAddingListener}
+        />
       )}
     </div>
   );
-} 
+}

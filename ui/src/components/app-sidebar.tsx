@@ -14,20 +14,11 @@ import {
   SidebarMenuButton,
   SidebarMenuBadge,
   SidebarSeparator,
-  useSidebar,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { MCPLogo } from "@/components/mcp-logo";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { Target, Listener } from "@/lib/types";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { Target } from "@/lib/types";
 import {
   Dialog,
   DialogContent,
@@ -36,17 +27,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Loader2,
-  Home,
-  Shield,
-  Headphones,
-  Server,
-  Code,
-  LogOut,
-  ChevronsUpDown,
-  Settings,
-} from "lucide-react";
+import { Loader2, Home, Shield, Headphones, Server, Code, Settings } from "lucide-react";
 import { fetchListeners, deleteListener } from "@/lib/api";
 import { useLoading } from "@/lib/loading-context";
 import { useRouter, usePathname } from "next/navigation";
@@ -64,18 +45,15 @@ interface AppSidebarProps {
 export function AppSidebar({
   targets,
   listeners,
-  activeView,
   setActiveView,
-  addTarget,
   onRestartWizard,
 }: AppSidebarProps) {
-  const { isMobile } = useSidebar();
   const { setIsLoading } = useLoading();
   const [showRestartDialog, setShowRestartDialog] = useState(false);
   const [isDeletingListeners, setIsDeletingListeners] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
-  const { } = useServer();
+  const {} = useServer();
 
   const handleRestartWizard = () => {
     setShowRestartDialog(true);
@@ -85,16 +63,16 @@ export function AppSidebar({
     try {
       setIsDeletingListeners(true);
       setIsLoading(true);
-      
+
       // Fetch all listeners
       const listeners = await fetchListeners("0.0.0.0", 19000);
-      
+
       // Delete each listener
       for (const listener of listeners) {
         // Create a unique identifier for each listener based on its properties
         await deleteListener("0.0.0.0", 19000, listener);
       }
-      
+
       // Call the parent component's onRestartWizard function
       onRestartWizard();
     } catch (error) {
@@ -108,15 +86,15 @@ export function AppSidebar({
 
   const navigateTo = (path: string) => {
     router.push(path);
-    setActiveView(path.split('/').pop() || 'home');
+    setActiveView(path.split("/").pop() || "home");
   };
 
   return (
     <Sidebar>
       <SidebarHeader className="border-b">
-          <div className="p-2 flex items-center justify-center mb-2">
-            <MCPLogo className="h-10 w-auto" />
-          </div>
+        <div className="p-2 flex items-center justify-center mb-2">
+          <MCPLogo className="h-10 w-auto" />
+        </div>
       </SidebarHeader>
 
       <SidebarContent>
@@ -191,7 +169,7 @@ export function AppSidebar({
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton 
+            <SidebarMenuButton
               tooltip="Restart Setup Wizard"
               onClick={handleRestartWizard}
               aria-label="Restart Setup Wizard"
@@ -213,15 +191,16 @@ export function AppSidebar({
           <DialogHeader>
             <DialogTitle>Restart Setup Wizard</DialogTitle>
             <DialogDescription>
-              Are you sure you want to restart the setup wizard? This will reset all your current configuration settings.
+              Are you sure you want to restart the setup wizard? This will reset all your current
+              configuration settings.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowRestartDialog(false)}>
               Cancel
             </Button>
-            <Button 
-              variant="destructive" 
+            <Button
+              variant="destructive"
               onClick={confirmRestartWizard}
               disabled={isDeletingListeners}
             >

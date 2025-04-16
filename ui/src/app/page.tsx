@@ -3,23 +3,16 @@
 import { useState, useEffect } from "react";
 import { SetupWizard } from "@/components/setup-wizard";
 import { useLoading } from "@/lib/loading-context";
-import { JsonConfig } from "@/components/json-config";
 import { useServer } from "@/lib/server-context";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
 
 export default function Home() {
   const { isLoading, setIsLoading } = useLoading();
-  const { 
-    config, 
-    setConfig, 
-    isConnected, 
-    connectionError, 
-    listeners,
-  } = useServer();
-  
+  const { config, setConfig, isConnected, connectionError, listeners } = useServer();
+
   const [showWizard, setShowWizard] = useState(false);
-  const [configUpdateMessage, setConfigUpdateMessage] = useState<{
+  const [configUpdateMessage] = useState<{
     success: boolean;
     message: string;
   } | null>(null);
@@ -45,33 +38,12 @@ export default function Home() {
     setConfig(newConfig);
   };
 
-  const handleConfigUpdate = (success: boolean, message: string) => {
-    setConfigUpdateMessage({ success, message });
-    // Clear the message after 5 seconds
-    setTimeout(() => {
-      setConfigUpdateMessage(null);
-    }, 5000);
-  };
-
   const handleWizardComplete = () => {
     setShowWizard(false);
   };
 
   const handleWizardSkip = () => {
     setShowWizard(false);
-  };
-
-  const handleRestartWizard = () => {
-    // Reset the configuration
-    setConfig({
-      type: "static",
-      listeners: [],
-      targets: [],
-      policies: [],
-    });
-    
-    // Show the setup wizard
-    setShowWizard(true);
   };
 
   const renderContent = () => {

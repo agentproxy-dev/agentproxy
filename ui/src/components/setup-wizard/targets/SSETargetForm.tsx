@@ -18,7 +18,7 @@ export function SSETargetForm({
   targetName,
   onSubmit,
   isLoading,
-  existingTarget
+  existingTarget,
 }: SSETargetFormProps) {
   const [sseUrl, setSseUrl] = useState("");
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
@@ -35,15 +35,15 @@ export function SSETargetForm({
       const protocol = sse.tls?.insecure_skip_verify ? "https" : "http";
       const url = `${protocol}://${sse.host}:${sse.port}${sse.path}`;
       setSseUrl(url);
-      
+
       if (sse.headers) {
         setHeaders(sse.headers);
       }
-      
+
       if (sse.auth?.passthrough) {
         setPassthroughAuth(true);
       }
-      
+
       if (sse.tls?.insecure_skip_verify) {
         setInsecureSkipVerify(true);
       }
@@ -85,14 +85,14 @@ export function SSETargetForm({
       // Add auth if passthrough is enabled
       if (passthroughAuth) {
         target.sse!.auth = {
-          passthrough: true
+          passthrough: true,
         };
       }
 
       // Add TLS config if insecure skip verify is enabled
       if (insecureSkipVerify) {
         target.sse!.tls = {
-          insecure_skip_verify: true
+          insecure_skip_verify: true,
         };
       }
 
@@ -139,11 +139,7 @@ export function SSETargetForm({
                 {headers.map((header, index) => (
                   <div key={index} className="flex items-center gap-2">
                     <div className="flex-1">
-                      <Input
-                        value={header.key}
-                        disabled
-                        placeholder="Header key"
-                      />
+                      <Input value={header.key} disabled placeholder="Header key" />
                     </div>
                     <div className="flex-1">
                       <Input
@@ -210,7 +206,9 @@ export function SSETargetForm({
                 <Checkbox
                   id="passthrough-auth"
                   checked={passthroughAuth}
-                  onCheckedChange={(checked: boolean | "indeterminate") => setPassthroughAuth(checked as boolean)}
+                  onCheckedChange={(checked: boolean | "indeterminate") =>
+                    setPassthroughAuth(checked as boolean)
+                  }
                 />
                 <Label htmlFor="passthrough-auth" className="text-sm font-normal">
                   Pass through authentication
@@ -224,7 +222,9 @@ export function SSETargetForm({
                 <Checkbox
                   id="insecure-skip-verify"
                   checked={insecureSkipVerify}
-                  onCheckedChange={(checked: boolean | "indeterminate") => setInsecureSkipVerify(checked as boolean)}
+                  onCheckedChange={(checked: boolean | "indeterminate") =>
+                    setInsecureSkipVerify(checked as boolean)
+                  }
                 />
                 <Label htmlFor="insecure-skip-verify" className="text-sm font-normal">
                   Insecure skip verify
@@ -235,13 +235,15 @@ export function SSETargetForm({
         </CollapsibleContent>
       </Collapsible>
 
-      <Button 
-        onClick={handleSubmit}
-        className="w-full"
-        disabled={isLoading || !sseUrl}
-      >
-        {isLoading ? (existingTarget ? "Updating Target..." : "Adding Target...") : (existingTarget ? "Update SSE Target" : "Add SSE Target")}
+      <Button onClick={handleSubmit} className="w-full" disabled={isLoading || !sseUrl}>
+        {isLoading
+          ? existingTarget
+            ? "Updating Target..."
+            : "Adding Target..."
+          : existingTarget
+            ? "Update SSE Target"
+            : "Add SSE Target"}
       </Button>
     </div>
   );
-} 
+}

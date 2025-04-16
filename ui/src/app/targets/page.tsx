@@ -23,15 +23,12 @@ export default function TargetsPage() {
               Configure the targets for your proxy server
             </p>
           </div>
-          
+
           <div className="mt-4">
-            <TargetsConfig 
-              config={config}
-              onConfigChange={setConfig}
-            />
+            <TargetsConfig config={config} onConfigChange={setConfig} />
           </div>
         </div>
       )}
     </div>
   );
-} 
+}

@@ -3,12 +3,10 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { PlusCircle, Server, Globe, Terminal, Loader2, Network, ChevronDown, ChevronUp, Info, Edit2 } from "lucide-react";
-import { Target, TargetType, Header, BackendAuth, BackendTls, Config } from "@/lib/types";
+import { PlusCircle, Loader2, Info, Edit2 } from "lucide-react";
+import { Target, Config } from "@/lib/types";
 import { updateTarget, createMcpTarget, createA2aTarget } from "@/lib/api";
 import {
   Dialog,
@@ -19,8 +17,6 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import TargetItem from "./target-item";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { MCPTargetForm } from "./setup-wizard/targets/MCPTargetForm";
 import { A2ATargetForm } from "./setup-wizard/targets/A2ATargetForm";
 import { toast } from "@/lib/toast";
@@ -36,7 +32,7 @@ export function TargetsConfig({
   config,
   onConfigChange,
   serverAddress = "0.0.0.0",
-  serverPort = 19000
+  serverPort = 19000,
 }: TargetsConfigProps) {
   const [targetCategory, setTargetCategory] = useState<"mcp" | "a2a">("mcp");
   const [targetName, setTargetName] = useState("");
@@ -98,16 +94,14 @@ export function TargetsConfig({
     setIsUpdating(true);
     try {
       await updateTarget(serverAddress, serverPort, target);
-      
+
       // Update the target in the config
       const newConfig = {
         ...config,
-        targets: config.targets.map((t) => 
-          t.name === target.name ? target : t
-        ),
+        targets: config.targets.map((t) => (t.name === target.name ? target : t)),
       };
       onConfigChange(newConfig);
-      
+
       setIsDialogOpen(false);
       setEditingTarget(undefined);
       toast.success("Target updated", {
@@ -165,8 +159,8 @@ export function TargetsConfig({
           <div className="space-y-2">
             <h3 className="font-medium">What are Targets?</h3>
             <p className="text-sm text-muted-foreground">
-              Targets are the destination servers that your proxy will forward requests to.
-              You can add multiple targets and configure their connection settings.
+              Targets are the destination servers that your proxy will forward requests to. You can
+              add multiple targets and configure their connection settings.
             </p>
           </div>
 
@@ -190,7 +184,10 @@ export function TargetsConfig({
               <h3 className="font-medium mb-2">Configured Targets</h3>
               <div className="space-y-2">
                 {config.targets.map((target, index) => (
-                  <div key={index} className="flex items-center justify-between p-3 border rounded-md">
+                  <div
+                    key={index}
+                    className="flex items-center justify-between p-3 border rounded-md"
+                  >
                     <TargetItem
                       target={target}
                       index={index}
@@ -214,7 +211,8 @@ export function TargetsConfig({
             <Alert>
               <Info className="h-4 w-4" />
               <AlertDescription>
-                No targets configured yet. Click "Add Target" to create your first target.
+                No targets configured yet. Click <strong>Add Target</strong> to create your first
+                target.
               </AlertDescription>
             </Alert>
           )}
@@ -226,13 +224,16 @@ export function TargetsConfig({
           <DialogHeader>
             <DialogTitle>{editingTarget ? "Edit Target" : "Add New Target"}</DialogTitle>
             <DialogDescription>
-              {editingTarget 
-                ? "Update the configuration for your target server." 
+              {editingTarget
+                ? "Update the configuration for your target server."
                 : "Configure a new target server for your proxy."}
             </DialogDescription>
           </DialogHeader>
 
-          <Tabs value={targetCategory} onValueChange={(value) => setTargetCategory(value as "mcp" | "a2a")}>
+          <Tabs
+            value={targetCategory}
+            onValueChange={(value) => setTargetCategory(value as "mcp" | "a2a")}
+          >
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="mcp">MCP Target</TabsTrigger>
               <TabsTrigger value="a2a">A2A Target</TabsTrigger>
@@ -242,8 +243,9 @@ export function TargetsConfig({
               <Alert>
                 <Info className="h-4 w-4" />
                 <AlertDescription>
-                  MCP (Model Control Protocol) targets are used to connect to AI model servers that support the MCP protocol.
-                  These are typically used for AI model inference and control.
+                  MCP (Model Control Protocol) targets are used to connect to AI model servers that
+                  support the MCP protocol. These are typically used for AI model inference and
+                  control.
                 </AlertDescription>
               </Alert>
 
@@ -260,8 +262,9 @@ export function TargetsConfig({
               <Alert>
                 <Info className="h-4 w-4" />
                 <AlertDescription>
-                  A2A (Agent-to-Agent) targets are used to connect to other agent systems that support the A2A protocol.
-                  These are typically used for agent-to-agent communication and collaboration.
+                  A2A (Agent-to-Agent) targets are used to connect to other agent systems that
+                  support the A2A protocol. These are typically used for agent-to-agent
+                  communication and collaboration.
                 </AlertDescription>
               </Alert>
 

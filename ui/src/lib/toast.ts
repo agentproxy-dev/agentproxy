@@ -1,15 +1,4 @@
-import { toast as sonnerToast, type ExternalToast } from 'sonner';
-
-type ToastType = 'success' | 'error' | 'info' | 'warning';
-
-interface ToastOptions {
-  duration?: number;
-  position?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'top-center' | 'bottom-center' | 'top' | 'bottom';
-  action?: {
-    label: string;
-    onClick: () => void;
-  };
-}
+import { toast as sonnerToast, type ExternalToast } from "sonner";
 
 export const toast = {
   success: (message: string, options?: ExternalToast) => {
@@ -48,4 +37,4 @@ export const toast = {
   custom: (message: React.ReactNode, options?: ExternalToast) => {
     sonnerToast(message, options);
   },
-}; 
+};

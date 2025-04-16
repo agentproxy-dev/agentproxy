@@ -9,12 +9,12 @@ import { RBACConfig } from "@/lib/types";
 export default function PoliciesPage() {
   const { policies, connectionError } = useServer();
 
-  const handleAddPolicy = (policy: RBACConfig) => {
+  const handleAddPolicy = (_policy: RBACConfig) => {
     // Policy management is now handled through the listener
     console.log("Policy management is now handled through the listener");
   };
 
-  const handleRemovePolicy = (index: number) => {
+  const handleRemovePolicy = (_index: number) => {
     // Policy management is now handled through the listener
     console.log("Policy management is now handled through the listener");
   };
@@ -34,9 +34,9 @@ export default function PoliciesPage() {
               Configure the policies for your proxy server
             </p>
           </div>
-          
+
           <div className="mt-4">
-            <PoliciesConfig 
+            <PoliciesConfig
               policies={policies}
               addPolicy={handleAddPolicy}
               removePolicy={handleRemovePolicy}
@@ -46,4 +46,4 @@ export default function PoliciesPage() {
       )}
     </div>
   );
-} 
+}

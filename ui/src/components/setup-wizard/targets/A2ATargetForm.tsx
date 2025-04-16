@@ -15,7 +15,7 @@ export function A2ATargetForm({
   targetName,
   onSubmit,
   isLoading,
-  existingTarget
+  existingTarget,
 }: A2ATargetFormProps) {
   const [targetHost, setTargetHost] = useState("");
   const [targetPort, setTargetPort] = useState("");
@@ -46,8 +46,8 @@ export function A2ATargetForm({
         a2a: {
           host: targetHost,
           port: port,
-          path: targetPath || "/"
-        }
+          path: targetPath || "/",
+        },
       };
 
       await onSubmit(target);
@@ -94,13 +94,19 @@ export function A2ATargetForm({
         </p>
       </div>
 
-      <Button 
+      <Button
         onClick={handleSubmit}
         className="w-full"
         disabled={isLoading || !targetHost || !targetPort}
       >
-        {isLoading ? (existingTarget ? "Updating Target..." : "Adding Target...") : (existingTarget ? "Update A2A Target" : "Add A2A Target")}
+        {isLoading
+          ? existingTarget
+            ? "Updating Target..."
+            : "Adding Target..."
+          : existingTarget
+            ? "Update A2A Target"
+            : "Add A2A Target"}
       </Button>
     </div>
   );
-} 
+}

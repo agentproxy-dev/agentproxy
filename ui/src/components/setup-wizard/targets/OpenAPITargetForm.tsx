@@ -4,7 +4,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ChevronUp, ChevronDown } from "lucide-react";
-import { Target, OpenAPITarget, Header, LocalDataSource } from "@/lib/types";
+import { Target, Header, LocalDataSource } from "@/lib/types";
 
 interface OpenAPITargetFormProps {
   targetName: string;
@@ -17,7 +17,7 @@ export function OpenAPITargetForm({
   targetName,
   onSubmit,
   isLoading,
-  existingTarget
+  existingTarget,
 }: OpenAPITargetFormProps) {
   const [host, setHost] = useState("");
   const [port, setPort] = useState("");
@@ -41,10 +41,13 @@ export function OpenAPITargetForm({
 
   const addHeader = () => {
     if (headerKey && headerValue) {
-      setHeaders([...headers, { 
-        key: headerKey, 
-        value: { string_value: headerValue } 
-      }]);
+      setHeaders([
+        ...headers,
+        {
+          key: headerKey,
+          value: { string_value: headerValue },
+        },
+      ]);
       setHeaderKey("");
       setHeaderValue("");
     }
@@ -56,9 +59,10 @@ export function OpenAPITargetForm({
 
   const handleSubmit = async () => {
     try {
-      const schema: LocalDataSource = schemaType === "file" 
-        ? { file_path: schemaFilePath }
-        : { inline: new TextEncoder().encode(schemaInline) };
+      const schema: LocalDataSource =
+        schemaType === "file"
+          ? { file_path: schemaFilePath }
+          : { inline: new TextEncoder().encode(schemaInline) };
 
       const target: Target = {
         name: targetName,
@@ -66,7 +70,7 @@ export function OpenAPITargetForm({
           host,
           port: parseInt(port),
           schema,
-          headers: headers.length > 0 ? headers : undefined
+          headers: headers.length > 0 ? headers : undefined,
         },
       };
 
@@ -158,11 +162,7 @@ export function OpenAPITargetForm({
                 {headers.map((header, index) => (
                   <div key={index} className="flex items-center gap-2">
                     <div className="flex-1">
-                      <Input
-                        value={header.key}
-                        disabled
-                        placeholder="Header name"
-                      />
+                      <Input value={header.key} disabled placeholder="Header name" />
                     </div>
                     <div className="flex-1">
                       <Input
@@ -226,13 +226,21 @@ export function OpenAPITargetForm({
         </CollapsibleContent>
       </Collapsible>
 
-      <Button 
+      <Button
         onClick={handleSubmit}
         className="w-full"
-        disabled={isLoading || !host || !port || (schemaType === "file" ? !schemaFilePath : !schemaInline)}
+        disabled={
+          isLoading || !host || !port || (schemaType === "file" ? !schemaFilePath : !schemaInline)
+        }
       >
-        {isLoading ? (existingTarget ? "Updating Target..." : "Adding Target...") : (existingTarget ? "Update OpenAPI Target" : "Add OpenAPI Target")}
+        {isLoading
+          ? existingTarget
+            ? "Updating Target..."
+            : "Adding Target..."
+          : existingTarget
+            ? "Update OpenAPI Target"
+            : "Add OpenAPI Target"}
       </Button>
     </div>
   );
-} 
+}

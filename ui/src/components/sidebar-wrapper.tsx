@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import { AppSidebar } from "@/components/app-sidebar";
 import { useServer } from "@/lib/server-context";
 import { useLoading } from "@/lib/loading-context";
-import { Target } from "@/lib/types";
 
 export function SidebarWrapper() {
   const { targets, listeners, setConfig, isConnected } = useServer();
@@ -38,4 +37,4 @@ export function SidebarWrapper() {
       onRestartWizard={handleRestartWizard}
     />
   );
-} 
+}

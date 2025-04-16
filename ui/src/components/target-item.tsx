@@ -64,9 +64,7 @@ export default function TargetItem({ target, index, onDelete, isUpdating }: Targ
         </div>
       </div>
       <div className="flex items-center space-x-2">
-        <Badge variant="outline">
-          {targetType}
-        </Badge>
+        <Badge variant="outline">{targetType}</Badge>
         <Button
           variant="ghost"
           size="icon"

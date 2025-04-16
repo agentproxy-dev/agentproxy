@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -22,7 +21,7 @@ export function MCPTargetForm({
   onTargetNameChange,
   onSubmit,
   isLoading,
-  existingTarget
+  existingTarget,
 }: MCPTargetFormProps) {
   const [targetType, setTargetType] = useState<TargetType>("sse");
 
@@ -46,7 +45,7 @@ export function MCPTargetForm({
           placeholder="e.g., local-model"
         />
       </div>
-      
+
       <div className="space-y-2">
         <Label>Target Type</Label>
         <Tabs value={targetType} onValueChange={(value) => setTargetType(value as TargetType)}>
@@ -64,7 +63,7 @@ export function MCPTargetForm({
               OpenAPI
             </TabsTrigger>
           </TabsList>
-          
+
           <TabsContent value="sse">
             <SSETargetForm
               targetName={targetName}
@@ -73,7 +72,7 @@ export function MCPTargetForm({
               existingTarget={existingTarget}
             />
           </TabsContent>
-          
+
           <TabsContent value="stdio">
             <StdioTargetForm
               targetName={targetName}
@@ -82,7 +81,7 @@ export function MCPTargetForm({
               existingTarget={existingTarget}
             />
           </TabsContent>
-          
+
           <TabsContent value="openapi">
             <OpenAPITargetForm
               targetName={targetName}
@@ -95,4 +94,4 @@ export function MCPTargetForm({
       </div>
     </div>
   );
-} 
+}

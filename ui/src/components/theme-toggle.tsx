@@ -32,7 +32,7 @@ export function ThemeToggle({ asChild, className }: ThemeToggleProps) {
         onClick={toggleTheme}
         role="button"
         tabIndex={0}
-        onKeyDown={e => {
+        onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             toggleTheme();
           }

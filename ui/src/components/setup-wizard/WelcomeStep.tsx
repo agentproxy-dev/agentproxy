@@ -1,5 +1,12 @@
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { MCPLogo } from "@/components/mcp-logo";
 import { ArrowRight } from "lucide-react";
 
@@ -17,7 +24,7 @@ export function WelcomeStep({ onNext, onSkip }: WelcomeStepProps) {
         </div>
         <CardTitle className="text-center">Welcome to agent-proxy</CardTitle>
         <CardDescription className="text-center">
-          Let's get your proxy server up and running in just a few steps
+          Let&apos;s get your proxy server up and running in just a few steps
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -25,11 +32,12 @@ export function WelcomeStep({ onNext, onSkip }: WelcomeStepProps) {
           <h3 className="font-medium">What is agent-proxy?</h3>
           <p className="text-sm text-muted-foreground">
             Agentproxy is a powerful tool that helps you manage and secure your server connections.
-            It allows you to configure listeners, set up target servers, and implement security policies.
+            It allows you to configure listeners, set up target servers, and implement security
+            policies.
           </p>
         </div>
         <div className="space-y-2">
-          <h3 className="font-medium">What you'll configure:</h3>
+          <h3 className="font-medium">What you&apos;ll configure:</h3>
           <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
             <li>Listener settings for your proxy server</li>
             <li>Target servers that your proxy will forward requests to</li>
@@ -48,4 +56,4 @@ export function WelcomeStep({ onNext, onSkip }: WelcomeStepProps) {
       </CardFooter>
     </Card>
   );
-} 
+}

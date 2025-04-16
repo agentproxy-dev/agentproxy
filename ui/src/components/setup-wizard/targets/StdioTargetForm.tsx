@@ -17,7 +17,7 @@ export function StdioTargetForm({
   targetName,
   onSubmit,
   isLoading,
-  existingTarget
+  existingTarget,
 }: StdioTargetFormProps) {
   const [command, setCommand] = useState("npx");
   const [args, setArgs] = useState("");
@@ -107,18 +107,10 @@ export function StdioTargetForm({
                 {Object.entries(envVars).map(([key, value]) => (
                   <div key={key} className="flex items-center gap-2">
                     <div className="flex-1">
-                      <Input
-                        value={key}
-                        disabled
-                        placeholder="Variable name"
-                      />
+                      <Input value={key} disabled placeholder="Variable name" />
                     </div>
                     <div className="flex-1">
-                      <Input
-                        value={value}
-                        disabled
-                        placeholder="Variable value"
-                      />
+                      <Input value={value} disabled placeholder="Variable value" />
                     </div>
                     <Button
                       type="button"
@@ -175,13 +167,15 @@ export function StdioTargetForm({
         </CollapsibleContent>
       </Collapsible>
 
-      <Button 
-        onClick={handleSubmit}
-        className="w-full"
-        disabled={isLoading || !command}
-      >
-        {isLoading ? (existingTarget ? "Updating Target..." : "Adding Target...") : (existingTarget ? "Update stdio Target" : "Add stdio Target")}
+      <Button onClick={handleSubmit} className="w-full" disabled={isLoading || !command}>
+        {isLoading
+          ? existingTarget
+            ? "Updating Target..."
+            : "Adding Target..."
+          : existingTarget
+            ? "Update stdio Target"
+            : "Add stdio Target"}
       </Button>
     </div>
   );
-} 
+}

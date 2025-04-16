@@ -1,6 +1,13 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { MCPLogo } from "@/components/mcp-logo";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { Label } from "@/components/ui/label";
@@ -18,13 +25,13 @@ interface ListenerStepProps {
   serverPort?: number;
 }
 
-export function ListenerStep({ 
-  onNext, 
-  onPrevious, 
-  config, 
+export function ListenerStep({
+  onNext,
+  onPrevious,
+  config,
   onConfigChange,
   serverAddress = "0.0.0.0",
-  serverPort = 19000
+  serverPort = 19000,
 }: ListenerStepProps) {
   const [listenerAddress, setListenerAddress] = useState("0.0.0.0");
   const [listenerPort, setListenerPort] = useState("5555");
@@ -43,22 +50,22 @@ export function ListenerStep({
           address: listenerAddress,
           port: parseInt(listenerPort, 10),
           tls: undefined,
-          rbac: []
-        }
+          rbac: [],
+        },
       };
 
       // Update the config with the new listener
       const newConfig = {
         ...config,
-        listeners: [newListener]
+        listeners: [newListener],
       };
-      
+
       // Update the local state
       onConfigChange(newConfig);
-      
+
       // Call the API to create/update the listener
       await createListener(serverAddress, serverPort, newListener);
-      
+
       console.log("Listener configuration updated:", newListener);
       onNext();
       return true;
@@ -91,26 +98,26 @@ export function ListenerStep({
               the address, port, and protocol for your listener.
             </p>
           </div>
-          
+
           <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="listenerAddress">Address</Label>
-              <Input 
-                id="listenerAddress" 
-                value={listenerAddress} 
+              <Input
+                id="listenerAddress"
+                value={listenerAddress}
                 onChange={(e) => setListenerAddress(e.target.value)}
                 placeholder="e.g., 0.0.0.0"
               />
               <p className="text-xs text-muted-foreground">
-                The IP address the listener is bound to. 0.0.0.0 means it's listening on all
+                The IP address the listener is bound to. 0.0.0.0 means it&apos;s listening on all
                 interfaces.
               </p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="listenerPort">Port</Label>
-              <Input 
-                id="listenerPort" 
-                value={listenerPort} 
+              <Input
+                id="listenerPort"
+                value={listenerPort}
                 onChange={(e) => setListenerPort(e.target.value)}
                 placeholder="e.g., 5555"
               />
@@ -118,7 +125,7 @@ export function ListenerStep({
                 The port number the listener is using.
               </p>
             </div>
-            
+
             {error && (
               <Alert variant="destructive">
                 <AlertDescription>{error}</AlertDescription>
@@ -132,14 +139,11 @@ export function ListenerStep({
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back
         </Button>
-        <Button 
-          onClick={updateListenerConfig}
-          disabled={isUpdatingListener}
-        >
+        <Button onClick={updateListenerConfig} disabled={isUpdatingListener}>
           {isUpdatingListener ? "Updating..." : "Next"}
           <ArrowRight className="ml-2 h-4 w-4" />
         </Button>
       </CardFooter>
     </Card>
   );
-} 
+}
