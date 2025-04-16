@@ -107,6 +107,7 @@ impl SpanProcessor for EnrichWithBaggageSpanProcessor {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Config {
 	pub tracer: Tracer,
+	#[serde(default, skip_serializing_if = "HashMap::is_empty")]
 	pub tags: HashMap<String, String>,
 }
 
