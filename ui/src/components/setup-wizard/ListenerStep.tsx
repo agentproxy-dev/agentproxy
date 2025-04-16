@@ -67,12 +67,11 @@ export function ListenerStep({
       await createListener(serverAddress, serverPort, newListener);
 
       console.log("Listener configuration updated:", newListener);
+      // Call onNext to navigate to the next step
       onNext();
-      return true;
     } catch (err) {
       console.error("Error updating listener configuration:", err);
       setError(err instanceof Error ? err.message : "Failed to update listener configuration");
-      return false;
     } finally {
       setIsUpdatingListener(false);
     }

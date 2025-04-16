@@ -12,6 +12,7 @@ interface SSETargetFormProps {
   onSubmit: (target: Target) => Promise<void>;
   isLoading: boolean;
   existingTarget?: Target;
+  hideSubmitButton?: boolean;
 }
 
 export function SSETargetForm({
@@ -19,6 +20,7 @@ export function SSETargetForm({
   onSubmit,
   isLoading,
   existingTarget,
+  hideSubmitButton = false,
 }: SSETargetFormProps) {
   const [sseUrl, setSseUrl] = useState("");
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
@@ -104,7 +106,14 @@ export function SSETargetForm({
   };
 
   return (
-    <div className="space-y-4 pt-4">
+    <form
+      id="mcp-target-form"
+      onSubmit={(e) => {
+        e.preventDefault();
+        handleSubmit();
+      }}
+      className="space-y-4 pt-4"
+    >
       <div className="space-y-2">
         <Label htmlFor="sseUrl">Server URL</Label>
         <Input
@@ -235,15 +244,17 @@ export function SSETargetForm({
         </CollapsibleContent>
       </Collapsible>
 
-      <Button onClick={handleSubmit} className="w-full" disabled={isLoading || !sseUrl}>
-        {isLoading
-          ? existingTarget
-            ? "Updating Target..."
-            : "Adding Target..."
-          : existingTarget
-            ? "Update SSE Target"
-            : "Add SSE Target"}
-      </Button>
-    </div>
+      {!hideSubmitButton && (
+        <Button type="submit" className="w-full" disabled={isLoading || !sseUrl}>
+          {isLoading
+            ? existingTarget
+              ? "Updating Target..."
+              : "Adding Target..."
+            : existingTarget
+              ? "Update SSE Target"
+              : "Add SSE Target"}
+        </Button>
+      )}
+    </form>
   );
 }

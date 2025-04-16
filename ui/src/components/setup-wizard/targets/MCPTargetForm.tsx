@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Globe, Terminal, Server } from "lucide-react";
 import { SSETargetForm } from "./SSETargetForm";
@@ -23,32 +22,32 @@ export function MCPTargetForm({
   isLoading,
   existingTarget,
 }: MCPTargetFormProps) {
-  const [targetType, setTargetType] = useState<TargetType>("sse");
-
-  // Set the target type based on the existing target if provided
-  useEffect(() => {
+  // Initialize target type based on existing target if available
+  const getInitialTargetType = (): TargetType => {
+    console.log('existingTarget', existingTarget)
     if (existingTarget) {
-      if (existingTarget.sse) setTargetType("sse");
-      else if (existingTarget.stdio) setTargetType("stdio");
-      else if (existingTarget.openapi) setTargetType("openapi");
+      if (existingTarget.stdio) return "stdio";
+      if (existingTarget.openapi) return "openapi";
+      if (existingTarget.sse) return "sse";
     }
+    return "sse"; // Default to SSE if no existing target
+  };
+
+  const [targetType, setTargetType] = useState<TargetType>(getInitialTargetType());
+
+  // Update target type when existingTarget changes
+  useEffect(() => {
+    const newType = getInitialTargetType();
+    setTargetType(newType);
   }, [existingTarget]);
 
+  console.log('target', existingTarget)
+  console.log(targetType);
   return (
     <div className="space-y-4">
       <div className="space-y-2">
-        <Label htmlFor="targetName">Target Name</Label>
-        <Input
-          id="targetName"
-          value={targetName}
-          onChange={(e) => onTargetNameChange(e.target.value)}
-          placeholder="e.g., local-model"
-        />
-      </div>
-
-      <div className="space-y-2">
         <Label>Target Type</Label>
-        <Tabs value={targetType} onValueChange={(value) => setTargetType(value as TargetType)}>
+        <Tabs defaultValue={targetType} value={targetType} onValueChange={(value) => setTargetType(value as TargetType)}>
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="sse" className="flex items-center">
               <Globe className="h-4 w-4 mr-2" />
@@ -70,6 +69,7 @@ export function MCPTargetForm({
               onSubmit={onSubmit}
               isLoading={isLoading}
               existingTarget={existingTarget}
+              hideSubmitButton={true}
             />
           </TabsContent>
 
@@ -79,6 +79,7 @@ export function MCPTargetForm({
               onSubmit={onSubmit}
               isLoading={isLoading}
               existingTarget={existingTarget}
+              hideSubmitButton={true}
             />
           </TabsContent>
 
@@ -88,6 +89,7 @@ export function MCPTargetForm({
               onSubmit={onSubmit}
               isLoading={isLoading}
               existingTarget={existingTarget}
+              hideSubmitButton={true}
             />
           </TabsContent>
         </Tabs>

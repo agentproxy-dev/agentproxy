@@ -9,6 +9,7 @@ interface A2ATargetFormProps {
   onSubmit: (target: Target) => Promise<void>;
   isLoading: boolean;
   existingTarget?: Target;
+  hideSubmitButton?: boolean;
 }
 
 export function A2ATargetForm({
@@ -16,6 +17,7 @@ export function A2ATargetForm({
   onSubmit,
   isLoading,
   existingTarget,
+  hideSubmitButton = false,
 }: A2ATargetFormProps) {
   const [targetHost, setTargetHost] = useState("");
   const [targetPort, setTargetPort] = useState("");
@@ -58,7 +60,14 @@ export function A2ATargetForm({
   };
 
   return (
-    <div className="space-y-4 pt-4">
+    <form
+      id="a2a-target-form"
+      onSubmit={(e) => {
+        e.preventDefault();
+        handleSubmit();
+      }}
+      className="space-y-4 pt-4"
+    >
       <div className="space-y-2">
         <Label htmlFor="targetHost">Host</Label>
         <Input
@@ -94,19 +103,21 @@ export function A2ATargetForm({
         </p>
       </div>
 
-      <Button
-        onClick={handleSubmit}
-        className="w-full"
-        disabled={isLoading || !targetHost || !targetPort}
-      >
-        {isLoading
-          ? existingTarget
-            ? "Updating Target..."
-            : "Adding Target..."
-          : existingTarget
-            ? "Update A2A Target"
-            : "Add A2A Target"}
-      </Button>
-    </div>
+      {!hideSubmitButton && (
+        <Button
+          type="submit"
+          className="w-full"
+          disabled={isLoading || !targetHost || !targetPort}
+        >
+          {isLoading
+            ? existingTarget
+              ? "Updating Target..."
+              : "Adding Target..."
+            : existingTarget
+              ? "Update A2A Target"
+              : "Add A2A Target"}
+        </Button>
+      )}
+    </form>
   );
 }

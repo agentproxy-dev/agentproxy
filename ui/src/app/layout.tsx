@@ -7,6 +7,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { ServerProvider } from "@/lib/server-context";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { SidebarWrapper } from "@/components/sidebar-wrapper";
+import { WizardProvider } from "@/lib/wizard-context";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -19,8 +20,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Agent-proxy Dashboard",
-  description: "Agent-proxy Dashboard",
+  title: "Agentproxy Dashboard",
+  description: "Agentproxy Dashboard",
   icons: {
     icon: "/favicon.svg",
   },
@@ -45,13 +46,15 @@ export default function RootLayout({
             storageKey="agentproxy-theme"
           >
             <LoadingWrapper>
-              <SidebarProvider>
-                <div className="flex min-h-screen w-full">
-                  <SidebarWrapper />
-                  <main className="flex-1 overflow-auto">{children}</main>
-                </div>
-              </SidebarProvider>
-              <Toaster />
+              <WizardProvider>
+                <SidebarProvider>
+                  <div className="flex min-h-screen w-full">
+                    <SidebarWrapper />
+                    <main className="flex-1 overflow-auto">{children}</main>
+                  </div>
+                </SidebarProvider>
+                <Toaster />
+              </WizardProvider>
             </LoadingWrapper>
           </ThemeProvider>
         </ServerProvider>

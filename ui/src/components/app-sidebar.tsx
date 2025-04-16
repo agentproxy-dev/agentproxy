@@ -53,7 +53,7 @@ export function AppSidebar({
   const [isDeletingListeners, setIsDeletingListeners] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
-  const {} = useServer();
+  const { refreshListeners } = useServer();
 
   const handleRestartWizard = () => {
     setShowRestartDialog(true);
@@ -69,12 +69,23 @@ export function AppSidebar({
 
       // Delete each listener
       for (const listener of listeners) {
-        // Create a unique identifier for each listener based on its properties
         await deleteListener("0.0.0.0", 19000, listener);
       }
 
       // Call the parent component's onRestartWizard function
       onRestartWizard();
+      
+      // Refresh the listeners in the server context
+      await refreshListeners();
+      
+      // Add a small delay to allow the server to process the deletions
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Trigger wizard restart
+      localStorage.setItem('restartWizard', 'true');
+      
+      // Navigate to the home page to trigger the setup wizard
+      navigateTo("/");
     } catch (error) {
       console.error("Error restarting wizard:", error);
     } finally {
@@ -148,17 +159,6 @@ export function AppSidebar({
                   <span>Policies</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  tooltip="JSON Configuration"
-                  isActive={pathname === "/json"}
-                  onClick={() => navigateTo("/json")}
-                  aria-label="JSON Configuration"
-                >
-                  <Code className="h-4 w-4" />
-                  <span>JSON View</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -181,6 +181,7 @@ export function AppSidebar({
           <SidebarMenuItem>
             <SidebarMenuButton tooltip="Theme">
               <ThemeToggle asChild className="flex items-center gap-2" />
+              <span>Theme</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>

@@ -11,6 +11,7 @@ interface StdioTargetFormProps {
   onSubmit: (target: Target) => Promise<void>;
   isLoading: boolean;
   existingTarget?: Target;
+  hideSubmitButton?: boolean;
 }
 
 export function StdioTargetForm({
@@ -18,6 +19,7 @@ export function StdioTargetForm({
   onSubmit,
   isLoading,
   existingTarget,
+  hideSubmitButton = false,
 }: StdioTargetFormProps) {
   const [command, setCommand] = useState("npx");
   const [args, setArgs] = useState("");
@@ -29,9 +31,10 @@ export function StdioTargetForm({
   // Initialize form with existing target data if provided
   useEffect(() => {
     if (existingTarget?.stdio) {
-      setCommand(existingTarget.stdio.cmd);
-      setArgs(existingTarget.stdio.args.join(" "));
-      setEnvVars(existingTarget.stdio.env || {});
+      const { cmd, args: targetArgs, env } = existingTarget.stdio;
+      setCommand(cmd || "npx");
+      setArgs(Array.isArray(targetArgs) ? targetArgs.join(" ") : "");
+      setEnvVars(env || {});
     }
   }, [existingTarget]);
 
@@ -68,7 +71,14 @@ export function StdioTargetForm({
   };
 
   return (
-    <div className="space-y-4 pt-4">
+    <form
+      id="mcp-target-form"
+      onSubmit={(e) => {
+        e.preventDefault();
+        handleSubmit();
+      }}
+      className="space-y-4 pt-4"
+    >
       <div className="space-y-2">
         <Label htmlFor="command">Command</Label>
         <Input
@@ -167,15 +177,17 @@ export function StdioTargetForm({
         </CollapsibleContent>
       </Collapsible>
 
-      <Button onClick={handleSubmit} className="w-full" disabled={isLoading || !command}>
-        {isLoading
-          ? existingTarget
-            ? "Updating Target..."
-            : "Adding Target..."
-          : existingTarget
-            ? "Update stdio Target"
-            : "Add stdio Target"}
-      </Button>
-    </div>
+      {!hideSubmitButton && (
+        <Button type="submit" className="w-full" disabled={isLoading || !command}>
+          {isLoading
+            ? existingTarget
+              ? "Updating Target..."
+              : "Adding Target..."
+            : existingTarget
+              ? "Update stdio Target"
+              : "Add stdio Target"}
+        </Button>
+      )}
+    </form>
   );
 }

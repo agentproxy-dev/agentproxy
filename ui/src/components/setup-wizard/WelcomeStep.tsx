@@ -22,14 +22,14 @@ export function WelcomeStep({ onNext, onSkip }: WelcomeStepProps) {
         <div className="flex justify-center mb-6">
           <MCPLogo className="h-12" />
         </div>
-        <CardTitle className="text-center">Welcome to agent-proxy</CardTitle>
+        <CardTitle className="text-center">Welcome to agentproxy</CardTitle>
         <CardDescription className="text-center">
           Let&apos;s get your proxy server up and running in just a few steps
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-2">
-          <h3 className="font-medium">What is agent-proxy?</h3>
+          <h3 className="font-medium">What is agentproxy?</h3>
           <p className="text-sm text-muted-foreground">
             Agentproxy is a powerful tool that helps you manage and secure your server connections.
             It allows you to configure listeners, set up target servers, and implement security

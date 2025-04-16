@@ -37,6 +37,7 @@ const getTargetType = (target: Target): TargetType => {
 export default function TargetItem({ target, index, onDelete, isUpdating }: TargetItemProps) {
   const targetType = getTargetType(target);
 
+  console.log(target);
   return (
     <div className="flex items-center justify-between w-full">
       <div className="flex items-center space-x-2">

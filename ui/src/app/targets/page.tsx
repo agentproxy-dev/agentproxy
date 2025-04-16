@@ -3,31 +3,49 @@
 import { TargetsConfig } from "@/components/targets-config";
 import { useServer } from "@/lib/server-context";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useState, useRef } from "react";
 
 export default function TargetsPage() {
   const { config, setConfig, connectionError } = useServer();
+  const [isAddingTarget, setIsAddingTarget] = useState(false);
+  const targetsConfigRef = useRef<{ openAddTargetDialog: () => void } | null>(null);
+
+  const handleAddTarget = () => {
+    if (targetsConfigRef.current) {
+      targetsConfigRef.current.openAddTargetDialog();
+    }
+  };
 
   return (
-    <div className="container mx-auto py-6">
+    <div className="container mx-auto py-8 px-4">
+      <div className="flex flex-row items-center justify-between mb-6">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Targets</h1>
+          <p className="text-muted-foreground mt-1">
+            Configure and manage targets for your proxy server
+          </p>
+        </div>
+        <Button onClick={handleAddTarget}>
+          <Plus className="mr-2 h-4 w-4" />
+          Add Target
+        </Button>
+      </div>
+
       {connectionError ? (
-        <Alert variant="destructive">
+        <Alert variant="destructive" className="mb-6">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>{connectionError}</AlertDescription>
         </Alert>
       ) : (
-        <div>
-          <div className="mb-6">
-            <h1 className="text-2xl font-bold tracking-tight">Target Configuration</h1>
-            <p className="text-lg text-muted-foreground mt-1">
-              Configure the targets for your proxy server
-            </p>
-          </div>
-
-          <div className="mt-4">
-            <TargetsConfig config={config} onConfigChange={setConfig} />
-          </div>
-        </div>
+        <TargetsConfig 
+          ref={targetsConfigRef}
+          config={config} 
+          onConfigChange={setConfig}
+          isAddingTarget={isAddingTarget}
+          setIsAddingTarget={setIsAddingTarget}
+        />
       )}
     </div>
   );

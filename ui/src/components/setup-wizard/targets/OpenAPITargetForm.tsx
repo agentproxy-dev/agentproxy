@@ -11,6 +11,7 @@ interface OpenAPITargetFormProps {
   onSubmit: (target: Target) => Promise<void>;
   isLoading: boolean;
   existingTarget?: Target;
+  hideSubmitButton?: boolean;
 }
 
 export function OpenAPITargetForm({
@@ -18,6 +19,7 @@ export function OpenAPITargetForm({
   onSubmit,
   isLoading,
   existingTarget,
+  hideSubmitButton = false,
 }: OpenAPITargetFormProps) {
   const [host, setHost] = useState("");
   const [port, setPort] = useState("");
@@ -61,7 +63,7 @@ export function OpenAPITargetForm({
     try {
       const schema: LocalDataSource =
         schemaType === "file"
-          ? { file_path: schemaFilePath }
+          ? { filePath: schemaFilePath }
           : { inline: new TextEncoder().encode(schemaInline) };
 
       const target: Target = {
@@ -82,7 +84,14 @@ export function OpenAPITargetForm({
   };
 
   return (
-    <div className="space-y-4 pt-4">
+    <form
+      id="mcp-target-form"
+      onSubmit={(e) => {
+        e.preventDefault();
+        handleSubmit();
+      }}
+      className="space-y-4 pt-4"
+    >
       <div className="space-y-2">
         <Label htmlFor="host">Host</Label>
         <Input
@@ -226,21 +235,23 @@ export function OpenAPITargetForm({
         </CollapsibleContent>
       </Collapsible>
 
-      <Button
-        onClick={handleSubmit}
-        className="w-full"
-        disabled={
-          isLoading || !host || !port || (schemaType === "file" ? !schemaFilePath : !schemaInline)
-        }
-      >
-        {isLoading
-          ? existingTarget
-            ? "Updating Target..."
-            : "Adding Target..."
-          : existingTarget
-            ? "Update OpenAPI Target"
-            : "Add OpenAPI Target"}
-      </Button>
-    </div>
+      {!hideSubmitButton && (
+        <Button
+          type="submit"
+          className="w-full"
+          disabled={
+            isLoading || !host || !port || (schemaType === "file" ? !schemaFilePath : !schemaInline)
+          }
+        >
+          {isLoading
+            ? existingTarget
+              ? "Updating Target..."
+              : "Adding Target..."
+            : existingTarget
+              ? "Update OpenAPI Target"
+              : "Add OpenAPI Target"}
+        </Button>
+      )}
+    </form>
   );
 }

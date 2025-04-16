@@ -133,6 +133,8 @@ export async function deleteMcpTarget(address: string, port: number, name: strin
       method: "DELETE",
     });
 
+    console.log('response', response)
+
     if (!response.ok) {
       throw new Error(`Failed to delete MCP target: ${response.status} ${response.statusText}`);
     }
@@ -299,6 +301,8 @@ export async function addListener(
   listener: Listener
 ): Promise<void> {
   try {
+
+    console.log('listener', listener)
     const response = await fetch(`http://${address}:${port}/listeners`, {
       method: "POST",
       headers: {
@@ -306,6 +310,8 @@ export async function addListener(
       },
       body: JSON.stringify(listener),
     });
+
+    console.log('response', response) 
 
     if (!response.ok) {
       throw new Error(`Failed to add listener: ${response.status} ${response.statusText}`);
