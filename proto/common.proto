@@ -15,14 +15,17 @@ message RemoteDataSource {
   string url = 1;
   uint32 port = 2;
   string path = 3;
-  map<string, string> headers = 4;
+  repeated Header headers = 4;
   google.protobuf.Duration initial_timeout = 5;
   google.protobuf.Duration refresh_interval = 6;
 }
 
 message BackendAuth {
   oneof auth {
+    // Passthrough the Auth header
     google.protobuf.Empty passthrough = 1;
+    // Use GCP auth
+    google.protobuf.Empty GCP = 2;
   }
 }
 

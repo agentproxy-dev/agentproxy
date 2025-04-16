@@ -151,9 +151,14 @@ pub struct OpenAPITarget {
 	pub host: String,
 	pub prefix: String,
 	pub port: u16,
+	#[serde(skip_serializing_if = "Vec::is_empty")]
 	pub tools: Vec<(Tool, openapi::UpstreamOpenAPICall)>,
+	#[serde(skip_serializing_if = "HashMap::is_empty")]
 	pub headers: HashMap<String, String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	pub backend_auth: Option<backend::BackendAuthConfig>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub tls: Option<TlsConfig>,
 }
 
 impl TryFrom<XdsOpenAPITarget> for OpenAPITarget {
@@ -178,6 +183,10 @@ impl TryFrom<XdsOpenAPITarget> for OpenAPITarget {
 				Some(auth) => auth
 					.try_into()
 					.map_err(|_| openapi::ParseError::MissingSchema)?,
+				None => None,
+			},
+			tls: match value.tls {
+				Some(tls) => Some(TlsConfig::try_from(tls).map_err(|_| openapi::ParseError::MissingSchema)?),
 				None => None,
 			},
 		})

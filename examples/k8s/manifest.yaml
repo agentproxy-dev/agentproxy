@@ -101,7 +101,7 @@ data:
       "listeners": [
         {
           "sse": {
-            "address": "0.0.0.0",
+            "address": "[::]",
             "port": 3000
           }
         }

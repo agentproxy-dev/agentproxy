@@ -3,7 +3,7 @@
   "listeners": [
     {
       "sse": {
-        "address": "0.0.0.0",
+        "address": "[::]",
         "port": 3000,
         "tls": {
           "cert_pem": {

@@ -11,7 +11,7 @@
     {
       "protocol": "A2A",
       "sse": {
-        "address": "0.0.0.0",
+        "address": "[::]",
         "port": 3000
       }
     }
