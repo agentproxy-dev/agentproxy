@@ -108,13 +108,18 @@ export function TargetsStep({
 
   const handleNext = async () => {
     try {
-      // If there's a target name entered, try to submit the current form
-      if (targetName) {
+      // Check if there's an incomplete target being added
+      if (targetName.trim()) {
+        // If there's a target name entered, try to submit the current form
         if (targetCategory === "mcp" && mcpFormRef) {
           await mcpFormRef.submitForm();
         } else if (targetCategory === "a2a" && a2aFormRef) {
           await a2aFormRef.submitForm();
         }
+      } else if (config.targets.length === 0) {
+        // If no targets are configured and no target is being added, show error
+        setError("Please add at least one target before proceeding");
+        return;
       }
       onNext();
     } catch (err) {
@@ -152,12 +157,16 @@ export function TargetsStep({
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="targetName">Target Name</Label>
+                  <Label htmlFor="targetName">Target Name *</Label>
                   <Input
                     id="targetName"
                     placeholder="Enter target name"
                     value={targetName}
-                    onChange={(e) => setTargetName(e.target.value)}
+                    onChange={(e) => {
+                      setTargetName(e.target.value);
+                      setError(null); // Clear error when user starts typing
+                    }}
+                    required
                   />
                 </div>
 
