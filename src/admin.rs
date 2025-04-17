@@ -1,5 +1,4 @@
 use std::sync::Arc;
-use std::time::Duration;
 
 use crate::proto::agentproxy::dev::a2a::target::Target as A2aTarget;
 use crate::proto::agentproxy::dev::listener::Listener;
@@ -8,15 +7,17 @@ use crate::xds::XdsStore;
 use axum::{
 	Json, Router,
 	extract::{Path, State},
-	http::{HeaderName, HeaderValue, Method, StatusCode},
+	http::StatusCode,
 	response::{IntoResponse, Response},
 	routing::get,
 };
 use serde::{Deserialize, Serialize};
-use tower_http::cors::CorsLayer;
 use tracing::error;
+
+pub use ui::add_cors_layer;
+
 #[derive(Clone)]
-struct App {
+pub(crate) struct App {
 	state: Arc<tokio::sync::RwLock<XdsStore>>,
 }
 
@@ -25,22 +26,8 @@ impl App {
 		Self { state }
 	}
 	fn router(&self) -> Router {
-		let cors = CorsLayer::new()
-			.allow_origin(["http://localhost:3000", "http://127.0.0.1:3000", "http://0.0.0.0:19000", "http://127.0.0.1:19000"].map(|origin| origin.parse::<HeaderValue>().unwrap()))
-			.allow_headers([
-				HeaderName::from_static("content-type"),
-				HeaderName::from_static("authorization"),
-				HeaderName::from_static("x-requested-with"),
-			])
-			.allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE, Method::OPTIONS])
-			.allow_credentials(true)
-			.expose_headers([
-				HeaderName::from_static("content-type"),
-				HeaderName::from_static("content-length"),
-			])
-			.max_age(Duration::from_secs(3600));
-
-		Router::new()
+		let router = Router::new()
+			// Redirect to the UI
 			.route(
 				"/targets/mcp",
 				get(targets_mcp_list_handler).post(targets_mcp_create_handler),
@@ -68,9 +55,13 @@ impl App {
 			.route(
 				"/listeners/{name}",
 				get(listener_get_handler).delete(listener_delete_handler),
-			)
-			.layer(cors)
-			.with_state(self.clone())
+			);
+
+		let router = ui::add_ui_layer(router);
+
+		let router = router.layer(ui::add_cors_layer());
+
+		router.with_state(self.clone())
 	}
 }
 
@@ -381,5 +372,69 @@ async fn listener_delete_handler(
 				},
 			))
 		},
+	}
+}
+
+mod ui {
+	use super::*;
+	use crate::admin::App;
+	use http::{
+		HeaderName, HeaderValue, Method,
+		header::{AUTHORIZATION, CONTENT_LENGTH, CONTENT_TYPE},
+	};
+	use std::time::Duration;
+	use tower_http::cors::CorsLayer;
+
+	pub fn add_cors_layer() -> CorsLayer {
+		CorsLayer::new()
+			.allow_origin(
+				[
+					"http://localhost:3000",
+					"http://127.0.0.1:3000",
+					"http://0.0.0.0:19000",
+					"http://127.0.0.1:19000",
+				]
+				.map(|origin| origin.parse::<HeaderValue>().unwrap()),
+			)
+			.allow_headers([
+				CONTENT_TYPE,
+				AUTHORIZATION,
+				HeaderName::from_static("x-requested-with"),
+			])
+			.allow_methods([
+				Method::GET,
+				Method::POST,
+				Method::PUT,
+				Method::DELETE,
+				Method::OPTIONS,
+			])
+			.allow_credentials(true)
+			.expose_headers([CONTENT_TYPE, CONTENT_LENGTH])
+			.max_age(Duration::from_secs(3600))
+	}
+
+	#[cfg(feature = "ui")]
+	use {
+		axum::{Router, response::Redirect},
+		include_dir::{Dir, include_dir},
+		tower_serve_static::ServeDir,
+	};
+
+	#[cfg(feature = "ui")]
+	lazy_static::lazy_static! {
+		static ref ASSETS_DIR: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/ui/out");
+	}
+
+	#[cfg(feature = "ui")]
+	pub fn add_ui_layer(router: Router<App>) -> Router<App> {
+		let service = ServeDir::new(&ASSETS_DIR);
+		router
+			.nest_service("/ui", service)
+			.route("/", get(|| async { Redirect::permanent("/ui") }))
+	}
+
+	#[cfg(not(feature = "ui"))]
+	pub fn add_ui_layer(router: Router<App>) -> Router<App> {
+		router
 	}
 }

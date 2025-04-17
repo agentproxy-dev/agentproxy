@@ -65,11 +65,11 @@ export function AppSidebar({
       setIsLoading(true);
 
       // Fetch all listeners
-      const listeners = await fetchListeners("0.0.0.0", 19000);
+      const listeners = await fetchListeners("localhost", 19000);
 
       // Delete each listener
       for (const listener of listeners) {
-        await deleteListener("0.0.0.0", 19000, listener);
+        await deleteListener("localhost", 19000, listener);
       }
 
       // Call the parent component's onRestartWizard function
@@ -190,7 +190,7 @@ export function AppSidebar({
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
-              <ThemeToggle />
+            <ThemeToggle asChild />
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>

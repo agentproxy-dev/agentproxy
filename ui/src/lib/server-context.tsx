@@ -16,7 +16,7 @@ interface ServerContextType {
   refreshTargets: () => Promise<void>;
 }
 
-const DEFAULT_HOST = "0.0.0.0";
+const DEFAULT_HOST = "localhost";
 const DEFAULT_PORT = 19000;
 
 const ServerContext = createContext<ServerContextType | undefined>(undefined);

@@ -30,7 +30,7 @@ export function ListenerStep({
   onPrevious,
   config,
   onConfigChange,
-  serverAddress = "0.0.0.0",
+  serverAddress = "localhost",
   serverPort = 19000,
 }: ListenerStepProps) {
   const [listenerAddress, setListenerAddress] = useState("0.0.0.0");

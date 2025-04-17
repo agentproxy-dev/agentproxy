@@ -7,7 +7,7 @@ use crate::proto::agentproxy::dev::listener::Listener as XdsListener;
 use crate::proto::agentproxy::dev::mcp::target::Target as XdsMcpTarget;
 use crate::xds::XdsStore as ProxyState;
 #[derive(Default, Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(deny_unknown_fields)]
 pub struct StaticConfig {
 	#[serde(default)]
 	targets: Targets,
@@ -16,7 +16,7 @@ pub struct StaticConfig {
 }
 
 #[derive(Default, Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(deny_unknown_fields)]
 struct Targets {
 	#[serde(default)]
 	pub mcp: Vec<XdsMcpTarget>,

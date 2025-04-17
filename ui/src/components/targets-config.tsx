@@ -44,7 +44,7 @@ export const TargetsConfig = forwardRef<{ openAddTargetDialog: () => void }, Tar
     {
       config,
       onConfigChange,
-      serverAddress = "0.0.0.0",
+      serverAddress = "localhost",
       serverPort = 19000,
       isAddingTarget: externalIsAddingTarget,
       setIsAddingTarget: externalSetIsAddingTarget,

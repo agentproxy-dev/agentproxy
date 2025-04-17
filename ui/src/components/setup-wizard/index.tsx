@@ -20,7 +20,7 @@ export function SetupWizard({
   onConfigChange,
   onComplete,
   onSkip,
-  serverAddress = "0.0.0.0",
+  serverAddress = "localhost",
   serverPort = 19000,
 }: SetupWizardProps) {
   const [step, setStep] = useState(1);

@@ -11,7 +11,6 @@ const BUILD_RUST_VERSION: &str = env!("MCPGW_BUILD_RUSTC_VERSION");
 const BUILD_RUST_PROFILE: &str = env!("MCPGW_BUILD_PROFILE_NAME");
 
 #[derive(serde::Serialize, Clone, Debug, Default)]
-#[serde(rename_all = "camelCase")]
 pub struct BuildInfo {
 	version: String,
 	git_revision: String,

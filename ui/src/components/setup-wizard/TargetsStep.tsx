@@ -35,7 +35,7 @@ export function TargetsStep({
   onPrevious,
   config,
   onConfigChange,
-  serverAddress = "0.0.0.0",
+  serverAddress = "localhost",
   serverPort = 19000,
 }: TargetsStepProps) {
   const [targetCategory, setTargetCategory] = useState<"mcp" | "a2a">("mcp");

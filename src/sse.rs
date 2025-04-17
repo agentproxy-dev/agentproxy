@@ -1,3 +1,4 @@
+use crate::admin::add_cors_layer;
 use crate::authn;
 use crate::inbound;
 use crate::relay;
@@ -28,11 +29,8 @@ use rmcp::serve_server;
 use serde_json::json;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Duration;
 use tokio::io::{self};
 use tokio::sync::RwLock;
-use tower_http::cors::CorsLayer;
-use http::{Method, HeaderName, HeaderValue};
 
 type SessionId = Arc<str>;
 
@@ -72,25 +70,9 @@ impl App {
 		}
 	}
 	pub fn router(&self) -> Router {
-		// TODO: This is a hack
-		let cors = CorsLayer::new()
-			.allow_origin(["http://localhost:3000", "http://127.0.0.1:3000", "http://0.0.0.0:19000", "http://127.0.0.1:19000"].map(|origin| origin.parse::<HeaderValue>().unwrap()))
-			.allow_headers([
-				HeaderName::from_static("content-type"),
-				HeaderName::from_static("authorization"),
-				HeaderName::from_static("x-requested-with"),
-			])
-			.allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE, Method::OPTIONS])
-			.allow_credentials(true)
-			.expose_headers([
-				HeaderName::from_static("content-type"),
-				HeaderName::from_static("content-length"),
-			])
-			.max_age(Duration::from_secs(3600));
-
 		Router::new()
 			.route("/sse", get(sse_handler).post(post_event_handler))
-			.layer(cors)
+			.layer(add_cors_layer())
 			.with_state(self.clone())
 	}
 }

@@ -114,7 +114,7 @@ export default function Home() {
           onConfigChange={handleConfigChange}
           onComplete={handleWizardComplete}
           onSkip={handleWizardSkip}
-          serverAddress="0.0.0.0"
+          serverAddress="localhost"
           serverPort={19000}
         />
       );
@@ -126,7 +126,7 @@ export default function Home() {
           <div className="text-center">
             <h2 className="text-lg font-medium">Welcome to MCP Proxy</h2>
             <p className="mt-2 text-sm text-muted-foreground">
-              Connecting to server at 0.0.0.0:19000...
+              Connecting to server at localhost:19000...
             </p>
           </div>
         </div>

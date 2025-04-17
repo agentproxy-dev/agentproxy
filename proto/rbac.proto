@@ -14,7 +14,17 @@ message Rule {
   }
 
   message Resource {
+    // The ID of the resource.
+    // In the case of a tool, this is the name of the tool.
+    // In the case of a prompt, this is the name of the prompt.
+    // In the case of a resource, this is the name of the resource.
+    //
+    // If this is not set, it will just match against the server name.
     string id = 1;
+
+    // The name of the target server.
+    // If this is not set, it will assume assume the resource can be from any server.
+    string target = 2;
     // The type of resource that the rule applies to.
     // This is a string that is used to identify the type of resource.
     // For MCP, the supported types are:
@@ -23,7 +33,7 @@ message Rule {
     // - resource
     // For A2A, the supported types are:
     // - task
-    string type = 2;
+    string type = 3;
   }
 
   // The key to use when finding the value in the claims.
