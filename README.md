@@ -1,8 +1,8 @@
 <div align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/agentproxy/agentproxy/refs/heads/main/img/mcp-text-light.svg" alt="agentproxy" width="400">
-    <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/agentproxy/agentproxy/refs/heads/main/img/mcp-text-dark.svg" alt="agentproxy" width="400">
-    <img alt="kagent" src="https://raw.githubusercontent.com/kagent-dev/kagent/main/img/icon-light.svg">
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/agentproxy/agentproxy/refs/heads/main/img/banner-light.svg" alt="agentproxy" width="400">
+    <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/agentproxy/agentproxy/refs/heads/main/img/banner-dark.svg" alt="agentproxy" width="400">
+    <img alt="agentproxy" src="https://raw.githubusercontent.com/agentproxy/agentproxy/refs/heads/main/img/icon-light.svg">
   </picture>
   <div>
      <a href="https://discord.gg/BdJpzaPjHv">
