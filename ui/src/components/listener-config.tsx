@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Listener } from "@/lib/types";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle, Trash2, Shield, Lock, Key, Settings2, MoreVertical } from "lucide-react";
-import { fetchListeners, addListener, deleteListener } from "@/lib/api";
+import { fetchListeners, addListener, deleteListener, fetchListenerTargets } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -60,13 +60,17 @@ interface DeleteDialogState {
   listenerIndex: number;
 }
 
+interface ListenerWithTargets extends Listener {
+  targetCount?: number;
+}
+
 export function ListenerConfig({
   serverAddress,
   serverPort,
   isAddingListener = false,
   setIsAddingListener = () => {},
 }: ListenerConfigProps) {
-  const [listeners, setListeners] = useState<Listener[]>([]);
+  const [listeners, setListeners] = useState<ListenerWithTargets[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [configDialog, setConfigDialog] = useState<ConfigDialogState>({
@@ -86,7 +90,7 @@ export function ListenerConfig({
     listenerIndex: -1,
   });
 
-  // Fetch listener configuration from the proxy API
+  // Fetch listener configuration and target counts
   useEffect(() => {
     const fetchListenerConfig = async () => {
       if (!serverAddress || !serverPort) {
@@ -99,12 +103,30 @@ export function ListenerConfig({
 
       try {
         const fetchedListeners = await fetchListeners();
-
-        // Ensure we have an array of listeners
         const listenersArray = Array.isArray(fetchedListeners)
           ? fetchedListeners
           : [fetchedListeners];
-        setListeners(listenersArray);
+
+        // Fetch target counts for each listener
+        const listenersWithTargets = await Promise.all(
+          listenersArray.map(async (listener) => {
+            try {
+              const targets = await fetchListenerTargets(listener.name);
+              return {
+                ...listener,
+                targetCount: targets.length,
+              };
+            } catch (err) {
+              console.error(`Error fetching targets for listener ${listener.name}:`, err);
+              return {
+                ...listener,
+                targetCount: 0,
+              };
+            }
+          })
+        );
+
+        setListeners(listenersWithTargets);
       } catch (err) {
         console.error("Error fetching listener configuration:", err);
         setError(err instanceof Error ? err.message : "Failed to fetch listener configuration");
@@ -249,8 +271,8 @@ export function ListenerConfig({
             <TableHeader>
               <TableRow className="bg-muted/50">
                 <TableHead>Name</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Address:Port</TableHead>
+                <TableHead>Address</TableHead>
+                <TableHead>Targets</TableHead>
                 <TableHead>Authentication</TableHead>
                 <TableHead>TLS</TableHead>
                 <TableHead>Policies</TableHead>
@@ -264,10 +286,12 @@ export function ListenerConfig({
                     {listener.name || `listener-${index + 1}`}
                   </TableCell>
                   <TableCell>
-                    <Badge variant="outline">SSE</Badge>
+                    {listener.sse?.address}:{listener.sse?.port}
                   </TableCell>
                   <TableCell>
-                    {listener.sse?.address || "0.0.0.0"}:{listener.sse?.port || "5555"}
+                    <Badge variant="outline">
+                      {listener.targetCount ?? 0} target{(listener.targetCount ?? 0) !== 1 ? 's' : ''}
+                    </Badge>
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center space-x-2">

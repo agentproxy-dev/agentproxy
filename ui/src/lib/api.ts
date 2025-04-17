@@ -8,17 +8,35 @@ const API_URL = "http://localhost:19000";
  */
 export async function updateTarget(target: Target): Promise<void> {
   try {
-    const response = await fetch(`${API_URL}/targets`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(target),
-    });
 
-    if (!response.ok) {
-      throw new Error(`Failed to update target: ${response.status} ${response.statusText}`);
+    // Check if it's an mcp or a2a target
+    if (target.sse || target.stdio || target.openapi) {
+      const response = await fetch(`${API_URL}/targets/mcp`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(target),
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to update target: ${response.status} ${response.statusText}`);
+      }
+    } else if (target.a2a) {
+      const response = await fetch(`${API_URL}/targets/a2a`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(target),
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to update target: ${response.status} ${response.statusText}`);
+      }
+    } else {
+      throw new Error("Invalid target type");
     }
+
+
   } catch (error) {
     console.error("Error updating target:", error);
     throw error;

@@ -29,12 +29,11 @@ import { toast } from "@/lib/toast";
 import { useServer } from "@/lib/server-context";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { ListenerSelect } from "./setup-wizard/targets/ListenerSelect";
 
 interface TargetsConfigProps {
   config: Config;
   onConfigChange: (config: Config) => void;
-  serverAddress?: string;
-  serverPort?: number;
   isAddingTarget?: boolean;
   setIsAddingTarget?: (isAdding: boolean) => void;
 }
@@ -44,8 +43,6 @@ export const TargetsConfig = forwardRef<{ openAddTargetDialog: () => void }, Tar
     {
       config,
       onConfigChange,
-      serverAddress = "localhost",
-      serverPort = 19000,
       isAddingTarget: externalIsAddingTarget,
       setIsAddingTarget: externalSetIsAddingTarget,
     },
@@ -54,6 +51,7 @@ export const TargetsConfig = forwardRef<{ openAddTargetDialog: () => void }, Tar
     const { refreshTargets } = useServer();
     const [targetCategory, setTargetCategory] = useState<"mcp" | "a2a">("mcp");
     const [targetName, setTargetName] = useState("");
+    const [selectedListeners, setSelectedListeners] = useState<string[]>([]);
     const [targetNameError, setTargetNameError] = useState<string | null>(null);
     const [internalIsAddingTarget, setInternalIsAddingTarget] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -83,9 +81,9 @@ export const TargetsConfig = forwardRef<{ openAddTargetDialog: () => void }, Tar
 
         // Call the appropriate delete API based on target type
         if (target.a2a) {
-          await deleteA2aTarget(serverAddress, serverPort, target.name);
+          await deleteA2aTarget(target.name);
         } else {
-          await deleteMcpTarget(serverAddress, serverPort, target.name);
+          await deleteMcpTarget(target.name);
         }
 
         // Only update local state after successful API call
@@ -129,16 +127,22 @@ export const TargetsConfig = forwardRef<{ openAddTargetDialog: () => void }, Tar
       setTargetNameError(null);
 
       try {
+        const targetWithListeners = {
+          ...target,
+          listeners: selectedListeners,
+        };
+
         if (targetCategory === "a2a") {
-          await createA2aTarget(serverAddress, serverPort, target);
+          await createA2aTarget(targetWithListeners);
         } else {
-          await createMcpTarget(serverAddress, serverPort, target);
+          await createMcpTarget(targetWithListeners);
         }
 
         // Refresh targets from the server
         await refreshTargets();
 
         setTargetName("");
+        setSelectedListeners([]);
         setIsDialogOpen(false);
         toast.success("Target created", {
           description: `Successfully created ${target.name} target.`,
@@ -159,13 +163,18 @@ export const TargetsConfig = forwardRef<{ openAddTargetDialog: () => void }, Tar
     const handleUpdateTarget = async (target: Target) => {
       setIsUpdating(true);
       try {
-        await updateTarget(serverAddress, serverPort, target);
+        const targetWithListeners = {
+          ...target,
+          listeners: selectedListeners,
+        };
+        await updateTarget(targetWithListeners);
 
         // Refresh targets from the server
         await refreshTargets();
 
         setIsDialogOpen(false);
         setEditingTarget(undefined);
+        setSelectedListeners([]);
         toast.success("Target updated", {
           description: `Successfully updated ${target.name} target.`,
         });
@@ -182,6 +191,7 @@ export const TargetsConfig = forwardRef<{ openAddTargetDialog: () => void }, Tar
 
     const openAddTargetDialog = () => {
       setTargetName("");
+      setSelectedListeners([]);
       setTargetNameError(null);
       setTargetCategory("mcp");
       setEditingTarget(undefined);
@@ -190,6 +200,7 @@ export const TargetsConfig = forwardRef<{ openAddTargetDialog: () => void }, Tar
 
     const openEditTargetDialog = (target: Target) => {
       setTargetName(target.name);
+      setSelectedListeners(target.listeners || []);
       if (target.a2a) {
         setTargetCategory("a2a");
       } else {
@@ -203,6 +214,7 @@ export const TargetsConfig = forwardRef<{ openAddTargetDialog: () => void }, Tar
       setIsDialogOpen(false);
       setEditingTarget(undefined);
       setTargetName("");
+      setSelectedListeners([]);
       setTargetNameError(null);
       if (setIsAddingTarget) {
         setIsAddingTarget(false);
@@ -296,6 +308,13 @@ export const TargetsConfig = forwardRef<{ openAddTargetDialog: () => void }, Tar
                   className={targetNameError ? "border-red-500" : ""}
                 />
                 {targetNameError && <p className="text-sm text-red-500">{targetNameError}</p>}
+              </div>
+
+              <div className="space-y-2">
+                <ListenerSelect
+                  selectedListeners={selectedListeners}
+                  onListenersChange={setSelectedListeners}
+                />
               </div>
 
               <div className="space-y-2">
