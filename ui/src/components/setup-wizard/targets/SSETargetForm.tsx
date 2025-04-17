@@ -24,25 +24,31 @@ export const SSETargetForm = forwardRef<{ submitForm: () => Promise<void> }, SSE
     const [headerValue, setHeaderValue] = useState("");
     const [passthroughAuth, setPassthroughAuth] = useState(false);
     const [insecureSkipVerify, setInsecureSkipVerify] = useState(false);
+    const [selectedListeners, setSelectedListeners] = useState<string[]>([]);
 
     // Initialize form with existing target data if provided
     useEffect(() => {
-      if (existingTarget?.sse) {
-        const sse = existingTarget.sse;
-        const protocol = sse.tls?.insecure_skip_verify ? "https" : "http";
-        const url = `${protocol}://${sse.host}:${sse.port}${sse.path}`;
-        setSseUrl(url);
+      if (existingTarget) {
+        if (existingTarget.sse) {
+          const sse = existingTarget.sse;
+          const protocol = sse.tls?.insecure_skip_verify ? "https" : "http";
+          const url = `${protocol}://${sse.host}:${sse.port}${sse.path}`;
+          setSseUrl(url);
 
-        if (sse.headers) {
-          setHeaders(sse.headers);
+          if (sse.headers) {
+            setHeaders(sse.headers);
+          }
+
+          if (sse.auth?.passthrough) {
+            setPassthroughAuth(true);
+          }
+
+          if (sse.tls?.insecure_skip_verify) {
+            setInsecureSkipVerify(true);
+          }
         }
-
-        if (sse.auth?.passthrough) {
-          setPassthroughAuth(true);
-        }
-
-        if (sse.tls?.insecure_skip_verify) {
-          setInsecureSkipVerify(true);
+        if (existingTarget.listeners) {
+          setSelectedListeners(existingTarget.listeners);
         }
       }
     }, [existingTarget]);
@@ -71,6 +77,7 @@ export const SSETargetForm = forwardRef<{ submitForm: () => Promise<void> }, SSE
 
         const target: Target = {
           name: targetName,
+          listeners: selectedListeners,
           sse: {
             host: urlObj.hostname,
             port: port,
@@ -244,14 +251,18 @@ export const SSETargetForm = forwardRef<{ submitForm: () => Promise<void> }, SSE
         </Collapsible>
 
         {!hideSubmitButton && (
-          <Button type="submit" className="w-full" disabled={isLoading || !sseUrl}>
+          <Button 
+            type="submit" 
+            className="w-full" 
+            disabled={isLoading || !sseUrl || selectedListeners.length === 0}
+          >
             {isLoading
               ? existingTarget
                 ? "Updating Target..."
-                : "Adding Target..."
+                : "Creating Target..."
               : existingTarget
-                ? "Update SSE Target"
-                : "Add SSE Target"}
+              ? "Update Target"
+              : "Create Target"}
           </Button>
         )}
       </form>

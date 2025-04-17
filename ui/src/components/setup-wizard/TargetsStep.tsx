@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -19,7 +19,8 @@ import { TooltipProvider, Tooltip, TooltipContent, TooltipTrigger } from "@/comp
 import { Config, Target, TargetType } from "@/lib/types";
 import { MCPTargetForm } from "./targets/MCPTargetForm";
 import { A2ATargetForm } from "./targets/A2ATargetForm";
-import { createMcpTarget, createA2aTarget } from "@/lib/api";
+import { createMcpTarget, createA2aTarget, fetchListeners } from "@/lib/api";
+import { ListenerSelect } from "./targets/ListenerSelect";
 
 interface TargetsStepProps {
   onNext: () => void;
@@ -36,10 +37,24 @@ export function TargetsStep({
 }: TargetsStepProps) {
   const [targetCategory, setTargetCategory] = useState<"mcp" | "a2a">("mcp");
   const [targetName, setTargetName] = useState("");
+  const [selectedListeners, setSelectedListeners] = useState<string[]>([]);
   const [isAddingTarget, setIsAddingTarget] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mcpFormRef, setMcpFormRef] = useState<{ submitForm: () => Promise<void> } | null>(null);
   const [a2aFormRef, setA2aFormRef] = useState<{ submitForm: () => Promise<void> } | null>(null);
+
+  useEffect(() => {
+    const loadListeners = async () => {
+      try {
+        await fetchListeners();
+      } catch (err) {
+        console.error("Error fetching listeners:", err);
+        setError("Failed to load listeners. Please try again.");
+      }
+    };
+
+    loadListeners();
+  }, []);
 
   const handleAddTarget = (target: Target) => {
     const newConfig = {
@@ -62,14 +77,20 @@ export function TargetsStep({
     setError(null);
 
     try {
+      const targetWithListeners = {
+        ...target,
+        listeners: selectedListeners,
+      };
+
       if (targetCategory === "a2a") {
-        await createA2aTarget(target);
+        await createA2aTarget(targetWithListeners);
       } else {
-        await createMcpTarget(target);
+        await createMcpTarget(targetWithListeners);
       }
 
-      handleAddTarget(target);
+      handleAddTarget(targetWithListeners);
       setTargetName("");
+      setSelectedListeners([]);
     } catch (err) {
       console.error("Error creating target:", err);
       setError(err instanceof Error ? err.message : "Failed to create target");
@@ -163,6 +184,13 @@ export function TargetsStep({
                       setError(null); // Clear error when user starts typing
                     }}
                     required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <ListenerSelect
+                    selectedListeners={selectedListeners}
+                    onListenersChange={setSelectedListeners}
                   />
                 </div>
 

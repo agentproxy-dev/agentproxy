@@ -111,10 +111,10 @@ export const A2ATargetForm = forwardRef<{ submitForm: () => Promise<void> }, A2A
             {isLoading
               ? existingTarget
                 ? "Updating Target..."
-                : "Adding Target..."
+                : "Creating Target..."
               : existingTarget
-                ? "Update A2A Target"
-                : "Add A2A Target"}
+                ? "Update Target"
+                : "Create Target"}
           </Button>
         )}
       </form>
