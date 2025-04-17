@@ -78,7 +78,7 @@ export default function PlaygroundPage() {
         headers["Authorization"] = `Bearer ${authToken}`;
       }
 
-      const transport = new SSEClientTransport(new URL(`http://${host}:${port}/sse`), {
+      const transport = new SSEClientTransport(new URL(`http://localhost:${port}/sse`), {
         eventSourceInit: {
           fetch: (url, init) => fetch(url, { ...init, headers }),
         },
@@ -175,7 +175,7 @@ export default function PlaygroundPage() {
 
   const getListenerEndpoint = (listener: Listener) => {
     if (listener.sse) {
-      const address = listener.sse.address || listener.sse.host || "0.0.0.0";
+      const address = "localhost";
       return `${address}:${listener.sse.port}`;
     }
     return null;
