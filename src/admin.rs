@@ -7,13 +7,25 @@ use crate::xds::XdsStore;
 use axum::{
 	Json, Router,
 	extract::{Path, State},
-	http::{HeaderName, HeaderValue, Method, StatusCode},
+	http::StatusCode,
 	response::{IntoResponse, Response},
 	routing::get,
 };
 use serde::{Deserialize, Serialize};
-use tower_http::cors::CorsLayer;
 use tracing::error;
+#[cfg(feature = "ui")]
+use {
+	http::header::{HeaderName, HeaderValue, Method},
+	include_dir::{Dir, include_dir},
+	tower_http::cors::CorsLayer,
+	tower_serve_static::ServeDir,
+};
+
+#[cfg(feature = "ui")]
+lazy_static::lazy_static! {
+	static ref ASSETS_DIR: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/ui/out");
+}
+
 #[derive(Clone)]
 struct App {
 	state: Arc<tokio::sync::RwLock<XdsStore>>,
@@ -24,12 +36,18 @@ impl App {
 		Self { state }
 	}
 	fn router(&self) -> Router {
-		let cors = CorsLayer::new()
-			.allow_origin("*".parse::<HeaderValue>().unwrap())
-			.allow_headers([HeaderName::from_static("content-type")])
-			.allow_methods([Method::GET, Method::POST, Method::DELETE]);
+		#[cfg(feature = "ui")]
+		let (cors, service) = {
+			let cors = CorsLayer::new()
+				.allow_origin("*".parse::<HeaderValue>().unwrap())
+				.allow_headers([HeaderName::from_static("content-type")])
+				.allow_methods([Method::GET, Method::POST, Method::DELETE]);
 
-		Router::new()
+			let service = ServeDir::new(&ASSETS_DIR);
+			(cors, service)
+		};
+
+		let router = Router::new()
 			.route(
 				"/targets/mcp",
 				get(targets_mcp_list_handler).post(targets_mcp_create_handler),
@@ -57,9 +75,12 @@ impl App {
 			.route(
 				"/listeners/{name}",
 				get(listener_get_handler).delete(listener_delete_handler),
-			)
-			.layer(cors)
-			.with_state(self.clone())
+			);
+
+		#[cfg(feature = "ui")]
+		let router = router.layer(cors).nest_service("/ui", service);
+
+		router.with_state(self.clone())
 	}
 }
 
