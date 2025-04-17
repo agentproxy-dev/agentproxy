@@ -135,8 +135,7 @@ export default function Home() {
     }
 
     return (
-      <div className="p-6">
-        <h2 className="text-2xl font-bold tracking-tight mb-6">Overview</h2>
+      <div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="p-6 bg-card rounded-lg shadow-sm">
             <h3 className="text-lg font-medium mb-2">Listener</h3>
@@ -166,7 +165,7 @@ export default function Home() {
   };
 
   return (
-    <div className="p-6">
+    <div className="container mx-auto py-8 px-4">
       {configUpdateMessage && (
         <div
           className={`mb-4 rounded-md p-4 ${configUpdateMessage.success ? "bg-green-100 text-green-800" : "bg-destructive/10 text-destructive"}`}
@@ -180,6 +179,17 @@ export default function Home() {
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>{connectionError}</AlertDescription>
         </Alert>
+      )}
+
+      {!isLoading && !showWizard && isConnected && (
+        <div className="flex justify-between items-center mb-6">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Overview</h1>
+            <p className="text-muted-foreground mt-1">
+              Monitor your proxy server's configuration and status
+            </p>
+          </div>
+        </div>
       )}
 
       {renderContent()}

@@ -55,7 +55,7 @@ export default function PoliciesPage() {
   };
 
   return (
-    <div className="container mx-auto py-6">
+    <div className="container mx-auto py-8 px-4">
       {connectionError ? (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
@@ -63,10 +63,10 @@ export default function PoliciesPage() {
         </Alert>
       ) : (
         <div className="space-y-6">
-          <div className="flex justify-between items-center">
+          <div className="flex justify-between items-center mb-6">
             <div>
-              <h1 className="text-2xl font-bold tracking-tight">Policies Overview</h1>
-              <p className="text-lg text-muted-foreground mt-1">
+              <h1 className="text-3xl font-bold tracking-tight">Policies Overview</h1>
+              <p className="text-muted-foreground mt-1">
                 View and manage security policies across all listeners
               </p>
             </div>
