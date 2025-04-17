@@ -20,13 +20,13 @@ WORKDIR /app
 
 COPY --from=node /app/out ./ui/out
 
-COPY Cargo.toml Cargo.lock build.rs ./
+COPY Makefile Cargo.toml Cargo.lock build.rs ./
 COPY proto ./proto
 COPY src ./src
 COPY a2a-sdk ./a2a-sdk
 COPY common ./common
 
-RUN cargo build --release --features ui
+RUN make build
 
 RUN strip target/release/agentproxy
 

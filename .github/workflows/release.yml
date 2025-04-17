@@ -162,12 +162,21 @@ jobs:
     steps:
     - name: Checkout Repository
       uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 23
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
     - name: Install Protoc
       uses: arduino/setup-protoc@v3
       with:
         repo-token: ${{ secrets.GITHUB_TOKEN }}
+    # TODO: build this in a separate job and just copy it over
+    - name: Build UI
+      run: | 
+        cd ui
+        npm install
+        npm run build
     - name: Build
       run: make build
     - name: Upload Artifact
