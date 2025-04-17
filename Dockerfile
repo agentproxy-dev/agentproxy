@@ -13,7 +13,7 @@ FROM docker.io/library/rust:1.86.0-slim-bookworm AS builder
 ARG TARGETARCH
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    protobuf-compiler libssl-dev pkg-config \
+    protobuf-compiler make libssl-dev pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
