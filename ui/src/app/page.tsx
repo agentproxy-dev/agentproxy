@@ -10,12 +10,13 @@ import { AlertCircle } from "lucide-react";
 
 export default function Home() {
   const { isLoading, setIsLoading } = useLoading();
-  const { config, setConfig, isConnected, connectionError, listeners, refreshListeners } =
-    useServer();
-  const { setIsWizardVisible } = useWizard();
+  const { config, setConfig, isConnected, connectionError } = useServer();
+  const { 
+    showWizard,
+    handleWizardComplete,
+    handleWizardSkip 
+  } = useWizard();
 
-  const [showWizard, setShowWizard] = useState(false);
-  const [wizardStarted, setWizardStarted] = useState(false);
   const [configUpdateMessage] = useState<{
     success: boolean;
     message: string;
@@ -28,72 +29,8 @@ export default function Home() {
     }
   }, [isConnected, setIsLoading]);
 
-  // Refresh listeners when the component mounts
-  useEffect(() => {
-    refreshListeners();
-  }, []);
-
-  // Effect to control wizard visibility based on listeners and setup status
-  useEffect(() => {
-    const setupCompleted = localStorage.getItem("agentproxy.setupCompleted");
-    
-    // If there are no listeners and setup is not completed or explicitly false
-    if (listeners.length === 0 && (setupCompleted === null || setupCompleted === "false")) {
-      setShowWizard(true);
-      setWizardStarted(true);
-      setIsWizardVisible(true);
-    }
-    // If there are listeners and setup status is not set
-    else if (listeners.length > 0 && setupCompleted === null) {
-      localStorage.setItem("agentproxy.setupCompleted", "true");
-      setShowWizard(false);
-      setWizardStarted(false);
-      setIsWizardVisible(false);
-    }
-    // If there are no listeners but setup is completed
-    else if (listeners.length === 0 && setupCompleted === "true") {
-      setShowWizard(false);
-      setWizardStarted(false);
-      setIsWizardVisible(false);
-    }
-    // Default case: hide wizard
-    else {
-      setShowWizard(false);
-      setWizardStarted(false);
-      setIsWizardVisible(false);
-    }
-  }, [listeners, setIsWizardVisible]);
-
-  // Effect to handle manual wizard restart
-  useEffect(() => {
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === "agentproxy.setupCompleted" && e.newValue === "false") {
-        setShowWizard(true);
-        setWizardStarted(true);
-        setIsWizardVisible(true);
-      }
-    };
-
-    window.addEventListener("storage", handleStorageChange);
-    return () => window.removeEventListener("storage", handleStorageChange);
-  }, [setIsWizardVisible]);
-
   const handleConfigChange = (newConfig: any) => {
     setConfig(newConfig);
-  };
-
-  const handleWizardComplete = () => {
-    localStorage.setItem("agentproxy.setupCompleted", "true");
-    setShowWizard(false);
-    setWizardStarted(false);
-    setIsWizardVisible(false);
-  };
-
-  const handleWizardSkip = () => {
-    localStorage.setItem("agentproxy.setupCompleted", "true");
-    setShowWizard(false);
-    setWizardStarted(false);
-    setIsWizardVisible(false);
   };
 
   const renderContent = () => {
@@ -115,8 +52,6 @@ export default function Home() {
           onConfigChange={handleConfigChange}
           onComplete={handleWizardComplete}
           onSkip={handleWizardSkip}
-          serverAddress="localhost"
-          serverPort={19000}
         />
       );
     }

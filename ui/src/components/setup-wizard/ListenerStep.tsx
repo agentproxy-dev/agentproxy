@@ -21,8 +21,6 @@ interface ListenerStepProps {
   onPrevious: () => void;
   config: Config;
   onConfigChange: (config: Config) => void;
-  serverAddress?: string;
-  serverPort?: number;
 }
 
 export function ListenerStep({
@@ -30,8 +28,6 @@ export function ListenerStep({
   onPrevious,
   config,
   onConfigChange,
-  serverAddress = "localhost",
-  serverPort = 19000,
 }: ListenerStepProps) {
   const [listenerAddress, setListenerAddress] = useState("0.0.0.0");
   const [listenerPort, setListenerPort] = useState("5555");
@@ -64,7 +60,7 @@ export function ListenerStep({
       onConfigChange(newConfig);
 
       // Call the API to create/update the listener
-      await createListener(serverAddress, serverPort, newListener);
+      await createListener(newListener);
 
       // Call onNext to navigate to the next step
       onNext();

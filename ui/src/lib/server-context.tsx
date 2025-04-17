@@ -14,10 +14,8 @@ interface ServerContextType {
   policies: RBACConfig[];
   refreshListeners: () => Promise<void>;
   refreshTargets: () => Promise<void>;
+  isConfigurationEmpty: () => Promise<boolean>;
 }
-
-const DEFAULT_HOST = "localhost";
-const DEFAULT_PORT = 19000;
 
 const ServerContext = createContext<ServerContextType | undefined>(undefined);
 
@@ -39,7 +37,7 @@ export function ServerProvider({ children }: { children: React.ReactNode }) {
   const refreshListeners = async () => {
     try {
       // Fetch listeners configuration
-      const listenersData = await fetchListeners(DEFAULT_HOST, DEFAULT_PORT);
+      const listenersData = await fetchListeners();
       const listenersArray = Array.isArray(listenersData) ? listenersData : [listenersData];
       setListeners(listenersArray);
 
@@ -56,8 +54,8 @@ export function ServerProvider({ children }: { children: React.ReactNode }) {
   const refreshTargets = async () => {
     try {
       // Fetch MCP and A2A targets
-      const mcpTargetsData = await fetchMcpTargets(DEFAULT_HOST, DEFAULT_PORT);
-      const a2aTargetsData = await fetchA2aTargets(DEFAULT_HOST, DEFAULT_PORT);
+      const mcpTargetsData = await fetchMcpTargets();
+      const a2aTargetsData = await fetchA2aTargets();
 
       // Combine targets
       const targetsArray = [
@@ -82,13 +80,13 @@ export function ServerProvider({ children }: { children: React.ReactNode }) {
     const loadConfiguration = async () => {
       try {
         // Fetch listeners configuration
-        const listenersData = await fetchListeners(DEFAULT_HOST, DEFAULT_PORT);
+        const listenersData = await fetchListeners();
         const listenersArray = Array.isArray(listenersData) ? listenersData : [listenersData];
         setListeners(listenersArray);
 
         // Fetch MCP and A2A targets
-        const mcpTargetsData = await fetchMcpTargets(DEFAULT_HOST, DEFAULT_PORT);
-        const a2aTargetsData = await fetchA2aTargets(DEFAULT_HOST, DEFAULT_PORT);
+        const mcpTargetsData = await fetchMcpTargets();
+        const a2aTargetsData = await fetchA2aTargets();
 
         // Combine targets
         const targetsArray = [
@@ -121,12 +119,12 @@ export function ServerProvider({ children }: { children: React.ReactNode }) {
     loadConfiguration();
   }, []);
 
-  // Save local configuration to localStorage when it changes
-  useEffect(() => {
-    if (isConnected) {
-      localStorage.setItem("localConfig", JSON.stringify(config));
-    }
-  }, [config, isConnected]);
+  const isConfigurationEmpty = async () => {
+    const listeners = await fetchListeners();
+    const mcpTargets = await fetchMcpTargets();
+    const a2aTargets = await fetchA2aTargets();
+    return listeners.length === 0 && mcpTargets.length === 0 && a2aTargets.length === 0;
+  };
 
   return (
     <ServerContext.Provider
@@ -140,12 +138,14 @@ export function ServerProvider({ children }: { children: React.ReactNode }) {
         policies,
         refreshListeners,
         refreshTargets,
+        isConfigurationEmpty,
       }}
     >
       {children}
     </ServerContext.Provider>
   );
 }
+
 
 export function useServer() {
   const context = useContext(ServerContext);

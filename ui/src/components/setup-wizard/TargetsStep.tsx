@@ -26,8 +26,6 @@ interface TargetsStepProps {
   onPrevious: () => void;
   config: Config;
   onConfigChange: (config: Config) => void;
-  serverAddress?: string;
-  serverPort?: number;
 }
 
 export function TargetsStep({
@@ -35,8 +33,6 @@ export function TargetsStep({
   onPrevious,
   config,
   onConfigChange,
-  serverAddress = "localhost",
-  serverPort = 19000,
 }: TargetsStepProps) {
   const [targetCategory, setTargetCategory] = useState<"mcp" | "a2a">("mcp");
   const [targetName, setTargetName] = useState("");
@@ -67,9 +63,9 @@ export function TargetsStep({
 
     try {
       if (targetCategory === "a2a") {
-        await createA2aTarget(serverAddress, serverPort, target);
+        await createA2aTarget(target);
       } else {
-        await createMcpTarget(serverAddress, serverPort, target);
+        await createMcpTarget(target);
       }
 
       handleAddTarget(target);

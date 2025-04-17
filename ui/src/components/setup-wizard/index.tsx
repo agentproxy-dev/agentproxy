@@ -11,8 +11,6 @@ interface SetupWizardProps {
   onConfigChange: (config: Config) => void;
   onComplete: () => void;
   onSkip: () => void;
-  serverAddress?: string;
-  serverPort?: number;
 }
 
 export function SetupWizard({
@@ -20,8 +18,6 @@ export function SetupWizard({
   onConfigChange,
   onComplete,
   onSkip,
-  serverAddress = "localhost",
-  serverPort = 19000,
 }: SetupWizardProps) {
   const [step, setStep] = useState(1);
   const totalSteps = 3;
@@ -37,8 +33,7 @@ export function SetupWizard({
             onPrevious={() => setStep(1)}
             config={config}
             onConfigChange={onConfigChange}
-            serverAddress={serverAddress}
-            serverPort={serverPort}
+
           />
         );
       case 3:
@@ -48,8 +43,6 @@ export function SetupWizard({
             onPrevious={() => setStep(2)}
             config={config}
             onConfigChange={onConfigChange}
-            serverAddress={serverAddress}
-            serverPort={serverPort}
           />
         );
       default:

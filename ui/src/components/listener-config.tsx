@@ -98,7 +98,7 @@ export function ListenerConfig({
       setError(null);
 
       try {
-        const fetchedListeners = await fetchListeners(serverAddress, serverPort);
+        const fetchedListeners = await fetchListeners();
 
         // Ensure we have an array of listeners
         const listenersArray = Array.isArray(fetchedListeners)
@@ -131,10 +131,10 @@ export function ListenerConfig({
         },
       };
 
-      await addListener(serverAddress, serverPort, listenerToAdd);
+      await addListener(listenerToAdd);
 
       // Refresh the listeners list
-      const updatedListeners = await fetchListeners(serverAddress, serverPort);
+      const updatedListeners = await fetchListeners();
       const listenersArray = Array.isArray(updatedListeners)
         ? updatedListeners
         : [updatedListeners];
@@ -164,10 +164,10 @@ export function ListenerConfig({
     setError(null);
 
     try {
-      await addListener(serverAddress, serverPort, updatedListener);
+      await addListener(updatedListener);
 
       // Refresh the listeners list
-      const updatedListeners = await fetchListeners(serverAddress, serverPort);
+      const updatedListeners = await fetchListeners();
       const listenersArray = Array.isArray(updatedListeners)
         ? updatedListeners
         : [updatedListeners];
@@ -204,10 +204,10 @@ export function ListenerConfig({
         name: listenerName,
       };
 
-      await deleteListener(serverAddress, serverPort, listenerWithName);
+      await deleteListener(listenerWithName);
 
       // Refresh the listeners list
-      const updatedListeners = await fetchListeners(serverAddress, serverPort);
+      const updatedListeners = await fetchListeners();
       const listenersArray = Array.isArray(updatedListeners)
         ? updatedListeners
         : [updatedListeners];

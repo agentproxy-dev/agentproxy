@@ -2,14 +2,11 @@
   "name": "agentproxy-ui",
   "version": "0.1.0",
   "private": false,
-  "description": "UI for MCP Proxy",
+  "description": "UI for agentproxy",
   "main": "index.js",
-  "bin": {
-    "agentproxy-ui": "./bin/cli.js"
-  },
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "next build",
+    "build": "npm run lint -- --fix && next build",
     "start": "next start",
     "lint": "next lint",
     "prepublishOnly": "npm run build"

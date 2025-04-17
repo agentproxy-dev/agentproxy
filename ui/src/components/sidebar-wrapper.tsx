@@ -7,7 +7,7 @@ import { useLoading } from "@/lib/loading-context";
 import { useWizard } from "@/lib/wizard-context";
 
 export function SidebarWrapper() {
-  const { targets, listeners, setConfig, isConnected } = useServer();
+  const { targets, listeners, isConnected } = useServer();
   const { setIsLoading } = useLoading();
   const [activeView, setActiveView] = useState("home");
   const { isWizardVisible } = useWizard();
@@ -18,16 +18,6 @@ export function SidebarWrapper() {
       setIsLoading(false);
     }
   }, [isConnected, setIsLoading]);
-
-  const handleRestartWizard = () => {
-    // Reset the configuration
-    setConfig({
-      type: "static",
-      listeners: [],
-      targets: [],
-      policies: [],
-    });
-  };
 
   // Don't render the sidebar if the wizard is visible
   if (isWizardVisible) {
@@ -40,8 +30,6 @@ export function SidebarWrapper() {
       listeners={listeners}
       activeView={activeView}
       setActiveView={setActiveView}
-      addTarget={() => {}}
-      onRestartWizard={handleRestartWizard}
     />
   );
 }
