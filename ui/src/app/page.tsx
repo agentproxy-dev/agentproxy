@@ -10,10 +10,12 @@ import { AlertCircle } from "lucide-react";
 
 export default function Home() {
   const { isLoading, setIsLoading } = useLoading();
-  const { config, setConfig, isConnected, connectionError, listeners, refreshListeners } = useServer();
+  const { config, setConfig, isConnected, connectionError, listeners, refreshListeners } =
+    useServer();
   const { setIsWizardVisible } = useWizard();
 
   const [showWizard, setShowWizard] = useState(false);
+  const [wizardStarted, setWizardStarted] = useState(false);
   const [configUpdateMessage] = useState<{
     success: boolean;
     message: string;
@@ -21,8 +23,8 @@ export default function Home() {
 
   // Track if initial setup has been completed
   const [initialSetupDone, setInitialSetupDone] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('initialSetupDone') === 'true';
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("initialSetupDone") === "true";
     }
     return false;
   });
@@ -43,35 +45,34 @@ export default function Home() {
   useEffect(() => {
     if (listeners.length > 0 && !initialSetupDone) {
       setInitialSetupDone(true);
-      localStorage.setItem('initialSetupDone', 'true');
+      localStorage.setItem("initialSetupDone", "true");
     }
   }, [listeners.length, initialSetupDone]);
 
   // Effect to control wizard visibility
   useEffect(() => {
-    // Only show wizard if there are no listeners AND initial setup hasn't been done
-    if (listeners.length === 0 && !initialSetupDone) {
+    // Only show wizard initially if there are no listeners
+    if (listeners.length === 0 && !wizardStarted) {
       setShowWizard(true);
+      setWizardStarted(true);
       setIsWizardVisible(true);
-    } else {
-      setShowWizard(false);
-      setIsWizardVisible(false);
     }
-  }, [listeners, setIsWizardVisible, initialSetupDone]);
+  }, [listeners, setIsWizardVisible, wizardStarted]);
 
   // Reset initial setup when wizard is manually restarted
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'restartWizard' && e.newValue === 'true') {
+      if (e.key === "restartWizard" && e.newValue === "true") {
         setInitialSetupDone(false);
         setShowWizard(true);
+        setWizardStarted(true);
         setIsWizardVisible(true);
-        localStorage.removeItem('restartWizard');
+        localStorage.removeItem("restartWizard");
       }
     };
 
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
   }, [setIsWizardVisible]);
 
   const handleConfigChange = (newConfig: any) => {
@@ -80,12 +81,18 @@ export default function Home() {
 
   const handleWizardComplete = () => {
     setShowWizard(false);
+    setWizardStarted(false);
     setIsWizardVisible(false);
+    setInitialSetupDone(true);
+    localStorage.setItem("initialSetupDone", "true");
   };
 
   const handleWizardSkip = () => {
     setShowWizard(false);
+    setWizardStarted(false);
     setIsWizardVisible(false);
+    setInitialSetupDone(true);
+    localStorage.setItem("initialSetupDone", "true");
   };
 
   const renderContent = () => {

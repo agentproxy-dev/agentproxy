@@ -25,4 +25,4 @@ export function useWizard() {
     throw new Error("useWizard must be used within a WizardProvider");
   }
   return context;
-} 
+}

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, forwardRef, useImperativeHandle } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -14,13 +14,10 @@ interface OpenAPITargetFormProps {
   hideSubmitButton?: boolean;
 }
 
-export function OpenAPITargetForm({
-  targetName,
-  onSubmit,
-  isLoading,
-  existingTarget,
-  hideSubmitButton = false,
-}: OpenAPITargetFormProps) {
+export const OpenAPITargetForm = forwardRef<
+  { submitForm: () => Promise<void> },
+  OpenAPITargetFormProps
+>(({ targetName, onSubmit, isLoading, existingTarget, hideSubmitButton = false }, ref) => {
   const [host, setHost] = useState("");
   const [port, setPort] = useState("");
   const [showOpenAPIAdvancedSettings, setShowOpenAPIAdvancedSettings] = useState(false);
@@ -63,7 +60,7 @@ export function OpenAPITargetForm({
     try {
       const schema: LocalDataSource =
         schemaType === "file"
-          ? { filePath: schemaFilePath }
+          ? { file_path: schemaFilePath }
           : { inline: new TextEncoder().encode(schemaInline) };
 
       const target: Target = {
@@ -82,6 +79,10 @@ export function OpenAPITargetForm({
       throw err;
     }
   };
+
+  useImperativeHandle(ref, () => ({
+    submitForm: handleSubmit,
+  }));
 
   return (
     <form
@@ -254,4 +255,6 @@ export function OpenAPITargetForm({
       )}
     </form>
   );
-}
+});
+
+OpenAPITargetForm.displayName = "OpenAPITargetForm";

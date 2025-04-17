@@ -67,7 +67,7 @@ export function ServerProvider({ children }: { children: React.ReactNode }) {
       setTargets(targetsArray);
 
       // Update the config with the new targets
-      setConfig(prevConfig => ({
+      setConfig((prevConfig) => ({
         ...prevConfig,
         targets: targetsArray,
       }));

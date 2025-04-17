@@ -40,7 +40,7 @@ export interface StdioTarget {
 
 export interface LocalDataSource {
   // Only one of these fields will be set
-  filePath?: string;
+  file_path?: string;
   inline?: Uint8Array; // For bytes in proto3, we use Uint8Array in TypeScript
 }
 
@@ -93,8 +93,6 @@ export interface BackendTls {
 export interface Listener {
   // The name of the listener
   name: string;
-  // The unique identifier of the listener
-  id: string;
   // SSE is the only listener we can configure through UI
   sse: SseListener;
   // The policies attached to this listener
@@ -138,19 +136,16 @@ export interface StdioListener {
 }
 
 // Enum for matcher types
-export type Matcher = 
+export type Matcher =
   // The value must be equal to the value in the claims.
-  "EQUALS"
-  //"CONTAINS" |
-  //"STARTS_WITH" |
-  //"ENDS_WITH"
+  "EQUALS";
+//"CONTAINS" |
+//"STARTS_WITH" |
+//"ENDS_WITH"
 
-
-export type ResourceType = 
-  "TOOL" //|
- // "PROMPT" |
- // "RESOURCE"
-
+export type ResourceType = "TOOL"; //|
+// "PROMPT" |
+// "RESOURCE"
 
 export interface Rule {
   key: string;

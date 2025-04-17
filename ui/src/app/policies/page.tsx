@@ -2,7 +2,7 @@
 
 import { useServer } from "@/lib/server-context";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertCircle, ExternalLink, Plus, Pencil, Trash2, ChevronDown, ChevronUp } from "lucide-react";
+import { AlertCircle, ExternalLink, ChevronDown, ChevronUp } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -16,31 +16,17 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Listener, RuleSet, Rule } from "@/lib/types";
 import { useState } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { RBACConfigForm } from "@/components/forms";
 
 interface PolicyWithListeners extends RuleSet {
   listeners: Array<{
     name: string;
-    id: string | null;
   }>;
 }
 
 export default function PoliciesPage() {
   const { listeners, connectionError } = useServer();
   const [selectedPolicy, setSelectedPolicy] = useState<PolicyWithListeners | null>(null);
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [policyToDelete, setPolicyToDelete] = useState<PolicyWithListeners | null>(null);
 
   // Collect all unique policies across listeners
   const policiesMap = new Map<string, PolicyWithListeners>();
@@ -50,14 +36,13 @@ export default function PoliciesPage() {
       if (!policiesMap.has(policy.name)) {
         policiesMap.set(policy.name, {
           ...policy,
-          listeners: [{ name: listener.name, id: listener.id || null }],
+          listeners: [{ name: listener.name }],
         });
       } else {
         const existingPolicy = policiesMap.get(policy.name);
         if (existingPolicy) {
           existingPolicy.listeners.push({
             name: listener.name,
-            id: listener.id || null,
           });
         }
       }
@@ -65,30 +50,8 @@ export default function PoliciesPage() {
   });
 
   const allPolicies = Array.from(policiesMap.values());
-
-  const handleAddPolicy = () => {
-    setIsAddDialogOpen(true);
-  };
-
-  const handleEditPolicy = (policy: PolicyWithListeners) => {
-    setSelectedPolicy(policy);
-    setIsEditDialogOpen(true);
-  };
-
-  const handleDeletePolicy = (policy: PolicyWithListeners) => {
-    setPolicyToDelete(policy);
-    setIsDeleteDialogOpen(true);
-  };
-
   const handlePolicyClick = (policy: PolicyWithListeners) => {
     setSelectedPolicy(selectedPolicy?.name === policy.name ? null : policy);
-  };
-
-  const handleUpdateListener = async (updatedListener: Listener) => {
-    // TODO: Implement updating the listener with the new policy
-    console.log("Updating listener:", updatedListener);
-    setIsAddDialogOpen(false);
-    setIsEditDialogOpen(false);
   };
 
   return (
@@ -129,8 +92,8 @@ export default function PoliciesPage() {
                   </TableHeader>
                   <TableBody>
                     {allPolicies.map((policy) => (
-                      <TableRow 
-                        key={policy.name} 
+                      <TableRow
+                        key={policy.name}
                         className="cursor-pointer hover:bg-muted/50"
                         onClick={() => handlePolicyClick(policy)}
                       >
@@ -145,9 +108,7 @@ export default function PoliciesPage() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Badge variant="secondary">
-                            {policy.rules?.length || 0} rules
-                          </Badge>
+                          <Badge variant="secondary">{policy.rules?.length || 0} rules</Badge>
                         </TableCell>
                         <TableCell>
                           <div className="flex flex-wrap gap-2">
@@ -159,11 +120,11 @@ export default function PoliciesPage() {
                           </div>
                         </TableCell>
                         <TableCell className="text-right">
-                          {policy.listeners.map((listener) => (
-                            listener.id ? (
+                          {policy.listeners.map((listener, idx) =>
+                            listener.name ? (
                               <Link
-                                key={listener.id}
-                                href={`/listeners/${listener.id}`}
+                                key={idx}
+                                href={`/listeners/${listener.name}`}
                                 className="inline-block"
                                 onClick={(e) => e.stopPropagation()}
                               >
@@ -173,7 +134,7 @@ export default function PoliciesPage() {
                                 </Button>
                               </Link>
                             ) : null
-                          ))}
+                          )}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -185,9 +146,7 @@ export default function PoliciesPage() {
                 <Card>
                   <CardHeader>
                     <CardTitle>Policy Details: {selectedPolicy.name}</CardTitle>
-                    <CardDescription>
-                      View the rules for this policy
-                    </CardDescription>
+                    <CardDescription>View the rules for this policy</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-4">
@@ -224,20 +183,6 @@ export default function PoliciesPage() {
                       </div>
                       <div>
                         <h3 className="text-sm font-medium mb-2">Applied to Listeners</h3>
-                        <div className="flex flex-wrap gap-2">
-                          {selectedPolicy.listeners.map((listener) => (
-                            <Link 
-                              key={listener.name} 
-                              href={listener.id ? `/listeners/${listener.id}` : '#'}
-                              className={!listener.id ? 'pointer-events-none' : ''}
-                            >
-                              <Badge variant="outline" className="cursor-pointer">
-                                {listener.name}
-                                {listener.id && <ExternalLink className="h-3 w-3 ml-1" />}
-                              </Badge>
-                            </Link>
-                          ))}
-                        </div>
                       </div>
                     </div>
                   </CardContent>

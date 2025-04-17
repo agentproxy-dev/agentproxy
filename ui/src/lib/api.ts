@@ -4,7 +4,6 @@ import { Target, Listener, Config } from "./types";
  * Updates a single target on the MCP proxy server
  */
 export async function updateTarget(address: string, port: number, target: Target): Promise<void> {
-  console.log("Updating target:", target);
   try {
     const response = await fetch(`http://${address}:${port}/targets`, {
       method: "POST",
@@ -36,7 +35,6 @@ export async function fetchListeners(address: string, port: number): Promise<Lis
     }
 
     const data = await response.json();
-    console.log("Raw listeners data from API:", data);
 
     // The API will return an array of listeners
     if (Array.isArray(data)) {
@@ -132,8 +130,6 @@ export async function deleteMcpTarget(address: string, port: number, name: strin
     const response = await fetch(`http://${address}:${port}/targets/mcp/${name}`, {
       method: "DELETE",
     });
-
-    console.log('response', response)
 
     if (!response.ok) {
       throw new Error(`Failed to delete MCP target: ${response.status} ${response.statusText}`);
@@ -301,8 +297,6 @@ export async function addListener(
   listener: Listener
 ): Promise<void> {
   try {
-
-    console.log('listener', listener)
     const response = await fetch(`http://${address}:${port}/listeners`, {
       method: "POST",
       headers: {
@@ -310,8 +304,6 @@ export async function addListener(
       },
       body: JSON.stringify(listener),
     });
-
-    console.log('response', response) 
 
     if (!response.ok) {
       throw new Error(`Failed to add listener: ${response.status} ${response.statusText}`);

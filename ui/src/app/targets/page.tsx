@@ -39,9 +39,9 @@ export default function TargetsPage() {
           <AlertDescription>{connectionError}</AlertDescription>
         </Alert>
       ) : (
-        <TargetsConfig 
+        <TargetsConfig
           ref={targetsConfigRef}
-          config={config} 
+          config={config}
           onConfigChange={setConfig}
           isAddingTarget={isAddingTarget}
           setIsAddingTarget={setIsAddingTarget}

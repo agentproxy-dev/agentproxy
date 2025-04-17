@@ -14,13 +14,12 @@ interface JWTConfigFormProps {
 }
 
 export function JWTConfigForm({ listener, onSave, onCancel }: JWTConfigFormProps) {
-  
   const [config, setConfig] = useState({
     issuer: listener?.sse?.authn?.jwt?.issuer?.join(",") || "",
     audience: listener?.sse?.authn?.jwt?.audience?.join(",") || "",
-    localJwksPath: listener?.sse?.authn?.jwt?.localJwks?.filePath || "",
+    localJwksPath: listener?.sse?.authn?.jwt?.localJwks?.file_path || "",
     remoteJwksUrl: listener?.sse?.authn?.jwt?.remoteJwks?.url || "",
-    jwksSource: listener?.sse?.authn?.jwt?.localJwks ? "local" : "remote"
+    jwksSource: listener?.sse?.authn?.jwt?.localJwks ? "local" : "remote",
   });
 
   const handleSave = () => {
@@ -32,21 +31,31 @@ export function JWTConfigForm({ listener, onSave, onCancel }: JWTConfigFormProps
         ...listener.sse,
         authn: {
           jwt: {
-            issuer: config.issuer.split(",").map(s => s.trim()).filter(Boolean),
-            audience: config.audience.split(",").map(s => s.trim()).filter(Boolean),
-            ...(config.jwksSource === "local" && config.localJwksPath ? {
-              local_jwks: {
-                file_path: config.localJwksPath,
-              }
-            } : {}),
-            ...(config.jwksSource === "remote" && config.remoteJwksUrl ? {
-              remote_jwks: {
-                url: config.remoteJwksUrl,
-              }
-            } : {}),
-          }
-        }
-      }
+            issuer: config.issuer
+              .split(",")
+              .map((s) => s.trim())
+              .filter(Boolean),
+            audience: config.audience
+              .split(",")
+              .map((s) => s.trim())
+              .filter(Boolean),
+            ...(config.jwksSource === "local" && config.localJwksPath
+              ? {
+                  local_jwks: {
+                    file_path: config.localJwksPath,
+                  },
+                }
+              : {}),
+            ...(config.jwksSource === "remote" && config.remoteJwksUrl
+              ? {
+                  remote_jwks: {
+                    url: config.remoteJwksUrl,
+                  },
+                }
+              : {}),
+          },
+        },
+      },
     };
 
     onSave(updatedListener);
@@ -84,11 +93,13 @@ export function JWTConfigForm({ listener, onSave, onCancel }: JWTConfigFormProps
         <Label>JWKS Source</Label>
         <RadioGroup
           value={config.jwksSource}
-          onValueChange={(value) => setConfig({
-            ...config,
-            jwksSource: value as "local" | "remote",
-            ...(value === "local" ? { remoteJwksUrl: "" } : { localJwksPath: "" })
-          })}
+          onValueChange={(value) =>
+            setConfig({
+              ...config,
+              jwksSource: value as "local" | "remote",
+              ...(value === "local" ? { remoteJwksUrl: "" } : { localJwksPath: "" }),
+            })
+          }
         >
           <div className="space-y-6">
             <div className="flex items-start space-x-4">
@@ -98,16 +109,16 @@ export function JWTConfigForm({ listener, onSave, onCancel }: JWTConfigFormProps
                 <Input
                   id="jwks-file"
                   value={config.localJwksPath}
-                  onChange={(e) => setConfig({
-                    ...config,
-                    localJwksPath: e.target.value,
-                  })}
+                  onChange={(e) =>
+                    setConfig({
+                      ...config,
+                      localJwksPath: e.target.value,
+                    })
+                  }
                   placeholder="/path/to/jwks.json"
                   disabled={config.jwksSource !== "local"}
                 />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Path to a local JWKS file.
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">Path to a local JWKS file.</p>
               </div>
             </div>
 
@@ -118,16 +129,16 @@ export function JWTConfigForm({ listener, onSave, onCancel }: JWTConfigFormProps
                 <Input
                   id="jwks-url"
                   value={config.remoteJwksUrl}
-                  onChange={(e) => setConfig({
-                    ...config,
-                    remoteJwksUrl: e.target.value,
-                  })}
+                  onChange={(e) =>
+                    setConfig({
+                      ...config,
+                      remoteJwksUrl: e.target.value,
+                    })
+                  }
                   placeholder="https://example.com/.well-known/jwks.json"
                   disabled={config.jwksSource !== "remote"}
                 />
-                <p className="text-xs text-muted-foreground mt-1">
-                  URL to a remote JWKS endpoint.
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">URL to a remote JWKS endpoint.</p>
               </div>
             </div>
           </div>
@@ -138,10 +149,8 @@ export function JWTConfigForm({ listener, onSave, onCancel }: JWTConfigFormProps
         <Button variant="outline" onClick={onCancel}>
           Cancel
         </Button>
-        <Button onClick={handleSave}>
-          Save Changes
-        </Button>
+        <Button onClick={handleSave}>Save Changes</Button>
       </div>
     </div>
   );
-} 
+}

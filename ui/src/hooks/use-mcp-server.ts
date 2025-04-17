@@ -70,7 +70,6 @@ export function useMCPServer({
       return;
     }
 
-    console.log("Connecting to MCP Server:", sseUrl);
     const client = new Client(
       {
         name: " agentproxy-ui",

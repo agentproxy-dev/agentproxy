@@ -74,16 +74,16 @@ export function AppSidebar({
 
       // Call the parent component's onRestartWizard function
       onRestartWizard();
-      
+
       // Refresh the listeners in the server context
       await refreshListeners();
-      
+
       // Add a small delay to allow the server to process the deletions
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
       // Trigger wizard restart
-      localStorage.setItem('restartWizard', 'true');
-      
+      localStorage.setItem("restartWizard", "true");
+
       // Navigate to the home page to trigger the setup wizard
       navigateTo("/");
     } catch (error) {
@@ -159,6 +159,17 @@ export function AppSidebar({
                   <span>Policies</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  tooltip="Playground"
+                  isActive={pathname === "/playground"}
+                  onClick={() => navigateTo("/playground")}
+                  aria-label="Playground"
+                >
+                  <Code className="h-4 w-4" />
+                  <span>Playground</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -179,10 +190,7 @@ export function AppSidebar({
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarMenuButton tooltip="Theme">
-              <ThemeToggle asChild className="flex items-center gap-2" />
-              <span>Theme</span>
-            </SidebarMenuButton>
+              <ThemeToggle />
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>

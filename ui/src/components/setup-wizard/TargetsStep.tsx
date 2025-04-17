@@ -13,7 +13,6 @@ import { Label } from "@/components/ui/label";
 import { MCPLogo } from "@/components/mcp-logo";
 import { ArrowLeft, ArrowRight, Globe, Server, Terminal, Trash2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Info } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { TooltipProvider, Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -43,6 +42,8 @@ export function TargetsStep({
   const [targetName, setTargetName] = useState("");
   const [isAddingTarget, setIsAddingTarget] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [mcpFormRef, setMcpFormRef] = useState<{ submitForm: () => Promise<void> } | null>(null);
+  const [a2aFormRef, setA2aFormRef] = useState<{ submitForm: () => Promise<void> } | null>(null);
 
   const handleAddTarget = (target: Target) => {
     const newConfig = {
@@ -105,6 +106,23 @@ export function TargetsStep({
     return "sse";
   };
 
+  const handleNext = async () => {
+    try {
+      // If there's a target name entered, try to submit the current form
+      if (targetName) {
+        if (targetCategory === "mcp" && mcpFormRef) {
+          await mcpFormRef.submitForm();
+        } else if (targetCategory === "a2a" && a2aFormRef) {
+          await a2aFormRef.submitForm();
+        }
+      }
+      onNext();
+    } catch (err) {
+      console.error("Error submitting target:", err);
+      setError(err instanceof Error ? err.message : "Failed to create target");
+    }
+  };
+
   return (
     <Card className="w-full max-w-2xl">
       <CardHeader>
@@ -149,6 +167,7 @@ export function TargetsStep({
                     onTargetNameChange={setTargetName}
                     onSubmit={handleCreateTarget}
                     isLoading={isAddingTarget}
+                    ref={setMcpFormRef}
                   />
                 </TabsContent>
 
@@ -157,6 +176,7 @@ export function TargetsStep({
                     targetName={targetName}
                     onSubmit={handleCreateTarget}
                     isLoading={isAddingTarget}
+                    ref={setA2aFormRef}
                   />
                 </TabsContent>
               </div>
@@ -232,7 +252,7 @@ export function TargetsStep({
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back
         </Button>
-        <Button onClick={onNext}>
+        <Button onClick={handleNext}>
           Complete Setup
           <ArrowRight className="ml-2 h-4 w-4" />
         </Button>

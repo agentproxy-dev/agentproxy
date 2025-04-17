@@ -26,12 +26,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { JWTConfigForm, TLSConfigForm, RBACConfigForm } from "@/components/forms";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -104,7 +99,6 @@ export function ListenerConfig({
 
       try {
         const fetchedListeners = await fetchListeners(serverAddress, serverPort);
-        console.log("ListenerConfig received data:", fetchedListeners);
 
         // Ensure we have an array of listeners
         const listenersArray = Array.isArray(fetchedListeners)
@@ -130,7 +124,6 @@ export function ListenerConfig({
 
     try {
       const listenerToAdd: Listener = {
-        id: "",
         name: newListener.name || `listener-${listeners.length + 1}`,
         sse: {
           address: newListener.address,
@@ -219,7 +212,7 @@ export function ListenerConfig({
         ? updatedListeners
         : [updatedListeners];
       setListeners(listenersArray);
-      
+
       // Close the delete dialog
       setDeleteDialog({ isOpen: false, listenerIndex: -1 });
     } catch (err) {
@@ -278,7 +271,7 @@ export function ListenerConfig({
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center space-x-2">
-                      <Badge 
+                      <Badge
                         variant={listener.sse?.authn ? "default" : "outline"}
                         className="h-7 space-x-2"
                       >
@@ -302,12 +295,14 @@ export function ListenerConfig({
                         </TooltipProvider>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem
-                            onClick={() => setConfigDialog({
-                              type: "jwt",
-                              isOpen: true,
-                              listener,
-                              listenerIndex: index,
-                            })}
+                            onClick={() =>
+                              setConfigDialog({
+                                type: "jwt",
+                                isOpen: true,
+                                listener,
+                                listenerIndex: index,
+                              })
+                            }
                           >
                             <Settings2 className="h-4 w-4 mr-2" />
                             Configure
@@ -337,7 +332,7 @@ export function ListenerConfig({
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center space-x-2">
-                      <Badge 
+                      <Badge
                         variant={listener.sse?.tls ? "default" : "outline"}
                         className="h-7 space-x-2"
                       >
@@ -361,12 +356,14 @@ export function ListenerConfig({
                         </TooltipProvider>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem
-                            onClick={() => setConfigDialog({
-                              type: "tls",
-                              isOpen: true,
-                              listener,
-                              listenerIndex: index,
-                            })}
+                            onClick={() =>
+                              setConfigDialog({
+                                type: "tls",
+                                isOpen: true,
+                                listener,
+                                listenerIndex: index,
+                              })
+                            }
                           >
                             <Settings2 className="h-4 w-4 mr-2" />
                             Configure
@@ -395,8 +392,10 @@ export function ListenerConfig({
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center space-x-2">
-                      <Badge 
-                        variant={listener.sse?.rbac && listener.sse.rbac.length > 0 ? "default" : "outline"}
+                      <Badge
+                        variant={
+                          listener.sse?.rbac && listener.sse.rbac.length > 0 ? "default" : "outline"
+                        }
                         className="h-7 space-x-2"
                       >
                         <Key className="h-4 w-4" />
@@ -408,8 +407,8 @@ export function ListenerConfig({
                             <TooltipTrigger asChild>
                               <div>
                                 <DropdownMenuTrigger asChild>
-                                  <Button 
-                                    variant="ghost" 
+                                  <Button
+                                    variant="ghost"
                                     size="icon"
                                     disabled={!listener.sse?.authn}
                                   >
@@ -420,7 +419,7 @@ export function ListenerConfig({
                             </TooltipTrigger>
                             <TooltipContent side="top">
                               <p className="text-xs">
-                                {!listener.sse?.authn 
+                                {!listener.sse?.authn
                                   ? "Enable JWT Authentication first to configure RBAC"
                                   : "Manage RBAC Policies"}
                               </p>
@@ -429,12 +428,14 @@ export function ListenerConfig({
                         </TooltipProvider>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem
-                            onClick={() => setConfigDialog({
-                              type: "rbac",
-                              isOpen: true,
-                              listener,
-                              listenerIndex: index,
-                            })}
+                            onClick={() =>
+                              setConfigDialog({
+                                type: "rbac",
+                                isOpen: true,
+                                listener,
+                                listenerIndex: index,
+                              })
+                            }
                           >
                             <Settings2 className="h-4 w-4 mr-2" />
                             Configure
@@ -484,7 +485,8 @@ export function ListenerConfig({
           <DialogHeader>
             <DialogTitle>Add New Listener</DialogTitle>
             <DialogDescription>
-              Configure a new SSE listener for the proxy server. Additional features can be configured after creation.
+              Configure a new SSE listener for the proxy server. Additional features can be
+              configured after creation.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -534,38 +536,34 @@ export function ListenerConfig({
       </Dialog>
 
       {/* JWT Configuration Dialog */}
-      <Dialog 
-        open={configDialog.type === "jwt" && configDialog.isOpen} 
+      <Dialog
+        open={configDialog.type === "jwt" && configDialog.isOpen}
         onOpenChange={(open) => !open && setConfigDialog({ ...configDialog, isOpen: false })}
       >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Configure JWT Authentication</DialogTitle>
-            <DialogDescription>
-              Set up JWT authentication for the listener.
-            </DialogDescription>
+            <DialogDescription>Set up JWT authentication for the listener.</DialogDescription>
           </DialogHeader>
-          <JWTConfigForm 
-            listener={configDialog.listener} 
-            onSave={handleUpdateListener} 
+          <JWTConfigForm
+            listener={configDialog.listener}
+            onSave={handleUpdateListener}
             onCancel={() => setConfigDialog({ ...configDialog, isOpen: false })}
           />
         </DialogContent>
       </Dialog>
 
       {/* TLS Configuration Dialog */}
-      <Dialog 
+      <Dialog
         open={configDialog.type === "tls" && configDialog.isOpen}
         onOpenChange={(open) => !open && setConfigDialog({ ...configDialog, isOpen: false })}
       >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Configure TLS</DialogTitle>
-            <DialogDescription>
-              Set up TLS encryption for the listener.
-            </DialogDescription>
+            <DialogDescription>Set up TLS encryption for the listener.</DialogDescription>
           </DialogHeader>
-          <TLSConfigForm 
+          <TLSConfigForm
             listener={configDialog.listener}
             onSave={handleUpdateListener}
             onCancel={() => setConfigDialog({ ...configDialog, isOpen: false })}
@@ -574,18 +572,16 @@ export function ListenerConfig({
       </Dialog>
 
       {/* RBAC Configuration Dialog */}
-      <Dialog 
+      <Dialog
         open={configDialog.type === "rbac" && configDialog.isOpen}
         onOpenChange={(open) => !open && setConfigDialog({ ...configDialog, isOpen: false })}
       >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Configure RBAC</DialogTitle>
-            <DialogDescription>
-              Set up role-based access control policies.
-            </DialogDescription>
+            <DialogDescription>Set up role-based access control policies.</DialogDescription>
           </DialogHeader>
-          <RBACConfigForm 
+          <RBACConfigForm
             listener={configDialog.listener}
             onSave={handleUpdateListener}
             onCancel={() => setConfigDialog({ ...configDialog, isOpen: false })}
@@ -594,7 +590,7 @@ export function ListenerConfig({
       </Dialog>
 
       {/* Delete Confirmation Dialog */}
-      <Dialog 
+      <Dialog
         open={deleteDialog.isOpen}
         onOpenChange={(open) => !open && setDeleteDialog({ ...deleteDialog, isOpen: false })}
       >
@@ -606,13 +602,13 @@ export function ListenerConfig({
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => setDeleteDialog({ isOpen: false, listenerIndex: -1 })}
             >
               Cancel
             </Button>
-            <Button 
+            <Button
               variant="destructive"
               onClick={() => handleDeleteListener(deleteDialog.listenerIndex)}
             >

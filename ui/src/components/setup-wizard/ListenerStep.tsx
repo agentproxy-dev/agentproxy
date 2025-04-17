@@ -66,7 +66,6 @@ export function ListenerStep({
       // Call the API to create/update the listener
       await createListener(serverAddress, serverPort, newListener);
 
-      console.log("Listener configuration updated:", newListener);
       // Call onNext to navigate to the next step
       onNext();
     } catch (err) {

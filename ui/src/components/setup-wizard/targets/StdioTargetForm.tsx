@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, forwardRef, useImperativeHandle } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -14,13 +14,10 @@ interface StdioTargetFormProps {
   hideSubmitButton?: boolean;
 }
 
-export function StdioTargetForm({
-  targetName,
-  onSubmit,
-  isLoading,
-  existingTarget,
-  hideSubmitButton = false,
-}: StdioTargetFormProps) {
+export const StdioTargetForm = forwardRef<
+  { submitForm: () => Promise<void> },
+  StdioTargetFormProps
+>(({ targetName, onSubmit, isLoading, existingTarget, hideSubmitButton = false }, ref) => {
   const [command, setCommand] = useState("npx");
   const [args, setArgs] = useState("");
   const [showStdioAdvancedSettings, setShowStdioAdvancedSettings] = useState(false);
@@ -69,6 +66,10 @@ export function StdioTargetForm({
       throw err;
     }
   };
+
+  useImperativeHandle(ref, () => ({
+    submitForm: handleSubmit,
+  }));
 
   return (
     <form
@@ -190,4 +191,6 @@ export function StdioTargetForm({
       )}
     </form>
   );
-}
+});
+
+StdioTargetForm.displayName = "StdioTargetForm";

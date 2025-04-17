@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use crate::proto::agentproxy::dev::a2a::target::Target as A2aTarget;
 use crate::proto::agentproxy::dev::listener::Listener;
@@ -25,9 +26,19 @@ impl App {
 	}
 	fn router(&self) -> Router {
 		let cors = CorsLayer::new()
-			.allow_origin("*".parse::<HeaderValue>().unwrap())
-			.allow_headers([HeaderName::from_static("content-type")])
-			.allow_methods([Method::GET, Method::POST, Method::DELETE]);
+			.allow_origin(["http://localhost:3000", "http://127.0.0.1:3000", "http://0.0.0.0:19000", "http://127.0.0.1:19000"].map(|origin| origin.parse::<HeaderValue>().unwrap()))
+			.allow_headers([
+				HeaderName::from_static("content-type"),
+				HeaderName::from_static("authorization"),
+				HeaderName::from_static("x-requested-with"),
+			])
+			.allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE, Method::OPTIONS])
+			.allow_credentials(true)
+			.expose_headers([
+				HeaderName::from_static("content-type"),
+				HeaderName::from_static("content-length"),
+			])
+			.max_age(Duration::from_secs(3600));
 
 		Router::new()
 			.route(

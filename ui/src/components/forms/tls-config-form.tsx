@@ -32,8 +32,8 @@ export function TLSConfigForm({ listener, onSave, onCancel }: TLSConfigFormProps
           key_pem: {
             file_path: config.keyFile,
           },
-        }
-      }
+        },
+      },
     };
 
     onSave(updatedListener);
@@ -49,9 +49,7 @@ export function TLSConfigForm({ listener, onSave, onCancel }: TLSConfigFormProps
           onChange={(e) => setConfig({ ...config, certFile: e.target.value })}
           placeholder="/path/to/cert.pem"
         />
-        <p className="text-xs text-muted-foreground">
-          Path to the TLS certificate file.
-        </p>
+        <p className="text-xs text-muted-foreground">Path to the TLS certificate file.</p>
       </div>
 
       <div className="space-y-2">
@@ -62,19 +60,15 @@ export function TLSConfigForm({ listener, onSave, onCancel }: TLSConfigFormProps
           onChange={(e) => setConfig({ ...config, keyFile: e.target.value })}
           placeholder="/path/to/key.pem"
         />
-        <p className="text-xs text-muted-foreground">
-          Path to the TLS private key file.
-        </p>
+        <p className="text-xs text-muted-foreground">Path to the TLS private key file.</p>
       </div>
 
       <div className="flex justify-end space-x-2 pt-4">
         <Button variant="outline" onClick={onCancel}>
           Cancel
         </Button>
-        <Button onClick={handleSave}>
-          Save Changes
-        </Button>
+        <Button onClick={handleSave}>Save Changes</Button>
       </div>
     </div>
   );
-} 
+}

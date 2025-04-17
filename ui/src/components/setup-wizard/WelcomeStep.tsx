@@ -41,7 +41,6 @@ export function WelcomeStep({ onNext, onSkip }: WelcomeStepProps) {
           <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
             <li>Listener settings for your proxy server</li>
             <li>Target servers that your proxy will forward requests to</li>
-            <li>Security policies to protect your infrastructure</li>
           </ul>
         </div>
       </CardContent>

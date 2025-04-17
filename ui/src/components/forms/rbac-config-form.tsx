@@ -5,7 +5,13 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Listener, Rule, ResourceType, Matcher } from "@/lib/types";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Trash2, Plus } from "lucide-react";
 
 interface RBACConfigFormProps {
@@ -16,7 +22,7 @@ interface RBACConfigFormProps {
 
 export function RBACConfigForm({ listener, onSave, onCancel }: RBACConfigFormProps) {
   const [rules, setRules] = useState<Rule[]>(
-    listener?.sse?.rbac?.[0]?.rules?.map(rule => ({
+    listener?.sse?.rbac?.[0]?.rules?.map((rule) => ({
       key: rule.key || "",
       value: rule.value || "",
       resource: {
@@ -47,11 +53,7 @@ export function RBACConfigForm({ listener, onSave, onCancel }: RBACConfigFormPro
   };
 
   const handleUpdateRule = (index: number, updates: Partial<Rule>) => {
-    setRules(
-      rules.map((rule, i) =>
-        i === index ? { ...rule, ...updates } : rule
-      )
-    );
+    setRules(rules.map((rule, i) => (i === index ? { ...rule, ...updates } : rule)));
   };
 
   const handleSave = () => {
@@ -96,9 +98,7 @@ export function RBACConfigForm({ listener, onSave, onCancel }: RBACConfigFormPro
               <Input
                 id={`rule-key-${index}`}
                 value={rule.key}
-                onChange={(e) =>
-                  handleUpdateRule(index, { key: e.target.value })
-                }
+                onChange={(e) => handleUpdateRule(index, { key: e.target.value })}
                 placeholder="e.g., role"
               />
             </div>
@@ -108,9 +108,7 @@ export function RBACConfigForm({ listener, onSave, onCancel }: RBACConfigFormPro
               <Input
                 id={`rule-value-${index}`}
                 value={rule.value}
-                onChange={(e) =>
-                  handleUpdateRule(index, { value: e.target.value })
-                }
+                onChange={(e) => handleUpdateRule(index, { value: e.target.value })}
                 placeholder="e.g., admin"
               />
             </div>
@@ -176,11 +174,7 @@ export function RBACConfigForm({ listener, onSave, onCancel }: RBACConfigFormPro
         ))}
       </div>
 
-      <Button
-        variant="outline"
-        className="w-full"
-        onClick={handleAddRule}
-      >
+      <Button variant="outline" className="w-full" onClick={handleAddRule}>
         <Plus className="h-4 w-4 mr-2" />
         Add Rule
       </Button>
@@ -189,10 +183,8 @@ export function RBACConfigForm({ listener, onSave, onCancel }: RBACConfigFormPro
         <Button variant="outline" onClick={onCancel}>
           Cancel
         </Button>
-        <Button onClick={handleSave}>
-          Save Changes
-        </Button>
+        <Button onClick={handleSave}>Save Changes</Button>
       </div>
     </div>
   );
-} 
+}
