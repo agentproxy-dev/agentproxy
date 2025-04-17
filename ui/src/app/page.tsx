@@ -21,14 +21,6 @@ export default function Home() {
     message: string;
   } | null>(null);
 
-  // Track if initial setup has been completed
-  const [initialSetupDone, setInitialSetupDone] = useState(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("initialSetupDone") === "true";
-    }
-    return false;
-  });
-
   // Update loading state based on connection status
   useEffect(() => {
     if (isConnected) {
@@ -39,35 +31,46 @@ export default function Home() {
   // Refresh listeners when the component mounts
   useEffect(() => {
     refreshListeners();
-  }, [refreshListeners]);
+  }, []);
 
-  // Effect to handle initial setup completion
+  // Effect to control wizard visibility based on listeners and setup status
   useEffect(() => {
-    if (listeners.length > 0 && !initialSetupDone) {
-      setInitialSetupDone(true);
-      localStorage.setItem("initialSetupDone", "true");
-    }
-  }, [listeners.length, initialSetupDone]);
-
-  // Effect to control wizard visibility
-  useEffect(() => {
-    // Only show wizard initially if there are no listeners
-    if (listeners.length === 0 && !wizardStarted) {
+    const setupCompleted = localStorage.getItem("agentproxy.setupCompleted");
+    
+    // If there are no listeners and setup is not completed or explicitly false
+    if (listeners.length === 0 && (setupCompleted === null || setupCompleted === "false")) {
       setShowWizard(true);
       setWizardStarted(true);
       setIsWizardVisible(true);
     }
-  }, [listeners, setIsWizardVisible, wizardStarted]);
+    // If there are listeners and setup status is not set
+    else if (listeners.length > 0 && setupCompleted === null) {
+      localStorage.setItem("agentproxy.setupCompleted", "true");
+      setShowWizard(false);
+      setWizardStarted(false);
+      setIsWizardVisible(false);
+    }
+    // If there are no listeners but setup is completed
+    else if (listeners.length === 0 && setupCompleted === "true") {
+      setShowWizard(false);
+      setWizardStarted(false);
+      setIsWizardVisible(false);
+    }
+    // Default case: hide wizard
+    else {
+      setShowWizard(false);
+      setWizardStarted(false);
+      setIsWizardVisible(false);
+    }
+  }, [listeners, setIsWizardVisible]);
 
-  // Reset initial setup when wizard is manually restarted
+  // Effect to handle manual wizard restart
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === "restartWizard" && e.newValue === "true") {
-        setInitialSetupDone(false);
+      if (e.key === "agentproxy.setupCompleted" && e.newValue === "false") {
         setShowWizard(true);
         setWizardStarted(true);
         setIsWizardVisible(true);
-        localStorage.removeItem("restartWizard");
       }
     };
 
@@ -80,19 +83,17 @@ export default function Home() {
   };
 
   const handleWizardComplete = () => {
+    localStorage.setItem("agentproxy.setupCompleted", "true");
     setShowWizard(false);
     setWizardStarted(false);
     setIsWizardVisible(false);
-    setInitialSetupDone(true);
-    localStorage.setItem("initialSetupDone", "true");
   };
 
   const handleWizardSkip = () => {
+    localStorage.setItem("agentproxy.setupCompleted", "true");
     setShowWizard(false);
     setWizardStarted(false);
     setIsWizardVisible(false);
-    setInitialSetupDone(true);
-    localStorage.setItem("initialSetupDone", "true");
   };
 
   const renderContent = () => {
