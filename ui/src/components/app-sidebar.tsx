@@ -190,7 +190,12 @@ export function AppSidebar({
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <ThemeToggle asChild />
+            <SidebarMenuButton
+              tooltip="Toggle Theme"
+              aria-label="Toggle Theme"
+            >
+              <ThemeToggle asChild />
+            </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
