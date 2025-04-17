@@ -172,7 +172,6 @@ async fn main() -> Result<()> {
 			let state = Arc::new(tokio::sync::RwLock::new(ProxyState::new(update_tx)));
 
 			let listener_manager = inbound::ListenerManager::new(
-				ct.child_token(),
 				state.clone(),
 				update_rx,
 				Arc::new(relay::metrics::Metrics::new(
@@ -245,7 +244,6 @@ async fn main() -> Result<()> {
 			let state = Arc::new(tokio::sync::RwLock::new(ProxyState::new(update_tx)));
 
 			let mut listener_manager = inbound::ListenerManager::new(
-				ct.child_token(),
 				state.clone(),
 				update_rx,
 				Arc::new(relay::metrics::Metrics::new(
