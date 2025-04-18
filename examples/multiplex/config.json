@@ -20,7 +20,7 @@
         }
       },
       {
-        "name": "everything_else",
+        "name": "everything-else",
         "stdio": {
           "cmd": "npx",
           "args": [

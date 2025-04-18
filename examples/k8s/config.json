@@ -11,7 +11,7 @@
   "targets": {
     "mcp": [
       {
-        "name": "everything_remote",
+        "name": "everything-remote",
         "sse": {
           "host": "everything",
           "port": 3000,
