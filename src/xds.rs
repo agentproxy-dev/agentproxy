@@ -455,18 +455,21 @@ impl ListenerStore {
 			.insert(listener_name.clone(), listener.clone());
 		let xds_listener = inbound::Listener::from_xds(listener).await?;
 		if self.by_name.iter().any(|(_, listener)| {
-			// If the listener is the same, we don't need to check the address
-			if listener.name == listener_name {
-				return false;
-			}
+			// Return true if the incoming listener binds to the same address as an existing listener.
+			// Unless the names are the same, in which case we return false, because we will update the existing listener.
 			match (&listener.spec, &xds_listener.spec) {
-				(inbound::ListenerType::Sse(l), inbound::ListenerType::Sse(r)) => l.addr == r.addr,
-				(inbound::ListenerType::A2a(l), inbound::ListenerType::A2a(r)) => l.addr == r.addr,
+				(inbound::ListenerType::Sse(l), inbound::ListenerType::Sse(r)) => {
+					l.addr == r.addr && listener.name != listener_name
+				},
+				(inbound::ListenerType::A2a(l), inbound::ListenerType::A2a(r)) => {
+					l.addr == r.addr && listener.name != listener_name
+				},
 				_ => false,
 			}
 		}) {
 			return Err(anyhow::anyhow!(
-				"listener already which binds to the same address"
+				"listener already exists which binds to the same address: {}",
+				listener_name
 			));
 		}
 		match self.by_name.insert(listener_name.clone(), xds_listener) {

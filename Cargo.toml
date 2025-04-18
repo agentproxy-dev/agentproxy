@@ -89,6 +89,8 @@ homedir = "0.3.4"
 
 include_dir = { version = "0.7.4", optional = true }
 tower-serve-static = { version = "0.1.1", optional = true }
+regex = "1.11.1"
+once_cell = "1.21.3"
 
 [build-dependencies]
 tonic-build = { version = "0.12", features = [

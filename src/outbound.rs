@@ -13,6 +13,16 @@ use std::collections::HashMap;
 pub mod backend;
 pub mod openapi;
 
+use {once_cell::sync::Lazy, regex::Regex};
+
+const VALID_NAME_REGEX: &str = r"^[a-zA-Z0-9-]+$";
+
+fn is_valid_name(name: &str) -> bool {
+	// We cannot support underscores in the name because they are used to separate the name from the listener name.
+	static RE: Lazy<Regex> = Lazy::new(|| Regex::new(VALID_NAME_REGEX).unwrap());
+	RE.is_match(name)
+}
+
 #[derive(Clone, Serialize, Debug)]
 pub struct Target<T> {
 	pub name: String,
@@ -29,6 +39,15 @@ impl TryFrom<McpXdsTarget> for Target<McpTargetSpec> {
 			Some(target) => target,
 			None => return Err(anyhow::anyhow!("target is None")),
 		};
+
+		if !is_valid_name(&value.name) {
+			return Err(anyhow::anyhow!(
+				"invalid name: {}, must match regex: {}",
+				value.name,
+				VALID_NAME_REGEX
+			));
+		}
+
 		Ok(Target {
 			name: value.name,
 			listeners: value.listeners,
@@ -76,6 +95,13 @@ impl TryFrom<XdsA2aTarget> for Target<A2aTargetSpec> {
 	type Error = anyhow::Error;
 
 	fn try_from(value: XdsA2aTarget) -> Result<Self, Self::Error> {
+		if !is_valid_name(&value.name) {
+			return Err(anyhow::anyhow!(
+				"invalid name: {}, must match regex: {}",
+				value.name,
+				VALID_NAME_REGEX
+			));
+		}
 		Ok(Target {
 			name: value.name,
 			listeners: value.listeners,
