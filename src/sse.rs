@@ -106,11 +106,11 @@ impl IntoResponse for AuthError {
 	fn into_response(self) -> Response {
 		let (status, error_message) = match self {
 			AuthError::NoAuthHeaderPresent(e) => (
-				StatusCode::BAD_REQUEST,
+				StatusCode::UNAUTHORIZED,
 				format!("No auth header present, error: {}", e),
 			),
 			AuthError::JwtError(e) => (
-				StatusCode::BAD_REQUEST,
+				StatusCode::UNAUTHORIZED,
 				match e {
 					authn::AuthError::InvalidToken(e) => format!("Invalid token, error: {}", e),
 				},
