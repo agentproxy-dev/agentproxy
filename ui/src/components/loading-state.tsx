@@ -8,7 +8,7 @@ export function LoadingState() {
     <div className="flex min-h-screen w-full items-center justify-center">
       <motion.div
         className="text-center"
-        initial={{ opacity: 0, y: -20 }}
+        initial={{ opacity: 1, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
       >

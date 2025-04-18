@@ -6,15 +6,18 @@ import { useLoading } from "@/lib/loading-context";
 import { useServer } from "@/lib/server-context";
 import { useWizard } from "@/lib/wizard-context";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Radio, Server, Shield, ArrowRight } from "lucide-react";
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import Link from "next/link";
+import { LoadingState } from "@/components/loading-state";
 
 export default function Home() {
   const { isLoading, setIsLoading } = useLoading();
   const { config, setConfig, isConnected, connectionError } = useServer();
-  const { 
+  const {
     showWizard,
     handleWizardComplete,
-    handleWizardSkip 
+    handleWizardSkip
   } = useWizard();
 
   const [configUpdateMessage] = useState<{
@@ -35,16 +38,8 @@ export default function Home() {
 
   const renderContent = () => {
     if (isLoading) {
-      return (
-        <div className="flex items-center justify-center h-full">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-            <p className="mt-2 text-sm text-muted-foreground">Loading...</p>
-          </div>
-        </div>
-      );
+      return <LoadingState />
     }
-
     if (showWizard) {
       return (
         <SetupWizard
@@ -72,28 +67,62 @@ export default function Home() {
     return (
       <div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="p-6 bg-card rounded-lg shadow-sm">
-            <h3 className="text-lg font-medium mb-2">Listener</h3>
-            <p className="text-muted-foreground">
-              {config.listeners.length > 0 && config.listeners[0].sse
-                ? `SSE on ${config.listeners[0].sse.address || config.listeners[0].sse.host || "0.0.0.0"}:${config.listeners[0].sse.port || "5555"}`
-                : "Not configured"}
-            </p>
-          </div>
-          <div className="p-6 bg-card rounded-lg shadow-sm">
-            <h3 className="text-lg font-medium mb-2">Target Servers</h3>
-            <p className="text-muted-foreground">
-              {config.targets.length} target
-              {config.targets.length !== 1 ? "s" : ""} configured
-            </p>
-          </div>
-          <div className="p-6 bg-card rounded-lg shadow-sm">
-            <h3 className="text-lg font-medium mb-2">Security Policies</h3>
-            <p className="text-muted-foreground">
-              {config.policies?.length} polic
-              {config.policies?.length !== 1 ? "ies" : "y"} configured
-            </p>
-          </div>
+          <Card className="@container/card">
+            <CardHeader>
+              <CardDescription className="flex items-center gap-2 text-xs uppercase tracking-wider font-medium text-muted-foreground/80">
+                <Radio className="h-4 w-4 text-blue-500" />
+                Listeners
+              </CardDescription>
+              <CardTitle className="text-3xl font-semibold mt-2">
+                {config.listeners.length}
+              </CardTitle>
+              <Link 
+                href="/listeners" 
+                className="mt-3 text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 w-fit"
+              >
+                View all listeners
+                <ArrowRight className="h-3 w-3" />
+              </Link>
+            </CardHeader>
+          </Card>
+
+          <Card className="@container/card">
+            <CardHeader>
+              <CardDescription className="flex items-center gap-2 text-xs uppercase tracking-wider font-medium text-muted-foreground/80">
+                <Server className="h-4 w-4 text-purple-500" />
+                Targets
+              </CardDescription>
+              <CardTitle className="text-3xl font-semibold mt-2">
+                {config.targets.length}
+              </CardTitle>
+              <Link 
+                href="/targets" 
+                className="mt-3 text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 w-fit"
+              >
+                View all targets
+                <ArrowRight className="h-3 w-3" />
+              </Link>
+            </CardHeader>
+          </Card>
+
+          <Card className="@container/card">
+            <CardHeader>
+              <CardDescription className="flex items-center gap-2 text-xs uppercase tracking-wider font-medium text-muted-foreground/80">
+                <Shield className="h-4 w-4 text-green-500" />
+                Security Policies
+              </CardDescription>
+              <CardTitle className="text-3xl font-semibold mt-2">
+                {config.policies?.length || 0}
+              </CardTitle>
+              <Link 
+                href="/policies" 
+                className="mt-3 text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 w-fit"
+              >
+                View all policies
+                <ArrowRight className="h-3 w-3" />
+              </Link>
+            </CardHeader>
+          </Card>
         </div>
       </div>
     );
