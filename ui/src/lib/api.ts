@@ -313,6 +313,9 @@ export async function addListener(listener: Listener): Promise<void> {
       body: JSON.stringify(listener),
     });
 
+    console.log("addListener listener", response);
+    console.log("addListener listener", listener);
+
     if (!response.ok) {
       throw new Error(`Failed to add listener: ${response.status} ${response.statusText}`);
     }

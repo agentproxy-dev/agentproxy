@@ -36,6 +36,7 @@ import { Listener } from "@/lib/types";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { toast } from "sonner";
 
 // Schema for tool invocation response
 const ToolResponseSchema = z.any();
@@ -53,12 +54,10 @@ export default function PlaygroundPage() {
   const [paramValues, setParamValues] = useState<Record<string, any>>({});
   const [response, setResponse] = useState<any>(null);
   const [client, setClient] = useState<Client<Request, any, Result> | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   const connect = async () => {
     try {
       setIsConnecting(true);
-      setError(null);
       const [_, port] = selectedEndpoint.split(":");
 
       const mcpClient = new Client(
@@ -102,7 +101,15 @@ export default function PlaygroundPage() {
       setTools(toolsResponse.tools);
     } catch (error) {
       console.error("Failed to connect:", error);
-      setError(error instanceof Error ? error.message : "Failed to connect to server");
+      if (error instanceof Error) {
+        if (error.message.includes("401")) {
+          toast.error("Unauthorized: Please check your bearer token");
+        } else {
+          toast.error(error.message);
+        }
+      } else {
+        toast.error("Failed to connect to server");
+      }
     } finally {
       setIsConnecting(false);
       setIsLoadingTools(false);
@@ -117,7 +124,6 @@ export default function PlaygroundPage() {
       setTools([]);
       setSelectedTool(null);
       setResponse(null);
-      setError(null);
     }
   };
 
@@ -152,7 +158,6 @@ export default function PlaygroundPage() {
     if (!client || !selectedTool) return;
 
     try {
-      setError(null);
       setIsToolRunning(true);
       const request: ClientRequest = {
         method: "tools/call",
@@ -166,7 +171,7 @@ export default function PlaygroundPage() {
       setResponse(result);
     } catch (error) {
       console.error("Failed to run tool:", error);
-      setError(error instanceof McpError ? error.message : "Failed to run tool");
+      toast.error(error instanceof McpError ? error.message : "Failed to run tool");
     } finally {
       setIsToolRunning(false);
     }
@@ -237,141 +242,146 @@ export default function PlaygroundPage() {
               )}
             </Button>
           </div>
-          {error && <div className="text-sm text-red-500">{error}</div>}
         </CardContent>
       </Card>
 
       {isConnected && (
         <>
-          <Card>
-            <CardHeader>
-              <CardTitle>Available Tools</CardTitle>
-              <CardDescription>Select a tool to use</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {isLoadingTools ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                  <span className="ml-3 text-muted-foreground">Loading tools...</span>
-                </div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Description</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {tools.map((tool) => (
-                      <TableRow
-                        key={tool.name}
-                        className="cursor-pointer hover:bg-muted/50"
-                        onClick={() => handleToolSelect(tool)}
-                      >
-                        <TableCell className="font-medium">{tool.name}</TableCell>
-                        <TableCell>{tool.description}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-
-          {selectedTool && (
-            <Card>
+          <div className="flex gap-4">
+            <Card className="flex-1">
               <CardHeader>
-                <CardTitle>{selectedTool.name}</CardTitle>
-                <CardDescription>{selectedTool.description}</CardDescription>
+                <CardTitle>Available Tools</CardTitle>
+                <CardDescription>Select a tool to use</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                {Object.entries(selectedTool.inputSchema.properties || {}).map(
-                  ([key, prop]: [string, any]) => (
-                    <div key={key} className="space-y-2">
-                      <Label htmlFor={key}>
-                        {key}
-                        {Array.isArray(selectedTool.inputSchema.required) &&
-                          selectedTool.inputSchema.required.includes(key) && (
-                            <span className="text-red-500 ml-1">*</span>
-                          )}
-                      </Label>
-                      {prop.type === "boolean" ? (
-                        <div className="flex items-center space-x-2">
-                          <Checkbox
+              <CardContent>
+                {isLoadingTools ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                    <span className="ml-3 text-muted-foreground">Loading tools...</span>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Description</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {tools.map((tool) => (
+                        <TableRow
+                          key={tool.name}
+                          className="cursor-pointer hover:bg-muted/50"
+                          onClick={() => handleToolSelect(tool)}
+                        >
+                          <TableCell className="font-medium">{tool.name}</TableCell>
+                          <TableCell>{tool.description}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+
+            {selectedTool ? (
+              <Card className="flex-1">
+                <CardHeader>
+                  <CardTitle>{selectedTool.name}</CardTitle>
+                  <CardDescription>{selectedTool.description}</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {Object.entries(selectedTool.inputSchema.properties || {}).map(
+                    ([key, prop]: [string, any]) => (
+                      <div key={key} className="space-y-2">
+                        <Label htmlFor={key}>
+                          {key}
+                          {Array.isArray(selectedTool.inputSchema.required) &&
+                            selectedTool.inputSchema.required.includes(key) && (
+                              <span className="text-red-500 ml-1">*</span>
+                            )}
+                        </Label>
+                        {prop.type === "boolean" ? (
+                          <div className="flex items-center space-x-2">
+                            <Checkbox
+                              id={key}
+                              checked={!!paramValues[key]}
+                              onCheckedChange={(checked) =>
+                                setParamValues({
+                                  ...paramValues,
+                                  [key]: checked,
+                                })
+                              }
+                            />
+                            <label htmlFor={key} className="text-sm text-muted-foreground">
+                              {prop.description || "Toggle this option"}
+                            </label>
+                          </div>
+                        ) : prop.type === "string" && prop.format === "textarea" ? (
+                          <Textarea
                             id={key}
-                            checked={!!paramValues[key]}
-                            onCheckedChange={(checked) =>
+                            placeholder={prop.description}
+                            value={paramValues[key] || ""}
+                            onChange={(e) =>
                               setParamValues({
                                 ...paramValues,
-                                [key]: checked,
+                                [key]: e.target.value,
                               })
                             }
                           />
-                          <label htmlFor={key} className="text-sm text-muted-foreground">
-                            {prop.description || "Toggle this option"}
-                          </label>
-                        </div>
-                      ) : prop.type === "string" && prop.format === "textarea" ? (
-                        <Textarea
-                          id={key}
-                          placeholder={prop.description}
-                          value={paramValues[key] || ""}
-                          onChange={(e) =>
-                            setParamValues({
-                              ...paramValues,
-                              [key]: e.target.value,
-                            })
-                          }
-                        />
-                      ) : prop.type === "number" || prop.type === "integer" ? (
-                        <Input
-                          type="number"
-                          id={key}
-                          placeholder={prop.description}
-                          value={paramValues[key] || ""}
-                          onChange={(e) =>
-                            setParamValues({
-                              ...paramValues,
-                              [key]: Number(e.target.value),
-                            })
-                          }
-                        />
-                      ) : (
-                        <Input
-                          id={key}
-                          placeholder={prop.description}
-                          value={paramValues[key] || ""}
-                          onChange={(e) =>
-                            setParamValues({
-                              ...paramValues,
-                              [key]: e.target.value,
-                            })
-                          }
-                        />
-                      )}
-                    </div>
-                  )
-                )}
-                <Button onClick={runTool} disabled={isToolRunning} className="w-full">
-                  {isToolRunning ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Running...
-                    </>
-                  ) : (
-                    <>
-                      <Send className="mr-2 h-4 w-4" />
-                      Run Tool
-                    </>
+                        ) : prop.type === "number" || prop.type === "integer" ? (
+                          <Input
+                            type="number"
+                            id={key}
+                            placeholder={prop.description}
+                            value={paramValues[key] || ""}
+                            onChange={(e) =>
+                              setParamValues({
+                                ...paramValues,
+                                [key]: Number(e.target.value),
+                              })
+                            }
+                          />
+                        ) : (
+                          <Input
+                            id={key}
+                            placeholder={prop.description}
+                            value={paramValues[key] || ""}
+                            onChange={(e) =>
+                              setParamValues({
+                                ...paramValues,
+                                [key]: e.target.value,
+                              })
+                            }
+                          />
+                        )}
+                      </div>
+                    )
                   )}
-                </Button>
-              </CardContent>
-            </Card>
-          )}
+                  <Button onClick={runTool} disabled={isToolRunning} className="w-full">
+                    {isToolRunning ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Running...
+                      </>
+                    ) : (
+                      <>
+                        <Send className="mr-2 h-4 w-4" />
+                        Run Tool
+                      </>
+                    )}
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="flex-1 flex items-center justify-center p-4 border rounded-lg text-muted-foreground bg-card">
+                Select one of the available tools
+              </div>
+            )}
+          </div>
 
           {response && (
-            <Card>
+            <Card className="mt-4">
               <CardHeader>
                 <CardTitle>Response</CardTitle>
               </CardHeader>

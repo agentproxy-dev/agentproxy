@@ -25,11 +25,11 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import TargetItem from "./target-item";
 import { MCPTargetForm } from "./setup-wizard/targets/MCPTargetForm";
 import { A2ATargetForm } from "./setup-wizard/targets/A2ATargetForm";
-import { toast } from "@/lib/toast";
 import { useServer } from "@/lib/server-context";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { ListenerSelect } from "./setup-wizard/targets/ListenerSelect";
+import { toast } from "sonner";
 
 interface TargetsConfigProps {
   config: Config;

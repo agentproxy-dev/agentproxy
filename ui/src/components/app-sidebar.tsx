@@ -29,6 +29,7 @@ import {
 import { Loader2, Home, Shield, Headphones, Server, Code, Settings } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
 import { useWizard } from "@/lib/wizard-context";
+import { toast } from "sonner";
 
 interface AppSidebarProps {
   targets: any[];
@@ -53,6 +54,7 @@ export function AppSidebar({ targets, listeners, setActiveView }: AppSidebarProp
       navigateTo("/");
     } catch (error) {
       console.error("Error restarting wizard:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to restart wizard");
     } finally {
       setShowRestartDialog(false);
     }

@@ -35,8 +35,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 interface ListenerConfigProps {
-  serverAddress?: string;
-  serverPort?: number;
   isAddingListener?: boolean;
   setIsAddingListener?: (isAdding: boolean) => void;
 }
@@ -65,8 +63,6 @@ interface ListenerWithTargets extends Listener {
 }
 
 export function ListenerConfig({
-  serverAddress,
-  serverPort,
   isAddingListener = false,
   setIsAddingListener = () => {},
 }: ListenerConfigProps) {
@@ -93,11 +89,6 @@ export function ListenerConfig({
   // Fetch listener configuration and target counts
   useEffect(() => {
     const fetchListenerConfig = async () => {
-      if (!serverAddress || !serverPort) {
-        setIsLoading(false);
-        return;
-      }
-
       setIsLoading(true);
       setError(null);
 
@@ -136,11 +127,9 @@ export function ListenerConfig({
     };
 
     fetchListenerConfig();
-  }, [serverAddress, serverPort]);
+  }, []);
 
   const handleAddListener = async () => {
-    if (!serverAddress || !serverPort) return;
-
     setIsLoading(true);
     setError(null);
 
@@ -180,13 +169,18 @@ export function ListenerConfig({
   };
 
   const handleUpdateListener = async (updatedListener: Listener) => {
-    if (!serverAddress || !serverPort) return;
-
     setIsLoading(true);
     setError(null);
 
+    // Make sure the updatedListener only includes the fields from the Listener type
+    const updatedListenerOnly = {
+      name: updatedListener.name,
+      sse: updatedListener.sse,
+      policies: updatedListener.policies,
+    };
+
     try {
-      await addListener(updatedListener);
+      await addListener(updatedListenerOnly);
 
       // Refresh the listeners list
       const updatedListeners = await fetchListeners();
@@ -210,8 +204,6 @@ export function ListenerConfig({
   };
 
   const handleDeleteListener = async (index: number) => {
-    if (!serverAddress || !serverPort) return;
-
     setIsLoading(true);
     setError(null);
 

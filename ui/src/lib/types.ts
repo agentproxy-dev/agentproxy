@@ -152,6 +152,7 @@ export interface Rule {
   value: string;
   resource: {
     type: ResourceType;
+    target: string;
     id: string;
   };
   matcher: Matcher;

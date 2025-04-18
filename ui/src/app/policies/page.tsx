@@ -149,42 +149,37 @@ export default function PoliciesPage() {
                     <CardDescription>View the rules for this policy</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="space-y-4">
-                      <div>
-                        <h3 className="text-sm font-medium mb-2">Rules</h3>
-                        <div className="space-y-2">
+                    <h3 className="text-lg font-medium mb-4">Rules</h3>
+                    {selectedPolicy.rules && selectedPolicy.rules.length > 0 ? (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Key</TableHead>
+                            <TableHead>Value</TableHead>
+                            <TableHead>Resource Type</TableHead>
+                            <TableHead>Resource ID</TableHead>
+                            <TableHead>Target</TableHead>
+                            <TableHead>Matcher</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
                           {selectedPolicy.rules.map((rule: Rule, index: number) => (
-                            <div key={index} className="border rounded-md p-3">
-                              <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                  <span className="text-sm font-medium">Key:</span>
-                                  <span className="ml-2">{rule.key}</span>
-                                </div>
-                                <div>
-                                  <span className="text-sm font-medium">Value:</span>
-                                  <span className="ml-2">{rule.value}</span>
-                                </div>
-                                <div>
-                                  <span className="text-sm font-medium">Resource Type:</span>
-                                  <span className="ml-2">{rule.resource.type}</span>
-                                </div>
-                                <div>
-                                  <span className="text-sm font-medium">Resource ID:</span>
-                                  <span className="ml-2">{rule.resource.id}</span>
-                                </div>
-                                <div>
-                                  <span className="text-sm font-medium">Matcher:</span>
-                                  <span className="ml-2">{rule.matcher}</span>
-                                </div>
-                              </div>
-                            </div>
+                            <TableRow key={index}>
+                              <TableCell>{rule.key}</TableCell>
+                              <TableCell>{rule.value}</TableCell>
+                              <TableCell>
+                                <Badge variant="outline">{rule.resource.type}</Badge>
+                              </TableCell>
+                              <TableCell>{rule.resource.id || "-"}</TableCell>
+                              <TableCell>{rule.resource.target || "-"}</TableCell>
+                              <TableCell>{rule.matcher || "EQUALS"}</TableCell>
+                            </TableRow>
                           ))}
-                        </div>
-                      </div>
-                      <div>
-                        <h3 className="text-sm font-medium mb-2">Applied to Listeners</h3>
-                      </div>
-                    </div>
+                        </TableBody>
+                      </Table>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">No rules defined for this policy.</p>
+                    )}
                   </CardContent>
                 </Card>
               )}

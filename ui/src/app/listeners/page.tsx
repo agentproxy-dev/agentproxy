@@ -11,10 +11,6 @@ export default function ListenersPage() {
   const { connectionError } = useServer();
   const [isAddingListener, setIsAddingListener] = useState(false);
 
-  // Default server address and port
-  const serverAddress = "localhost";
-  const serverPort = 19000;
-
   return (
     <div className="container mx-auto py-8 px-4">
       <div className="flex flex-row items-center justify-between mb-6">
@@ -37,8 +33,6 @@ export default function ListenersPage() {
         </Alert>
       ) : (
         <ListenerConfig
-          serverAddress={serverAddress}
-          serverPort={serverPort}
           isAddingListener={isAddingListener}
           setIsAddingListener={setIsAddingListener}
         />
