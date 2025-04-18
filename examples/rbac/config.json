@@ -2,6 +2,7 @@
   "type": "static",
   "listeners": [
     {
+      "name": "sse",
       "sse": {
         "address": "[::]",
         "port": 3000,
@@ -27,7 +28,8 @@
                 "value": "me",
                 "resource": {
                   "type": "TOOL",
-                  "id": "everything_echo"
+                  "target": "everything",
+                  "id": "echo"
                 },
                 "matcher": "EQUALS"
               }

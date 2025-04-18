@@ -532,12 +532,16 @@ impl ListenerManager {
 				update = self.update_rx.recv() => {
 					match update {
 						Some(xds::UpdateEvent::Insert(name)) => {
-							// Start the listener
-							match self.start_listener(name, ct.child_token()).await {
-								Ok(_) => {},
-								Err(e) => {
-									tracing::error!("Failed to start listener: {:?}", e);
-								},
+							if self.running.contains_key(&name) {
+								tracing::debug!("Received insert event for {}, but listener is already running.", name);
+							} else {
+								// Start the listener
+								match self.start_listener(name, ct.child_token()).await {
+									Ok(_) => {},
+									Err(e) => {
+										tracing::error!("Failed to start listener: {:?}", e);
+									},
+								}
 							}
 						}
 						Some(xds::UpdateEvent::Update(name)) => {

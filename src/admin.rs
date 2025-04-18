@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
-use crate::proto::agentproxy::dev::a2a::target::Target as A2aTarget;
 use crate::proto::agentproxy::dev::listener::Listener;
 use crate::proto::agentproxy::dev::mcp::target::Target as McpTarget;
 use crate::xds::XdsStore;
+use crate::{inbound, proto::agentproxy::dev::a2a::target::Target as A2aTarget};
 use axum::{
 	Json, Router,
 	extract::{Path, State},
@@ -285,12 +285,26 @@ async fn listener_targets_list_handler(
 		));
 	}
 	let listener = listener.unwrap();
-	let targets = state
-		.a2a_targets
-		.iter(&listener.name)
-		.map(|(_, target)| target.0.clone())
-		.collect::<Vec<_>>();
-	match serde_json::to_string(&targets) {
+	let marshalled = match listener.spec {
+		inbound::ListenerType::A2a(_) => {
+			let targets = state
+				.a2a_targets
+				.iter(&listener.name)
+				.map(|(_, target)| target.0.clone())
+				.collect::<Vec<_>>();
+			serde_json::to_string(&targets)
+		},
+		_ => {
+			let targets = state
+				.mcp_targets
+				.iter(&listener.name)
+				.map(|(_, target)| target.0.clone())
+				.collect::<Vec<_>>();
+			serde_json::to_string(&targets)
+		},
+	};
+
+	match marshalled {
 		Ok(json_targets) => Ok(json_targets),
 		Err(e) => {
 			error!("error serializing targets: {:?}", e);
