@@ -90,21 +90,24 @@ export function WizardProvider({ children }: { children: ReactNode }) {
   // Effect to check configuration on mount and when isConfigurationEmpty changes
   useEffect(() => {
     checkAndShowWizardIfNeeded();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isConfigurationEmpty]);
 
   return (
-    <WizardContext.Provider value={{ 
-      isWizardVisible, 
-      showWizard,
-      wizardStarted,
-      showSetupWizard,
-      hideSetupWizard,
-      handleWizardComplete,
-      handleWizardSkip,
-      checkAndShowWizardIfNeeded,
-      restartWizard,
-      isRestartingWizard
-    }}>
+    <WizardContext.Provider
+      value={{
+        isWizardVisible,
+        showWizard,
+        wizardStarted,
+        showSetupWizard,
+        hideSetupWizard,
+        handleWizardComplete,
+        handleWizardSkip,
+        checkAndShowWizardIfNeeded,
+        restartWizard,
+        isRestartingWizard,
+      }}
+    >
       {children}
     </WizardContext.Provider>
   );

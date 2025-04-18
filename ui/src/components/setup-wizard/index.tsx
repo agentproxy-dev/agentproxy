@@ -13,12 +13,7 @@ interface SetupWizardProps {
   onSkip: () => void;
 }
 
-export function SetupWizard({
-  config,
-  onConfigChange,
-  onComplete,
-  onSkip,
-}: SetupWizardProps) {
+export function SetupWizard({ config, onConfigChange, onComplete, onSkip }: SetupWizardProps) {
   const [step, setStep] = useState(1);
   const totalSteps = 3;
 
@@ -33,7 +28,6 @@ export function SetupWizard({
             onPrevious={() => setStep(1)}
             config={config}
             onConfigChange={onConfigChange}
-
           />
         );
       case 3:

@@ -1,5 +1,4 @@
-import { Target, Listener, Config, A2aTarget } from "./types";
-
+import { Target, Listener } from "./types";
 
 const API_URL = "http://localhost:19000";
 
@@ -8,7 +7,6 @@ const API_URL = "http://localhost:19000";
  */
 export async function updateTarget(target: Target): Promise<void> {
   try {
-
     // Check if it's an mcp or a2a target
     if (target.sse || target.stdio || target.openapi) {
       const response = await fetch(`${API_URL}/targets/mcp`, {
@@ -35,8 +33,6 @@ export async function updateTarget(target: Target): Promise<void> {
     } else {
       throw new Error("Invalid target type");
     }
-
-
   } catch (error) {
     console.error("Error updating target:", error);
     throw error;
@@ -282,9 +278,7 @@ export async function getListener(name: string): Promise<Listener> {
 /**
  * Creates or updates a listener on the proxy server
  */
-export async function createListener(
-  listener: Listener
-): Promise<void> {
+export async function createListener(listener: Listener): Promise<void> {
   try {
     const response = await fetch(`${API_URL}/listeners`, {
       method: "POST",
@@ -309,9 +303,7 @@ export async function createListener(
 /**
  * Creates a new listener on the MCP proxy server
  */
-export async function addListener(
-  listener: Listener
-): Promise<void> {
+export async function addListener(listener: Listener): Promise<void> {
   try {
     const response = await fetch(`${API_URL}/listeners`, {
       method: "POST",
@@ -333,9 +325,7 @@ export async function addListener(
 /**
  * Deletes a listener from the MCP proxy server
  */
-export async function deleteListener(
-  listener: Listener
-): Promise<void> {
+export async function deleteListener(listener: Listener): Promise<void> {
   try {
     // Extract the listener name or use a default if not available
     const listenerName = listener.name || "default";

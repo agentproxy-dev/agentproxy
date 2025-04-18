@@ -23,12 +23,7 @@ interface ListenerStepProps {
   onConfigChange: (config: Config) => void;
 }
 
-export function ListenerStep({
-  onNext,
-  onPrevious,
-  config,
-  onConfigChange,
-}: ListenerStepProps) {
+export function ListenerStep({ onNext, onPrevious, config, onConfigChange }: ListenerStepProps) {
   const [listenerAddress, setListenerAddress] = useState("0.0.0.0");
   const [listenerPort, setListenerPort] = useState("5555");
   const [isUpdatingListener, setIsUpdatingListener] = useState(false);

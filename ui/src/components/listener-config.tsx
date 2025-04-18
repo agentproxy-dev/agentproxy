@@ -290,7 +290,8 @@ export function ListenerConfig({
                   </TableCell>
                   <TableCell>
                     <Badge variant="outline">
-                      {listener.targetCount ?? 0} target{(listener.targetCount ?? 0) !== 1 ? 's' : ''}
+                      {listener.targetCount ?? 0} target
+                      {(listener.targetCount ?? 0) !== 1 ? "s" : ""}
                     </Badge>
                   </TableCell>
                   <TableCell>

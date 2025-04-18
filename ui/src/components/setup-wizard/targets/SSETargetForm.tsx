@@ -251,9 +251,9 @@ export const SSETargetForm = forwardRef<{ submitForm: () => Promise<void> }, SSE
         </Collapsible>
 
         {!hideSubmitButton && (
-          <Button 
-            type="submit" 
-            className="w-full" 
+          <Button
+            type="submit"
+            className="w-full"
             disabled={isLoading || !sseUrl || selectedListeners.length === 0}
           >
             {isLoading
@@ -261,8 +261,8 @@ export const SSETargetForm = forwardRef<{ submitForm: () => Promise<void> }, SSE
                 ? "Updating Target..."
                 : "Creating Target..."
               : existingTarget
-              ? "Update Target"
-              : "Create Target"}
+                ? "Update Target"
+                : "Create Target"}
           </Button>
         )}
       </form>

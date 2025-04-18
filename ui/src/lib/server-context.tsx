@@ -146,7 +146,6 @@ export function ServerProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-
 export function useServer() {
   const context = useContext(ServerContext);
   if (context === undefined) {

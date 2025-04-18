@@ -3,7 +3,13 @@ import { Listener } from "@/lib/types";
 import { Label } from "@/components/ui/label";
 import { fetchListeners } from "@/lib/api";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+} from "@/components/ui/command";
 import { Badge } from "@/components/ui/badge";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -95,7 +101,7 @@ export function ListenerSelect({ selectedListeners, onListenersChange }: Listene
                     if (allSelected) {
                       onListenersChange([]);
                     } else {
-                      onListenersChange(listeners.map(l => l.name));
+                      onListenersChange(listeners.map((l) => l.name));
                     }
                   }}
                 >
@@ -146,4 +152,4 @@ export function ListenerSelect({ selectedListeners, onListenersChange }: Listene
       </div>
     </div>
   );
-} 
+}

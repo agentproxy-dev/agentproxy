@@ -14,11 +14,7 @@ import { LoadingState } from "@/components/loading-state";
 export default function Home() {
   const { isLoading, setIsLoading } = useLoading();
   const { config, setConfig, isConnected, connectionError } = useServer();
-  const {
-    showWizard,
-    handleWizardComplete,
-    handleWizardSkip
-  } = useWizard();
+  const { showWizard, handleWizardComplete, handleWizardSkip } = useWizard();
 
   const [configUpdateMessage] = useState<{
     success: boolean;
@@ -38,7 +34,7 @@ export default function Home() {
 
   const renderContent = () => {
     if (isLoading) {
-      return <LoadingState />
+      return <LoadingState />;
     }
     if (showWizard) {
       return (
@@ -76,8 +72,8 @@ export default function Home() {
               <CardTitle className="text-3xl font-semibold mt-2">
                 {config.listeners.length}
               </CardTitle>
-              <Link 
-                href="/listeners" 
+              <Link
+                href="/listeners"
                 className="mt-3 text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 w-fit"
               >
                 View all listeners
@@ -92,11 +88,9 @@ export default function Home() {
                 <Server className="h-4 w-4 text-purple-500" />
                 Targets
               </CardDescription>
-              <CardTitle className="text-3xl font-semibold mt-2">
-                {config.targets.length}
-              </CardTitle>
-              <Link 
-                href="/targets" 
+              <CardTitle className="text-3xl font-semibold mt-2">{config.targets.length}</CardTitle>
+              <Link
+                href="/targets"
                 className="mt-3 text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 w-fit"
               >
                 View all targets
@@ -114,8 +108,8 @@ export default function Home() {
               <CardTitle className="text-3xl font-semibold mt-2">
                 {config.policies?.length || 0}
               </CardTitle>
-              <Link 
-                href="/policies" 
+              <Link
+                href="/policies"
                 className="mt-3 text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 w-fit"
               >
                 View all policies
@@ -150,7 +144,7 @@ export default function Home() {
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Overview</h1>
             <p className="text-muted-foreground mt-1">
-              Monitor your proxy server's configuration and status
+              Monitor your proxy server&apos;s configuration and status
             </p>
           </div>
         </div>

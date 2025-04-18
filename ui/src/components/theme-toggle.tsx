@@ -50,9 +50,9 @@ export function ThemeToggle({ asChild, className }: ThemeToggleProps) {
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          <Comp 
-            variant="ghost" 
-            onClick={toggleTheme} 
+          <Comp
+            variant="ghost"
+            onClick={toggleTheme}
             className={`${className} flex items-center justify-start w-full px-2`}
           >
             {content}

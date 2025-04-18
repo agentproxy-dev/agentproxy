@@ -29,12 +29,7 @@ interface TargetsStepProps {
   onConfigChange: (config: Config) => void;
 }
 
-export function TargetsStep({
-  onNext,
-  onPrevious,
-  config,
-  onConfigChange,
-}: TargetsStepProps) {
+export function TargetsStep({ onNext, onPrevious, config, onConfigChange }: TargetsStepProps) {
   const [targetCategory, setTargetCategory] = useState<"mcp" | "a2a">("mcp");
   const [targetName, setTargetName] = useState("");
   const [selectedListeners, setSelectedListeners] = useState<string[]>([]);

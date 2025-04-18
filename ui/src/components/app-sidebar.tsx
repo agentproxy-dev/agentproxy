@@ -18,7 +18,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { MCPLogo } from "@/components/mcp-logo";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { Target } from "@/lib/types";
 import {
   Dialog,
   DialogContent,
@@ -38,11 +37,7 @@ interface AppSidebarProps {
   setActiveView: (view: string) => void;
 }
 
-export function AppSidebar({
-  targets,
-  listeners,
-  setActiveView,
-}: AppSidebarProps) {
+export function AppSidebar({ targets, listeners, setActiveView }: AppSidebarProps) {
   const [showRestartDialog, setShowRestartDialog] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
@@ -158,10 +153,7 @@ export function AppSidebar({
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarMenuButton
-              tooltip="Toggle Theme"
-              aria-label="Toggle Theme"
-            >
+            <SidebarMenuButton tooltip="Toggle Theme" aria-label="Toggle Theme">
               <ThemeToggle asChild />
             </SidebarMenuButton>
           </SidebarMenuItem>
