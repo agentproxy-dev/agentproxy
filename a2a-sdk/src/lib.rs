@@ -424,21 +424,7 @@ impl From<&Self> for Part {
 		value.clone()
 	}
 }
-// impl From<TextPart> for Part {
-// 	fn from(value: TextPart) -> Self {
-// 		Self::TextPart(value)
-// 	}
-// }
-// impl From<FilePart> for Part {
-// 	fn from(value: FilePart) -> Self {
-// 		Self::FilePart(value)
-// 	}
-// }
-// impl From<DataPart> for Part {
-// 	fn from(value: DataPart) -> Self {
-// 		Self::DataPart(value)
-// 	}
-// }
+
 #[derive(serde::Deserialize, serde::Serialize, Clone, Debug)]
 pub struct PushNotificationConfig {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
