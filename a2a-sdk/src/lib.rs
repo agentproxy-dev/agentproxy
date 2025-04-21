@@ -7,6 +7,7 @@ mod jsonrpc;
 
 use crate::jsonrpc::*;
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
@@ -16,6 +17,7 @@ use std::fmt::Formatter;
 pub enum JsonRpcMessage {
 	Request(JsonRpcRequest<A2aRequest>),
 	Response(JsonRpcResponse<A2aResponse>),
+	Error(JsonRpcError),
 }
 
 impl JsonRpcMessage {
@@ -23,8 +25,34 @@ impl JsonRpcMessage {
 		match self {
 			JsonRpcMessage::Request(_) => None,
 			JsonRpcMessage::Response(resp) => Some(&resp.result),
+			JsonRpcMessage::Error(_) => None,
 		}
 	}
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct JsonRpcError {
+	pub jsonrpc: JsonRpcVersion2_0,
+	pub id: RequestId,
+	pub error: ErrorData,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub struct ErrorCode(pub i32);
+
+/// Error information for JSON-RPC error responses.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub struct ErrorData {
+	/// The error type that occurred.
+	pub code: ErrorCode,
+
+	/// A short description of the error. The message SHOULD be limited to a concise single sentence.
+	pub message: Cow<'static, str>,
+
+	/// Additional information about the error. The value of this member is defined by the
+	/// sender (e.g. detailed error information, nested errors etc.).
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub data: Option<serde_json::Value>,
 }
 
 // TODO: this is not complete, add the rest
@@ -496,7 +524,9 @@ pub struct Task {
 	#[serde(rename = "sessionId", default, skip_serializing_if = "Option::is_none")]
 	pub session_id: Option<String>,
 	pub status: TaskStatus,
+	pub history: Option<Vec<Message>>,
 }
+
 impl From<&Task> for Task {
 	fn from(value: &Task) -> Self {
 		value.clone()

@@ -44,6 +44,7 @@ pub enum Response {
 }
 
 impl Relay {
+	#[instrument(level = "debug", skip_all, fields(service_name))]
 	pub async fn fetch_agent_card(
 		&self,
 		host: String,
@@ -85,6 +86,8 @@ impl Relay {
 			.collect();
 		Ok(card)
 	}
+
+	#[instrument(level = "debug", skip_all, fields(service_name))]
 	pub async fn proxy_request(
 		self,
 		request: a2a_sdk::A2aRequest,
