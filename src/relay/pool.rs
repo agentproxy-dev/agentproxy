@@ -270,25 +270,61 @@ impl ClientHandler for PeerClientHandler {
 		})
 	}
 
-	async fn on_cancelled(&self, params: CancelledNotificationParam) -> () {
+	async fn on_cancelled(&self, params: CancelledNotificationParam) {
 		let _ = self.peer.notify_cancelled(params).await.inspect_err(|e| {
 			tracing::error!("Failed to notify cancelled: {}", e);
 		});
 	}
 
-	async fn on_progress(&self, params: ProgressNotificationParam) -> () {
+	async fn on_progress(&self, params: ProgressNotificationParam) {
 		let _ = self.peer.notify_progress(params).await.inspect_err(|e| {
 			tracing::error!("Failed to notify progress: {}", e);
 		});
 	}
 
-	async fn on_logging_message(&self, params: LoggingMessageNotificationParam) -> () {
+	async fn on_logging_message(&self, params: LoggingMessageNotificationParam) {
 		let _ = self
 			.peer
 			.notify_logging_message(params)
 			.await
 			.inspect_err(|e| {
 				tracing::error!("Failed to notify logging message: {}", e);
+			});
+	}
+
+	async fn on_prompt_list_changed(&self) {
+		let _ = self
+			.peer
+			.notify_prompt_list_changed()
+			.await
+			.inspect_err(|e| {
+				tracing::error!("Failed to notify prompt list changed: {}", e);
+			});
+	}
+
+	async fn on_resource_list_changed(&self) {
+		let _ = self
+			.peer
+			.notify_resource_list_changed()
+			.await
+			.inspect_err(|e| {
+				tracing::error!("Failed to notify resource list changed: {}", e);
+			});
+	}
+
+	async fn on_tool_list_changed(&self) {
+		let _ = self.peer.notify_tool_list_changed().await.inspect_err(|e| {
+			tracing::error!("Failed to notify tool list changed: {}", e);
+		});
+	}
+
+	async fn on_resource_updated(&self, params: ResourceUpdatedNotificationParam) {
+		let _ = self
+			.peer
+			.notify_resource_updated(params)
+			.await
+			.inspect_err(|e| {
+				tracing::error!("Failed to notify resource updated: {}", e);
 			});
 	}
 
