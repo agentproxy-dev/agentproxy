@@ -11,7 +11,7 @@ use sse_stream::{Error as SseError, Sse, SseStream};
 pub(crate) struct ConnectionPool {
 	listener_name: String,
 	state: Arc<tokio::sync::RwLock<XdsStore>>,
-	by_name: HashMap<String, Arc<upstream::UpstreamTarget>>,
+	by_name: HashMap<String, upstream::UpstreamTarget>,
 }
 
 impl ConnectionPool {
@@ -27,7 +27,7 @@ impl ConnectionPool {
 		&mut self,
 		rq_ctx: &RqCtx,
 		name: &str,
-	) -> anyhow::Result<Arc<upstream::UpstreamTarget>> {
+	) -> anyhow::Result<&upstream::UpstreamTarget> {
 		// Connect if it doesn't exist
 		if !self.by_name.contains_key(name) {
 			// Read target info and drop lock before calling connect
@@ -53,21 +53,21 @@ impl ConnectionPool {
 				));
 			}
 		}
-		let target = self.by_name.get(name).cloned();
+		let target = self.by_name.get(name);
 		Ok(target.ok_or(McpError::invalid_request(
 			format!("Service {} not found", name),
 			None,
 		))?)
 	}
 
-	pub(crate) async fn remove(&mut self, name: &str) -> Option<Arc<upstream::UpstreamTarget>> {
+	pub(crate) async fn remove(&mut self, name: &str) -> Option<upstream::UpstreamTarget> {
 		self.by_name.remove(name)
 	}
 
 	pub(crate) async fn list(
 		&mut self,
 		rq_ctx: &RqCtx,
-	) -> anyhow::Result<Vec<(String, Arc<upstream::UpstreamTarget>)>> {
+	) -> anyhow::Result<Vec<(String, &upstream::UpstreamTarget)>> {
 		// Iterate through all state targets, and get the connection from the pool
 		// If the connection is not in the pool, connect to it and add it to the pool
 		// 1. Get target configurations (name, Target, CancellationToken) from the state's TargetStore
@@ -108,7 +108,7 @@ impl ConnectionPool {
 		// 4. Collect all required connections from the pool
 		let results = targets_config
 			.into_iter()
-			.filter_map(|(name, _)| self.by_name.get(&name).map(|arc| (name, arc.clone())))
+			.filter_map(|(name, _)| self.by_name.get(&name).map(|target| (name, target)))
 			.collect();
 
 		Ok(results)
@@ -191,9 +191,7 @@ impl ConnectionPool {
 				})
 			},
 		};
-		self
-			.by_name
-			.insert(target.name.clone(), Arc::new(transport));
+		self.by_name.insert(target.name.clone(), transport);
 		Ok(())
 	}
 }
@@ -223,6 +221,7 @@ async fn tls_cfg(
 		},
 	}
 }
+
 async fn get_default_headers(
 	auth_config: &Option<backend::BackendAuthConfig>,
 	rq_ctx: &RqCtx,

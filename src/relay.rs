@@ -85,9 +85,7 @@ impl Relay {
 		tracing::info!("removing target: {}", name);
 		let mut pool = self.pool.write().await;
 		match pool.remove(name).await {
-			Some(target_arc) => {
-				// Try this a few times?
-				let target = Arc::into_inner(target_arc).unwrap();
+			Some(target) => {
 				match target {
 					upstream::UpstreamTarget::Mcp(m) => {
 						m.cancel().await?;
