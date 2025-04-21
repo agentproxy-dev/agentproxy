@@ -60,9 +60,12 @@ pub struct ErrorData {
 #[serde(untagged)]
 pub enum A2aRequest {
 	SendTaskRequest(SendTaskRequest),
-	SendSubscribeTaskRequest(SendSubscribeTaskRequest),
 	GetTaskRequest(GetTaskRequest),
 	CancelTaskRequest(CancelTaskRequest),
+	SendSubscribeTaskRequest(SendSubscribeTaskRequest),
+	TaskPushNotificationGetRequest(TaskPushNotificationGetRequest),
+	TaskPushNotificationSetRequest(TaskPushNotificationSetRequest),
+	TaskResubscribeRequest(TaskResubscribeRequest),
 }
 
 impl A2aRequest {
@@ -72,6 +75,9 @@ impl A2aRequest {
 			A2aRequest::SendSubscribeTaskRequest(i) => i.method.as_string(),
 			A2aRequest::GetTaskRequest(i) => i.method.as_string(),
 			A2aRequest::CancelTaskRequest(i) => i.method.as_string(),
+			A2aRequest::TaskPushNotificationGetRequest(i) => i.method.as_string(),
+			A2aRequest::TaskPushNotificationSetRequest(i) => i.method.as_string(),
+			A2aRequest::TaskResubscribeRequest(i) => i.method.as_string(),
 		}
 	}
 	pub fn id(&self) -> String {
@@ -80,6 +86,9 @@ impl A2aRequest {
 			A2aRequest::SendSubscribeTaskRequest(i) => i.params.id.clone(),
 			A2aRequest::GetTaskRequest(i) => i.params.id.clone(),
 			A2aRequest::CancelTaskRequest(i) => i.params.id.clone(),
+			A2aRequest::TaskPushNotificationGetRequest(i) => i.params.id.clone(),
+			A2aRequest::TaskPushNotificationSetRequest(i) => i.params.id.clone(),
+			A2aRequest::TaskResubscribeRequest(i) => i.params.id.clone(),
 		}
 	}
 	pub fn session_id(&self) -> Option<String> {
@@ -88,6 +97,9 @@ impl A2aRequest {
 			A2aRequest::SendSubscribeTaskRequest(i) => i.params.session_id.clone(),
 			A2aRequest::GetTaskRequest(_) => None,
 			A2aRequest::CancelTaskRequest(_) => None,
+			A2aRequest::TaskPushNotificationGetRequest(_) => None,
+			A2aRequest::TaskPushNotificationSetRequest(_) => None,
+			A2aRequest::TaskResubscribeRequest(_) => None,
 		}
 	}
 }
