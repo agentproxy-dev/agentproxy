@@ -93,7 +93,7 @@ impl Relay {
 						m.cancel().await?;
 					},
 					_ => {
-						todo!()
+						// Nothing to do here
 					},
 				}
 				Ok(())

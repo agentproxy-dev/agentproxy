@@ -62,6 +62,7 @@ pub enum A2aRequest {
 	SendTaskRequest(SendTaskRequest),
 	SendSubscribeTaskRequest(SendSubscribeTaskRequest),
 	GetTaskRequest(GetTaskRequest),
+	CancelTaskRequest(CancelTaskRequest),
 }
 
 impl A2aRequest {
@@ -70,6 +71,7 @@ impl A2aRequest {
 			A2aRequest::SendTaskRequest(i) => i.method.as_string(),
 			A2aRequest::SendSubscribeTaskRequest(i) => i.method.as_string(),
 			A2aRequest::GetTaskRequest(i) => i.method.as_string(),
+			A2aRequest::CancelTaskRequest(i) => i.method.as_string(),
 		}
 	}
 	pub fn id(&self) -> String {
@@ -77,6 +79,7 @@ impl A2aRequest {
 			A2aRequest::SendTaskRequest(i) => i.params.id.clone(),
 			A2aRequest::SendSubscribeTaskRequest(i) => i.params.id.clone(),
 			A2aRequest::GetTaskRequest(i) => i.params.id.clone(),
+			A2aRequest::CancelTaskRequest(i) => i.params.id.clone(),
 		}
 	}
 	pub fn session_id(&self) -> Option<String> {
@@ -84,6 +87,7 @@ impl A2aRequest {
 			A2aRequest::SendTaskRequest(i) => i.params.session_id.clone(),
 			A2aRequest::SendSubscribeTaskRequest(i) => i.params.session_id.clone(),
 			A2aRequest::GetTaskRequest(_) => None,
+			A2aRequest::CancelTaskRequest(_) => None,
 		}
 	}
 }
@@ -276,10 +280,6 @@ impl From<&AuthenticationInfo> for AuthenticationInfo {
 #[derive(serde::Deserialize, serde::Serialize, Clone, Debug)]
 pub struct DataPart {
 	pub data: ::serde_json::Map<String, ::serde_json::Value>,
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub metadata: Option<::serde_json::Map<String, ::serde_json::Value>>,
-	#[serde(rename = "type", default = "defaults::data_part_type")]
-	pub type_: String,
 }
 impl From<&DataPart> for DataPart {
 	fn from(value: &DataPart) -> Self {
@@ -305,19 +305,12 @@ impl From<&FileContent> for FileContent {
 #[derive(serde::Deserialize, serde::Serialize, Clone, Debug)]
 pub struct FilePart {
 	pub file: FileContent,
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub metadata: Option<::serde_json::Map<String, ::serde_json::Value>>,
-	#[serde(rename = "type", default = "defaults::file_part_type")]
-	pub type_: String,
 }
 impl From<&FilePart> for FilePart {
 	fn from(value: &FilePart) -> Self {
 		value.clone()
 	}
 }
-
-const_string!(GetTaskRequestMethod = "tasks/get");
-pub type GetTaskRequest = Request<GetTaskRequestMethod, TaskQueryParams>;
 
 #[derive(serde::Deserialize, serde::Serialize, Clone, Debug)]
 #[serde(untagged)]
@@ -397,10 +390,21 @@ impl From<&MethodNotFoundError> for MethodNotFoundError {
 	}
 }
 #[derive(serde::Deserialize, serde::Serialize, Clone, Debug)]
-#[serde(untagged)]
-pub enum Part {
+pub struct Part {
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub metadata: Option<::serde_json::Map<String, ::serde_json::Value>>,
+	#[serde(flatten)]
+	pub r#type: PartType,
+}
+
+#[derive(serde::Deserialize, serde::Serialize, Clone, Debug)]
+#[serde(tag = "type")]
+pub enum PartType {
+	#[serde(rename = "text")]
 	TextPart(TextPart),
+	#[serde(rename = "file")]
 	FilePart(FilePart),
+	#[serde(rename = "data")]
 	DataPart(DataPart),
 }
 impl From<&Self> for Part {
@@ -408,21 +412,21 @@ impl From<&Self> for Part {
 		value.clone()
 	}
 }
-impl From<TextPart> for Part {
-	fn from(value: TextPart) -> Self {
-		Self::TextPart(value)
-	}
-}
-impl From<FilePart> for Part {
-	fn from(value: FilePart) -> Self {
-		Self::FilePart(value)
-	}
-}
-impl From<DataPart> for Part {
-	fn from(value: DataPart) -> Self {
-		Self::DataPart(value)
-	}
-}
+// impl From<TextPart> for Part {
+// 	fn from(value: TextPart) -> Self {
+// 		Self::TextPart(value)
+// 	}
+// }
+// impl From<FilePart> for Part {
+// 	fn from(value: FilePart) -> Self {
+// 		Self::FilePart(value)
+// 	}
+// }
+// impl From<DataPart> for Part {
+// 	fn from(value: DataPart) -> Self {
+// 		Self::DataPart(value)
+// 	}
+// }
 #[derive(serde::Deserialize, serde::Serialize, Clone, Debug)]
 pub struct PushNotificationConfig {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
@@ -498,11 +502,28 @@ impl TryFrom<String> for Role {
 	}
 }
 
+const_string!(CancelTaskRequestMethod = "tasks/cancel");
+pub type CancelTaskRequest = Request<CancelTaskRequestMethod, TaskIdParams>;
+
+const_string!(GetTaskRequestMethod = "tasks/get");
+pub type GetTaskRequest = Request<GetTaskRequestMethod, TaskQueryParams>;
+
 const_string!(SendTaskRequestMethod = "tasks/send");
 pub type SendTaskRequest = Request<SendTaskRequestMethod, TaskSendParams>;
 
 const_string!(SendSubscribeTaskRequestMethod = "tasks/sendSubscribe");
 pub type SendSubscribeTaskRequest = Request<SendSubscribeTaskRequestMethod, TaskSendParams>;
+
+const_string!(TaskResubscribeRequestMethod = "tasks/resubscribe");
+pub type TaskResubscribeRequest = Request<TaskResubscribeRequestMethod, TaskQueryParams>;
+
+const_string!(TaskPushNotificationGetRequestMethod = "tasks/pushNotification/get");
+pub type TaskPushNotificationGetRequest =
+	Request<TaskPushNotificationGetRequestMethod, TaskIdParams>;
+
+const_string!(TaskPushNotificationSetRequestMethod = "tasks/pushNotification/set");
+pub type TaskPushNotificationSetRequest =
+	Request<TaskPushNotificationSetRequestMethod, TaskPushNotificationConfig>;
 
 #[derive(serde::Deserialize, serde::Serialize, Clone, Debug)]
 #[serde(untagged)]
@@ -727,11 +748,7 @@ pub struct TaskStatusUpdateEvent {
 
 #[derive(serde::Deserialize, serde::Serialize, Clone, Debug)]
 pub struct TextPart {
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub metadata: Option<::serde_json::Map<String, ::serde_json::Value>>,
 	pub text: String,
-	#[serde(rename = "type", default = "defaults::text_part_type")]
-	pub type_: String,
 }
 impl From<&TextPart> for TextPart {
 	fn from(value: &TextPart) -> Self {
@@ -755,15 +772,6 @@ pub mod defaults {
 	}
 	pub(super) fn agent_card_default_output_modes() -> Vec<String> {
 		vec!["text".to_string()]
-	}
-	pub(super) fn data_part_type() -> String {
-		"data".to_string()
-	}
-	pub(super) fn file_part_type() -> String {
-		"file".to_string()
-	}
-	pub(super) fn text_part_type() -> String {
-		"text".to_string()
 	}
 }
 
