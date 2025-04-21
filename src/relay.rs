@@ -140,7 +140,7 @@ impl ServerHandler for Relay {
 			.start_with_context(tracer, &rq_ctx.context);
 		let mut pool = self.pool.write().await;
 		let connections = pool
-			.list(rq_ctx)
+			.list(rq_ctx, &_context.peer)
 			.await
 			.map_err(|e| McpError::internal_error(format!("Failed to list connections: {}", e), None))?;
 		let all = connections.into_iter().map(|(_name, svc)| {
@@ -181,7 +181,7 @@ impl ServerHandler for Relay {
 			.start_with_context(tracer, &rq_ctx.context);
 		let mut pool = self.pool.write().await;
 		let connections = pool
-			.list(rq_ctx)
+			.list(rq_ctx, &_context.peer)
 			.await
 			.map_err(|e| McpError::internal_error(format!("Failed to list connections: {}", e), None))?;
 		let all = connections.into_iter().map(|(_name, svc)| {
@@ -227,7 +227,7 @@ impl ServerHandler for Relay {
 
 		let mut pool = self.pool.write().await;
 		let connections = pool
-			.list(rq_ctx)
+			.list(rq_ctx, &context.peer)
 			.await
 			.map_err(|e| McpError::internal_error(format!("Failed to list connections: {}", e), None))?;
 		let all = connections.into_iter().map(|(_name, svc)| {
@@ -277,12 +277,9 @@ impl ServerHandler for Relay {
 	async fn read_resource(
 		&self,
 		request: ReadResourceRequestParam,
-		_context: RequestContext<RoleServer>,
+		context: RequestContext<RoleServer>,
 	) -> std::result::Result<ReadResourceResult, McpError> {
-		let rq_ctx = _context
-			.extensions
-			.get::<RqCtx>()
-			.unwrap_or(&DEFAULT_RQ_CTX);
+		let rq_ctx = context.extensions.get::<RqCtx>().unwrap_or(&DEFAULT_RQ_CTX);
 		let tracer = trcng::get_tracer();
 		let _span = trcng::start_span("read_resource", &rq_ctx.identity)
 			.with_kind(SpanKind::Server)
@@ -303,7 +300,7 @@ impl ServerHandler for Relay {
 
 		let mut pool = self.pool.write().await;
 		let service_arc = pool
-			.get_or_create(rq_ctx, service_name)
+			.get_or_create(rq_ctx, &context.peer, service_name)
 			.await
 			.map_err(|_e| {
 				McpError::invalid_request(format!("Service {} not found", service_name), None)
@@ -336,12 +333,9 @@ impl ServerHandler for Relay {
 	async fn get_prompt(
 		&self,
 		request: GetPromptRequestParam,
-		_context: RequestContext<RoleServer>,
+		context: RequestContext<RoleServer>,
 	) -> std::result::Result<GetPromptResult, McpError> {
-		let rq_ctx = _context
-			.extensions
-			.get::<RqCtx>()
-			.unwrap_or(&DEFAULT_RQ_CTX);
+		let rq_ctx = context.extensions.get::<RqCtx>().unwrap_or(&DEFAULT_RQ_CTX);
 		let tracer = trcng::get_tracer();
 		let _span = trcng::start_span("get_prompt", &rq_ctx.identity)
 			.with_kind(SpanKind::Server)
@@ -362,7 +356,7 @@ impl ServerHandler for Relay {
 		}
 		let mut pool = self.pool.write().await;
 		let svc = pool
-			.get_or_create(rq_ctx, service_name)
+			.get_or_create(rq_ctx, &context.peer, service_name)
 			.await
 			.map_err(|_e| {
 				McpError::invalid_request(format!("Service {} not found", service_name), None)
@@ -399,7 +393,7 @@ impl ServerHandler for Relay {
 			.start_with_context(tracer, &rq_ctx.context);
 		let mut pool = self.pool.write().await;
 		let connections = pool
-			.list(rq_ctx)
+			.list(rq_ctx, &context.peer)
 			.await
 			.map_err(|e| McpError::internal_error(format!("Failed to list connections: {}", e), None))?;
 		let all = connections.into_iter().map(|(_name, svc_arc)| {
@@ -474,7 +468,7 @@ impl ServerHandler for Relay {
 		}
 		let mut pool = self.pool.write().await;
 		let svc = pool
-			.get_or_create(rq_ctx, service_name)
+			.get_or_create(rq_ctx, &context.peer, service_name)
 			.await
 			.map_err(|_e| {
 				McpError::invalid_request(format!("Service {} not found", service_name), None)

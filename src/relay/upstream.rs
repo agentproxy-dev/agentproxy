@@ -60,7 +60,7 @@ impl From<UpstreamError> for ErrorData {
 // UpstreamTarget defines a source for MCP information.
 #[derive(Debug)]
 pub(crate) enum UpstreamTarget {
-	Mcp(RunningService<RoleClient, ()>),
+	Mcp(RunningService<RoleClient, crate::relay::pool::PeerClientHandler>),
 	OpenAPI(openapi::Handler),
 }
 

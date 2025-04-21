@@ -4,8 +4,9 @@ use super::*;
 use futures::{FutureExt, StreamExt, future::BoxFuture, stream::BoxStream};
 use reqwest::{Client as HttpClient, IntoUrl, Url, header::ACCEPT};
 use rmcp::model::ClientJsonRpcMessage;
-use rmcp::service::serve_client_with_ct;
+use rmcp::service::{Peer, serve_client_with_ct};
 use rmcp::transport::sse::{SseClient, SseTransportError};
+use rmcp::{ClientHandler, ServiceError};
 use sse_stream::{Error as SseError, Sse, SseStream};
 
 pub(crate) struct ConnectionPool {
@@ -26,6 +27,7 @@ impl ConnectionPool {
 	pub(crate) async fn get_or_create(
 		&mut self,
 		rq_ctx: &RqCtx,
+		peer: &Peer<RoleServer>,
 		name: &str,
 	) -> anyhow::Result<&upstream::UpstreamTarget> {
 		// Connect if it doesn't exist
@@ -44,7 +46,7 @@ impl ConnectionPool {
 
 			if let Some((target, ct)) = target_info {
 				// Now self is not immutably borrowed by state lock
-				self.connect(rq_ctx, &ct, &target).await?;
+				self.connect(rq_ctx, &ct, &target, peer).await?;
 			} else {
 				// Handle target not found in state configuration
 				return Err(anyhow::anyhow!(
@@ -67,6 +69,7 @@ impl ConnectionPool {
 	pub(crate) async fn list(
 		&mut self,
 		rq_ctx: &RqCtx,
+		peer: &Peer<RoleServer>,
 	) -> anyhow::Result<Vec<(String, &upstream::UpstreamTarget)>> {
 		// Iterate through all state targets, and get the connection from the pool
 		// If the connection is not in the pool, connect to it and add it to the pool
@@ -98,10 +101,13 @@ impl ConnectionPool {
 		// 3. Connect the missing ones (self is borrowed mutably here)
 		for (name, target, ct) in connections_to_make {
 			tracing::debug!("Connecting missing target: {}", name);
-			self.connect(rq_ctx, &ct, &target).await.map_err(|e| {
-				tracing::error!("Failed to connect target {}: {}", name, e);
-				e // Propagate error
-			})?;
+			self
+				.connect(rq_ctx, &ct, &target, peer)
+				.await
+				.map_err(|e| {
+					tracing::error!("Failed to connect target {}: {}", name, e);
+					e // Propagate error
+				})?;
 		}
 		tracing::debug!("Finished connecting missing targets.");
 
@@ -126,6 +132,7 @@ impl ConnectionPool {
 		rq_ctx: &RqCtx,
 		ct: &tokio_util::sync::CancellationToken,
 		target: &outbound::Target<outbound::McpTargetSpec>,
+		peer: &Peer<RoleServer>,
 	) -> Result<(), anyhow::Error> {
 		// Already connected
 		if let Some(_transport) = self.by_name.get(&target.name) {
@@ -154,13 +161,26 @@ impl ConnectionPool {
 				let client = ReqwestSseClient::new_with_client(url.as_str(), client).await?;
 				let transport = SseTransport::start_with_client(client).await?;
 
-				upstream::UpstreamTarget::Mcp(serve_client_with_ct((), transport, ct.child_token()).await?)
+				upstream::UpstreamTarget::Mcp(
+					serve_client_with_ct(
+						PeerClientHandler {
+							peer: peer.clone(),
+							peer_client: None,
+						},
+						transport,
+						ct.child_token(),
+					)
+					.await?,
+				)
 			},
 			McpTargetSpec::Stdio { cmd, args, env: _ } => {
 				tracing::debug!("starting stdio transport for target: {}", target.name);
 				upstream::UpstreamTarget::Mcp(
 					serve_client_with_ct(
-						(),
+						PeerClientHandler {
+							peer: peer.clone(),
+							peer_client: None,
+						},
 						TokioChildProcess::new(Command::new(cmd).args(args))?,
 						ct.child_token(),
 					)
@@ -219,6 +239,65 @@ async fn tls_cfg(
 				.danger_accept_invalid_hostnames(tls.insecure_skip_verify);
 			Ok(("https".to_string(), builder))
 		},
+	}
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct PeerClientHandler {
+	peer: Peer<RoleServer>,
+	peer_client: Option<Peer<RoleClient>>,
+}
+
+impl ClientHandler for PeerClientHandler {
+	async fn create_message(
+		&self,
+		params: CreateMessageRequestParam,
+		_context: RequestContext<RoleClient>,
+	) -> Result<CreateMessageResult, McpError> {
+		self.peer.create_message(params).await.map_err(|e| match e {
+			ServiceError::McpError(e) => e,
+			_ => McpError::internal_error(e.to_string(), None),
+		})
+	}
+
+	async fn list_roots(
+		&self,
+		_context: RequestContext<RoleClient>,
+	) -> Result<ListRootsResult, McpError> {
+		self.peer.list_roots().await.map_err(|e| match e {
+			ServiceError::McpError(e) => e,
+			_ => McpError::internal_error(e.to_string(), None),
+		})
+	}
+
+	async fn on_cancelled(&self, params: CancelledNotificationParam) -> () {
+		let _ = self.peer.notify_cancelled(params).await.inspect_err(|e| {
+			tracing::error!("Failed to notify cancelled: {}", e);
+		});
+	}
+
+	async fn on_progress(&self, params: ProgressNotificationParam) -> () {
+		let _ = self.peer.notify_progress(params).await.inspect_err(|e| {
+			tracing::error!("Failed to notify progress: {}", e);
+		});
+	}
+
+	async fn on_logging_message(&self, params: LoggingMessageNotificationParam) -> () {
+		let _ = self
+			.peer
+			.notify_logging_message(params)
+			.await
+			.inspect_err(|e| {
+				tracing::error!("Failed to notify logging message: {}", e);
+			});
+	}
+
+	fn set_peer(&mut self, peer: Peer<RoleClient>) {
+		self.peer_client = Some(peer);
+	}
+
+	fn get_peer(&self) -> Option<Peer<RoleClient>> {
+		self.peer_client.clone()
 	}
 }
 

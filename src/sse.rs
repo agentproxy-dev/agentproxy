@@ -25,7 +25,7 @@ use axum_extra::{
 use futures::{SinkExt, StreamExt, stream::Stream};
 use rmcp::model::ClientJsonRpcMessage;
 use rmcp::model::GetExtensions;
-use rmcp::serve_server;
+use rmcp::service::serve_server_with_ct;
 use serde_json::json;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -217,7 +217,7 @@ async fn sse_handler(
 			);
 			let stream = ReceiverStream::new(from_client_rx);
 			let sink = PollSender::new(to_client_tx).sink_map_err(std::io::Error::other);
-			let result = serve_server(relay.clone(), (sink, stream))
+			let result = serve_server_with_ct(relay.clone(), (sink, stream), app.ct.child_token())
 				.await
 				.inspect_err(|e| {
 					tracing::error!("serving error: {:?}", e);
