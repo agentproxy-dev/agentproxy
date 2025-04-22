@@ -51,7 +51,7 @@ export const TargetsConfig = forwardRef<{ openAddTargetDialog: () => void }, Tar
     const { refreshTargets } = useServer();
     const [targetCategory, setTargetCategory] = useState<"mcp" | "a2a">("mcp");
     const [targetName, setTargetName] = useState("");
-    const [selectedListeners, setSelectedListeners] = useState<string[]>([]);
+    const [selectedListeners, setSelectedListeners] = useState<string[] | undefined>([]);
     const [targetNameError, setTargetNameError] = useState<string | null>(null);
     const [internalIsAddingTarget, setInternalIsAddingTarget] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -191,7 +191,7 @@ export const TargetsConfig = forwardRef<{ openAddTargetDialog: () => void }, Tar
 
     const openAddTargetDialog = () => {
       setTargetName("");
-      setSelectedListeners([]);
+      setSelectedListeners(undefined);
       setTargetNameError(null);
       setTargetCategory("mcp");
       setEditingTarget(undefined);
@@ -200,7 +200,7 @@ export const TargetsConfig = forwardRef<{ openAddTargetDialog: () => void }, Tar
 
     const openEditTargetDialog = (target: Target) => {
       setTargetName(target.name);
-      setSelectedListeners(target.listeners || []);
+      setSelectedListeners(target.listeners);
       if (target.a2a) {
         setTargetCategory("a2a");
       } else {

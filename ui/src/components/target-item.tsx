@@ -50,16 +50,20 @@ export default function TargetItem({ target, index, onDelete, isUpdating }: Targ
       </div>
       <div className="flex items-center gap-2">
         <div className="flex flex-wrap items-center gap-1">
-          {target.listeners && target.listeners.length > 0 ? (
+          {target.listeners === undefined ? (
+            <Badge variant="secondary" className="text-xs">
+              All listeners
+            </Badge>
+          ) : target.listeners.length === 0 ? (
+            <Badge variant="secondary" className="text-xs bg-muted">
+              No listeners
+            </Badge>
+          ) : (
             target.listeners.map((listener) => (
               <Badge key={listener} variant="secondary" className="text-xs">
                 {listener}
               </Badge>
             ))
-          ) : (
-            <Badge variant="secondary" className="text-xs bg-muted">
-              No listeners
-            </Badge>
           )}
         </div>
         <Button

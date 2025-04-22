@@ -47,19 +47,6 @@ export default function Home() {
       );
     }
 
-    if (!isConnected) {
-      return (
-        <div className="flex items-center justify-center h-full">
-          <div className="text-center">
-            <h2 className="text-lg font-medium">Welcome to MCP Proxy</h2>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Connecting to server at localhost:19000...
-            </p>
-          </div>
-        </div>
-      );
-    }
-
     return (
       <div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

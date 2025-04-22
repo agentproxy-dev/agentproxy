@@ -33,6 +33,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useServer } from "@/lib/server-context";
 
 interface ListenerConfigProps {
   isAddingListener?: boolean;
@@ -69,6 +70,7 @@ export function ListenerConfig({
   const [listeners, setListeners] = useState<ListenerWithTargets[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const { refreshListeners } = useServer();
   const [configDialog, setConfigDialog] = useState<ConfigDialogState>({
     type: null,
     isOpen: false,
@@ -145,11 +147,7 @@ export function ListenerConfig({
       await addListener(listenerToAdd);
 
       // Refresh the listeners list
-      const updatedListeners = await fetchListeners();
-      const listenersArray = Array.isArray(updatedListeners)
-        ? updatedListeners
-        : [updatedListeners];
-      setListeners(listenersArray);
+      await refreshListeners();
 
       // Reset the form
       setNewListener({
@@ -183,11 +181,7 @@ export function ListenerConfig({
       await addListener(updatedListenerOnly);
 
       // Refresh the listeners list
-      const updatedListeners = await fetchListeners();
-      const listenersArray = Array.isArray(updatedListeners)
-        ? updatedListeners
-        : [updatedListeners];
-      setListeners(listenersArray);
+      await refreshListeners();
 
       setConfigDialog({
         type: null,
@@ -221,11 +215,7 @@ export function ListenerConfig({
       await deleteListener(listenerWithName);
 
       // Refresh the listeners list
-      const updatedListeners = await fetchListeners();
-      const listenersArray = Array.isArray(updatedListeners)
-        ? updatedListeners
-        : [updatedListeners];
-      setListeners(listenersArray);
+      await refreshListeners();
 
       // Close the delete dialog
       setDeleteDialog({ isOpen: false, listenerIndex: -1 });

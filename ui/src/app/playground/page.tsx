@@ -259,6 +259,10 @@ export default function PlaygroundPage() {
                     <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                     <span className="ml-3 text-muted-foreground">Loading tools...</span>
                   </div>
+                ) : tools.length === 0 ? (
+                  <div className="flex items-center justify-center py-8">
+                    <span className="text-muted-foreground">No tools discovered.</span>
+                  </div>
                 ) : (
                   <Table>
                     <TableHeader>

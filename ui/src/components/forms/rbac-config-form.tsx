@@ -19,12 +19,8 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-} from "@/components/ui/command"
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover"
+} from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Trash2, Plus, ChevronsUpDown, Check } from "lucide-react";
 import { fetchMcpTargets, fetchA2aTargets } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -58,10 +54,7 @@ export function RBACConfigForm({ listener, onSave, onCancel }: RBACConfigFormPro
       setLoadingTargets(true);
       setFetchError(null);
       try {
-        const [mcpTargets, a2aTargets] = await Promise.all([
-          fetchMcpTargets(),
-          fetchA2aTargets(),
-        ]);
+        const [mcpTargets, a2aTargets] = await Promise.all([fetchMcpTargets(), fetchA2aTargets()]);
         const mcpNames = mcpTargets.map((t) => t.name).filter(Boolean);
         const a2aNames = a2aTargets.map((t) => t.name).filter(Boolean);
         const uniqueNames = Array.from(new Set([...mcpNames, ...a2aNames]));
@@ -81,7 +74,7 @@ export function RBACConfigForm({ listener, onSave, onCancel }: RBACConfigFormPro
   }, [rules.length]);
 
   const setPopoverOpen = (index: number, open: boolean) => {
-    setPopoverOpenStates(prev => prev.map((state, i) => i === index ? open : state));
+    setPopoverOpenStates((prev) => prev.map((state, i) => (i === index ? open : state)));
   };
 
   const handleAddRule = () => {
@@ -203,7 +196,10 @@ export function RBACConfigForm({ listener, onSave, onCancel }: RBACConfigFormPro
 
             <div className="space-y-1">
               <Label htmlFor={`resource-target-${index}`}>Resource Target</Label>
-              <Popover open={popoverOpenStates[index]} onOpenChange={(open) => setPopoverOpen(index, open)}>
+              <Popover
+                open={popoverOpenStates[index]}
+                onOpenChange={(open) => setPopoverOpen(index, open)}
+              >
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
@@ -212,42 +208,49 @@ export function RBACConfigForm({ listener, onSave, onCancel }: RBACConfigFormPro
                     className="w-full justify-between font-normal"
                     disabled={loadingTargets}
                   >
-                    {rule.resource.target || (loadingTargets ? "Loading..." : "Select or type target...")}
+                    {rule.resource.target ||
+                      (loadingTargets ? "Loading..." : "Select or type target...")}
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
                   <Command shouldFilter={false}>
-                    <CommandInput 
-                      placeholder="Search target or type name..." 
-                      value={rule.resource.target} 
+                    <CommandInput
+                      placeholder="Search target or type name..."
+                      value={rule.resource.target}
                       onValueChange={(search) => {
                         handleUpdateRule(index, { resource: { ...rule.resource, target: search } });
                       }}
                     />
                     <CommandList>
-                      <CommandEmpty>{loadingTargets ? "Loading..." : (fetchError || "No target found.")}</CommandEmpty>
+                      <CommandEmpty>
+                        {loadingTargets ? "Loading..." : fetchError || "No target found."}
+                      </CommandEmpty>
                       <CommandGroup heading="Suggestions">
                         {allTargetNames
-                           .filter(name => name.toLowerCase().includes(rule.resource.target?.toLowerCase() ?? ''))
-                           .map((name) => (
-                          <CommandItem
-                            key={name}
-                            value={name}
-                            onSelect={(currentValue) => {
-                              handleUpdateRule(index, { resource: { ...rule.resource, target: currentValue } });
-                              setPopoverOpen(index, false);
-                            }}
-                          >
-                            <Check
-                              className={cn(
-                                "mr-2 h-4 w-4",
-                                rule.resource.target === name ? "opacity-100" : "opacity-0"
-                              )}
-                            />
-                            {name}
-                          </CommandItem>
-                        ))}
+                          .filter((name) =>
+                            name.toLowerCase().includes(rule.resource.target?.toLowerCase() ?? "")
+                          )
+                          .map((name) => (
+                            <CommandItem
+                              key={name}
+                              value={name}
+                              onSelect={(currentValue) => {
+                                handleUpdateRule(index, {
+                                  resource: { ...rule.resource, target: currentValue },
+                                });
+                                setPopoverOpen(index, false);
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  rule.resource.target === name ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              {name}
+                            </CommandItem>
+                          ))}
                       </CommandGroup>
                     </CommandList>
                   </Command>

@@ -178,7 +178,9 @@ export default function PoliciesPage() {
                         </TableBody>
                       </Table>
                     ) : (
-                      <p className="text-sm text-muted-foreground">No rules defined for this policy.</p>
+                      <p className="text-sm text-muted-foreground">
+                        No rules defined for this policy.
+                      </p>
                     )}
                   </CardContent>
                 </Card>

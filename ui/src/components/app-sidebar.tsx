@@ -30,19 +30,19 @@ import { Loader2, Home, Shield, Headphones, Server, Code, Settings } from "lucid
 import { useRouter, usePathname } from "next/navigation";
 import { useWizard } from "@/lib/wizard-context";
 import { toast } from "sonner";
+import { useServer } from "@/lib/server-context";
 
 interface AppSidebarProps {
-  targets: any[];
-  listeners: any[];
   activeView: string;
   setActiveView: (view: string) => void;
 }
 
-export function AppSidebar({ targets, listeners, setActiveView }: AppSidebarProps) {
+export function AppSidebar({ setActiveView }: AppSidebarProps) {
   const [showRestartDialog, setShowRestartDialog] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
   const { restartWizard, isRestartingWizard } = useWizard();
+  const { listeners, targets } = useServer();
 
   const handleRestartWizard = () => {
     setShowRestartDialog(true);

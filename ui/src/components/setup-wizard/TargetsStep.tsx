@@ -185,7 +185,7 @@ export function TargetsStep({ onNext, onPrevious, config, onConfigChange }: Targ
                 <div className="space-y-2">
                   <ListenerSelect
                     selectedListeners={selectedListeners}
-                    onListenersChange={setSelectedListeners}
+                    onListenersChange={(listeners) => setSelectedListeners(listeners || [])}
                   />
                 </div>
 
