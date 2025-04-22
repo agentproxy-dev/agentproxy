@@ -23,7 +23,7 @@ export const metadata: Metadata = {
   title: "Agentproxy Dashboard",
   description: "Agentproxy Dashboard",
   icons: {
-    icon: "/favicon.svg",
+    icon: "/ui/favicon.svg",
   },
 };
 
