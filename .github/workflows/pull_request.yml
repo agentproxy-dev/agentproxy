@@ -40,7 +40,7 @@ jobs:
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
       with:
-        target: ${{ matrix.target }}
+        targets: ${{ matrix.target }}
 
     - name: Install Protoc
       uses: arduino/setup-protoc@v3
