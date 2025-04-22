@@ -173,6 +173,8 @@ jobs:
         node-version: 23
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
+      with:
+        target: ${{ matrix.target }}
     - name: Install Protoc
       uses: arduino/setup-protoc@v3
       with:
@@ -183,12 +185,11 @@ jobs:
         cd ui
         npm install
         npm run build
-    - name: Install musl-gcc
+    - name: Install musl-tools
       if: ${{ matrix.os == 'ubuntu-22.04-arm' || matrix.os == 'ubuntu-latest' }}
       run: |
         sudo apt-get update
-        sudo apt-get install -y musl-gcc
-        rustup target add ${{ matrix.target }}
+        sudo apt-get install -y musl-tools
     - name: Build
       run: make build
       env:
