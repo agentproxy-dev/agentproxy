@@ -188,6 +188,7 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y musl-gcc
+        rustup target add ${{ matrix.target }}
     - name: Build
       run: make build
       env:
