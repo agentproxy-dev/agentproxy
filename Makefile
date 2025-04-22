@@ -18,10 +18,11 @@ docker:
 docker-ext:
 	$(DOCKER_BUILDER) build $(DOCKER_BUILD_ARGS) -t $(IMAGE_FULL_NAME)-ext -f Dockerfile.ext .
 
+CARGO_BUILD_ARGS ?=
 # build
 .PHONY: build
 build:
-	cargo build --release --features ui
+	cargo build --release --features ui $(CARGO_BUILD_ARGS)
 
 # lint
 .PHONY: lint

@@ -14,7 +14,13 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, ubuntu-22.04-arm, macos-latest]
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+          - os: ubuntu-22.04-arm
+            target: aarch64-unknown-linux-musl
+          - os: macos-latest
+            target: aarch64-apple-darwin
 
     steps:
     - uses: actions/checkout@v4
@@ -43,8 +49,15 @@ jobs:
         cd ui
         npm install
         npm run build
+    - name: Install musl-gcc
+      if: ${{ matrix.os == 'ubuntu-22.04-arm' || matrix.os == 'ubuntu-latest' }}
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y musl-gcc
     - name: Build
       run: make build
+      env:
+        CARGO_BUILD_ARGS: "--target ${{ matrix.target }}"
   lint:
     runs-on: ubuntu-latest
 
