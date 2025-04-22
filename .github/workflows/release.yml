@@ -174,8 +174,7 @@ jobs:
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
       with:
-        targets: 
-        - "${{ matrix.target }}"
+        targets: ${{ matrix.target }}
     - name: Install Protoc
       uses: arduino/setup-protoc@v3
       with:
@@ -191,6 +190,7 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y musl-tools
+        rustup target add ${{ matrix.target }}
     - name: Build
       run: make build
       env:
