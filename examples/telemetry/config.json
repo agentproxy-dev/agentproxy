@@ -27,7 +27,8 @@
                 "value": "me",
                 "resource": {
                   "type": "TOOL",
-                  "id": "everything_echo"
+                  "target": "everything",
+                  "id": "echo"
                 },
                 "matcher": "EQUALS"
               }
