@@ -404,10 +404,12 @@ mod ui {
 		CorsLayer::new()
 			.allow_origin(
 				[
+					"http://0.0.0.0:3000",
 					"http://localhost:3000",
 					"http://127.0.0.1:3000",
 					"http://0.0.0.0:19000",
 					"http://127.0.0.1:19000",
+					"http://localhost:19000",
 				]
 				.map(|origin| origin.parse::<HeaderValue>().unwrap()),
 			)
