@@ -1,0 +1,567 @@
+openapi: 3.1.0
+info:
+  title: agentproxy API
+  version: 1.0.0
+  description: Admin API for managing agentproxy targets and listeners.
+  contact:
+    name: GitHub Repository
+    url: https://github.com/agentproxy-dev/agentproxy
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0
+
+servers:
+  - url: http://localhost:19000
+    description: Local development server.
+
+paths:
+  /targets/mcp:
+    get:
+      summary: List all MCP targets.
+      operationId: listMcpTargets
+      responses:
+        '200':
+          description: List of MCP targets.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/McpTarget'
+    post:
+      summary: Create or update an MCP target.
+      operationId: createMcpTarget
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/McpTarget'
+      responses:
+        '200':
+          description: Target created or updated successfully.
+        '400':
+          description: Invalid target configuration.
+        '500':
+          description: Internal server error.
+
+  /targets/mcp/{name}:
+    get:
+      summary: Get an MCP target by name.
+      operationId: getMcpTarget
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: MCP target details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/McpTarget'
+        '404':
+          description: Target not found.
+    delete:
+      summary: Delete an MCP target.
+      operationId: deleteMcpTarget
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Target deleted successfully.
+        '404':
+          description: Target not found.
+
+  /targets/a2a:
+    get:
+      summary: List all A2A targets.
+      operationId: listA2aTargets
+      responses:
+        '200':
+          description: List of A2A targets.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/A2aTarget'
+    post:
+      summary: Create or update an A2A target.
+      operationId: createA2aTarget
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/A2aTarget'
+      responses:
+        '200':
+          description: Target created or updated successfully.
+        '400':
+          description: Invalid target configuration.
+        '500':
+          description: Internal server error.
+
+  /targets/a2a/{name}:
+    get:
+      summary: Get an A2A target by name.
+      operationId: getA2aTarget
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A2A target details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/A2aTarget'
+        '404':
+          description: Target not found.
+    delete:
+      summary: Delete an A2A target.
+      operationId: deleteA2aTarget
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Target deleted successfully.
+        '404':
+          description: Target not found.
+
+  /listeners:
+    get:
+      summary: List all listeners.
+      operationId: listListeners
+      responses:
+        '200':
+          description: List of listeners.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Listener'
+    post:
+      summary: Create or update a listener.
+      operationId: createListener
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Listener'
+      responses:
+        '200':
+          description: Listener created or updated successfully.
+        '400':
+          description: Invalid listener configuration.
+        '500':
+          description: Internal server error.
+
+  /listeners/{name}:
+    get:
+      summary: Get a listener by name.
+      operationId: getListener
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Listener details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Listener'
+        '404':
+          description: Listener not found.
+    delete:
+      summary: Delete a listener.
+      operationId: deleteListener
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Listener deleted successfully.
+        '404':
+          description: Listener not found.
+
+  /listeners/{name}/targets:
+    get:
+      summary: List all targets for a listener.
+      description: Currently only returns A2A targets. MCP targets are not included in the response.
+      operationId: listListenerTargets
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of A2A targets for the listener.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/A2aTarget'
+
+components:
+  schemas:
+    McpTarget:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          description: The name of the target.
+        listeners:
+          type: array
+          items:
+            type: string
+          description: The listeners which are allowed to connect to the target.
+        sse:
+          $ref: '#/components/schemas/SseTarget'
+          description: SSE target configuration.
+        openapi:
+          $ref: '#/components/schemas/OpenApiTarget'
+          description: OpenAPI target configuration.
+        stdio:
+          $ref: '#/components/schemas/StdioTarget'
+          description: Stdio target configuration.
+
+    A2aTarget:
+      type: object
+      required:
+        - name
+        - host
+        - port
+        - path
+      properties:
+        name:
+          type: string
+          description: The name of the target.
+        listeners:
+          type: array
+          items:
+            type: string
+          description: The listeners which are allowed to connect to the target.
+        host:
+          type: string
+          description: The host of the target.
+        port:
+          type: integer
+          format: uint32
+          description: The port of the target.
+        path:
+          type: string
+          description: The path of the target.
+        headers:
+          type: array
+          items:
+            $ref: '#/components/schemas/Header'
+          description: The headers of the target.
+        auth:
+          $ref: '#/components/schemas/BackendAuth'
+          description: The authentication configuration.
+        tls:
+          $ref: '#/components/schemas/BackendTls'
+          description: The TLS configuration.
+
+    Listener:
+      type: object
+      required:
+        - name
+        - protocol
+      properties:
+        name:
+          type: string
+          description: The name of the listener.
+        protocol:
+          type: string
+          enum: [MCP, A2A]
+          description: The protocol of the listener.
+        sse:
+          $ref: '#/components/schemas/SseListener'
+          description: SSE listener configuration.
+        stdio:
+          $ref: '#/components/schemas/StdioListener'
+        listener:
+          oneOf:
+            - $ref: '#/components/schemas/SseListener'
+            - $ref: '#/components/schemas/StdioListener'
+
+    SseTarget:
+      type: object
+      required:
+        - host
+        - port
+        - path
+      properties:
+        host:
+          type: string
+          description: The host of the target.
+        port:
+          type: integer
+          format: uint32
+          description: The port of the target.
+        path:
+          type: string
+          description: The path of the target.
+        headers:
+          type: array
+          items:
+            $ref: '#/components/schemas/Header'
+          description: The headers of the target.
+        auth:
+          $ref: '#/components/schemas/BackendAuth'
+          description: The authentication configuration.
+        tls:
+          $ref: '#/components/schemas/BackendTls'
+          description: The TLS configuration.
+
+    OpenApiTarget:
+      type: object
+      required:
+        - host
+        - port
+        - schema
+      properties:
+        host:
+          type: string
+          description: The host of the target.
+        port:
+          type: integer
+          format: uint32
+          description: The port of the target.
+        schema:
+          $ref: '#/components/schemas/LocalDataSource'
+          description: The schema of the target.
+        auth:
+          $ref: '#/components/schemas/BackendAuth'
+          description: The authentication configuration.
+        tls:
+          $ref: '#/components/schemas/BackendTls'
+          description: The TLS configuration.
+        headers:
+          type: array
+          items:
+            $ref: '#/components/schemas/Header'
+          description: The headers of the target.
+
+    StdioTarget:
+      type: object
+      required:
+        - cmd
+      properties:
+        cmd:
+          type: string
+          description: The command of the target.
+        args:
+          type: array
+          items:
+            type: string
+          description: The arguments of the target.
+        env:
+          type: object
+          additionalProperties:
+            type: string
+          description: The environment variables of the target.
+
+    SseListener:
+      type: object
+      required:
+        - address
+        - port
+      properties:
+        address:
+          type: string
+          description: The address of the listener.
+        port:
+          type: integer
+          format: uint32
+          description: The port of the listener.
+        tls:
+          $ref: '#/components/schemas/TlsConfig'
+          description: The TLS configuration.
+        authn:
+          $ref: '#/components/schemas/Authn'
+          description: The authentication configuration.
+        rbac:
+          type: array
+          items:
+            $ref: '#/components/schemas/RuleSet'
+          description: The RBAC rules.
+
+    StdioListener:
+      type: object
+      description: Empty configuration for stdio listener.
+
+    Header:
+      type: object
+      required:
+        - key
+        - string_value
+      properties:
+        key:
+          type: string
+          description: The key of the header.
+        string_value:
+          type: string
+          description: The string value of the header.
+        env_value:
+          type: string
+          description: The environment variable name to use for the header value.
+        envValue:
+          type: string
+          description: Alternative name for env_value.
+
+    BackendAuth:
+      type: object
+      properties:
+        basic:
+          type: object
+          required:
+            - username
+            - password
+          properties:
+            username:
+              type: string
+              description: The username for basic authentication.
+            password:
+              type: string
+              description: The password for basic authentication.
+        bearer:
+          type: object
+          required:
+            - token
+          properties:
+            token:
+              type: string
+              description: The bearer token.
+
+    BackendTls:
+      type: object
+      properties:
+        ca_cert:
+          $ref: '#/components/schemas/LocalDataSource'
+          description: The CA certificate.
+        client_cert:
+          $ref: '#/components/schemas/LocalDataSource'
+          description: The client certificate.
+        client_key:
+          $ref: '#/components/schemas/LocalDataSource'
+          description: The client key.
+        skip_verify:
+          type: boolean
+          description: Whether to skip TLS verification.
+
+    LocalDataSource:
+      type: object
+      required:
+        - data
+      properties:
+        data:
+          type: string
+          description: The data content.
+        format:
+          type: string
+          enum: [json, yaml]
+          description: The format of the data.
+
+    TlsConfig:
+      type: object
+      required:
+        - key_pem
+        - cert_pem
+      properties:
+        key_pem:
+          $ref: '#/components/schemas/LocalDataSource'
+          description: The private key in PEM format.
+        cert_pem:
+          $ref: '#/components/schemas/LocalDataSource'
+          description: The certificate in PEM format.
+
+    Authn:
+      type: object
+      properties:
+        jwt:
+          $ref: '#/components/schemas/JwtConfig'
+          description: JWT authentication configuration.
+
+    JwtConfig:
+      type: object
+      properties:
+        issuer:
+          type: array
+          items:
+            type: string
+          description: The JWT issuer.
+        audience:
+          type: array
+          items:
+            type: string
+          description: The JWT audience.
+        jwks:
+          oneOf:
+            - $ref: '#/components/schemas/LocalDataSource'
+            - $ref: '#/components/schemas/RemoteDataSource'
+
+    RemoteDataSource:
+      type: object
+      required:
+        - url
+      properties:
+        url:
+          type: string
+          description: The URL to fetch the data from.
+        format:
+          type: string
+          enum: [json, yaml]
+          description: The format of the data.
+
+    RuleSet:
+      type: object
+      properties:
+        name:
+          type: string
+          description: The name of the rule set.
+        rules:
+          type: array
+          items:
+            $ref: '#/components/schemas/Rule'
+          description: The rules in the set.
+
+    Rule:
+      type: object
+      properties:
+        principal:
+          type: string
+          description: The principal to match.
+        action:
+          type: string
+          enum: [allow, deny]
+          description: The action to take.
