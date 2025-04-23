@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { MCPLogo } from "@/components/mcp-logo";
+import { AgentgatewayLogo } from "@/components/agentgateway-logo";
 import { ArrowLeft, ArrowRight, Globe, Server, Terminal, Trash2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -167,7 +167,7 @@ export function TargetsStep({ onNext, onPrevious, config, onConfigChange }: Targ
     <Card className="w-full max-w-2xl">
       <CardHeader>
         <div className="flex justify-center mb-6">
-          <MCPLogo className="h-12" />
+          <AgentgatewayLogo className="h-12" />
         </div>
         <CardTitle className="text-center">Configure Targets</CardTitle>
         <CardDescription className="text-center">

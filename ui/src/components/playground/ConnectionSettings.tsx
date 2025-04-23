@@ -126,7 +126,7 @@ export function ConnectionSettings({
             />
           </div>
 
-          <div className="flex flex-col justify-end h-full mt-[26px]">
+          <div className="flex flex-col justify-end h-full mt-[22px]">
             <Button
               onClick={isConnected ? onDisconnect : onConnect}
               disabled={

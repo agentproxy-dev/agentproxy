@@ -6,7 +6,7 @@
       "protocol": "MCP",
       "sse": {
         "address": "[::]",
-        "port": 3000
+        "port": 5555
       }
     }
   ],

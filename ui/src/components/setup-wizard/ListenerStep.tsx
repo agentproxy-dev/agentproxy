@@ -8,7 +8,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { MCPLogo } from "@/components/mcp-logo";
+import { AgentgatewayLogo } from "@/components/agentgateway-logo";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -69,7 +69,7 @@ export function ListenerStep({ onNext, onPrevious, config, onConfigChange }: Lis
     <Card className="w-full max-w-2xl">
       <CardHeader>
         <div className="flex justify-center mb-6">
-          <MCPLogo className="h-12" />
+          <AgentgatewayLogo className="h-12" />
         </div>
         <CardTitle className="text-center">Configure Listener</CardTitle>
         <CardDescription className="text-center">

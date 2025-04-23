@@ -1,6 +1,6 @@
 "use client";
 
-import { MCPLogo } from "@/components/mcp-logo";
+import { AgentgatewayLogo } from "@/components/agentgateway-logo";
 import { motion } from "framer-motion";
 
 export function LoadingState() {
@@ -12,7 +12,7 @@ export function LoadingState() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
       >
-        <MCPLogo className="h-16 w-auto mx-auto mb-4" />
+        <AgentgatewayLogo className="h-16 w-auto mx-auto mb-4" />
         <p className="text-muted-foreground">Loading...</p>
       </motion.div>
     </div>

@@ -20,8 +20,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Agentproxy Dashboard",
-  description: "Agentproxy Dashboard",
+  title: "Agentgateway Dashboard",
+  description: "Agentgateway Dashboard",
   icons: {
     icon: "/ui/favicon.svg",
   },

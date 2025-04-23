@@ -7,7 +7,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { MCPLogo } from "@/components/mcp-logo";
+import { AgentgatewayLogo } from "@/components/agentgateway-logo";
 import { ArrowRight } from "lucide-react";
 
 interface WelcomeStepProps {
@@ -20,18 +20,18 @@ export function WelcomeStep({ onNext, onSkip }: WelcomeStepProps) {
     <Card className="w-full max-w-2xl">
       <CardHeader>
         <div className="flex justify-center mb-6">
-          <MCPLogo className="h-12" />
+          <AgentgatewayLogo className="h-12" />
         </div>
-        <CardTitle className="text-center">Welcome to agentproxy</CardTitle>
+        <CardTitle className="text-center">Welcome to agentgateway</CardTitle>
         <CardDescription className="text-center">
           Let&apos;s get your proxy server up and running in just a few steps
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-2">
-          <h3 className="font-medium">What is agentproxy?</h3>
+          <h3 className="font-medium">What is Agentgateway?</h3>
           <p className="text-sm text-muted-foreground">
-            Agentproxy is a powerful tool that helps you manage and secure your server connections.
+            Agentgateway is a powerful tool that helps you manage and secure your server connections.
             It allows you to configure listeners, set up target servers, and implement security
             policies.
           </p>

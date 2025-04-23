@@ -16,7 +16,7 @@ import {
   SidebarSeparator,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
-import { MCPLogo } from "@/components/mcp-logo";
+import { AgentgatewayLogo } from "@/components/agentgateway-logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 import {
   Dialog,
@@ -69,7 +69,8 @@ export function AppSidebar({ setActiveView }: AppSidebarProps) {
     <Sidebar>
       <SidebarHeader className="border-b">
         <div className="p-2 flex items-center justify-center mb-2">
-          <MCPLogo className="h-10 w-auto" />
+          <AgentgatewayLogo className="h-10 w-auto" />
+          <span className="text-2xl ml-2 font-bold">agentgateway</span>
         </div>
       </SidebarHeader>
 

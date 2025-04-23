@@ -1,4 +1,4 @@
-import { Target, Listener } from "./types";
+import { Target, Listener, ListenerProtocol } from "./types";
 
 const API_URL = "http://localhost:19000";
 
@@ -258,6 +258,11 @@ export async function fetchListenerTargets(listenerName: string): Promise<any[]>
   try {
     const response = await fetch(`${API_URL}/listeners/${listenerName}/targets`, {});
 
+    // Check if it's 404 and return an empty array
+    if (response.status === 404) {
+      return [];
+    }
+
     if (!response.ok) {
       throw new Error(
         `Failed to fetch listener targets: ${response.status} ${response.statusText}`
@@ -317,12 +322,22 @@ export async function createListener(listener: Listener): Promise<void> {
  */
 export async function addListener(listener: Listener): Promise<void> {
   try {
+    let payload: any = listener;
+
+    // If the protocol is mcp, remove the protocol from the payload
+    if (listener.protocol === ListenerProtocol.MCP) {
+      const { protocol, ...rest } = listener;
+      payload = rest;
+    } else if (listener.protocol === ListenerProtocol.A2A) {
+      payload = { ...listener, protocol: "a2a" };
+    }
+
     const response = await fetch(`${API_URL}/listeners`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(listener),
+      body: JSON.stringify(payload),
     });
 
     if (!response.ok) {
