@@ -1,8 +1,8 @@
 ## OpenAPI Example
 
-This example shows how to use the agentproxy to proxy a OpenAPI as a MCP service.
+This example shows how to use the agentgateway to proxy a OpenAPI as a MCP service.
 
-OpenAPI is the current backbone of the internet, and it's a great way to describe your API. However, it's not geared towards agentic use-cases. Using agentproxy, you can seamlessly integrate OpenAPI APIs into your agentic workflows in a secure and scalable way.
+OpenAPI is the current backbone of the internet, and it's a great way to describe your API. However, it's not geared towards agentic use-cases. Using agentgateway, you can seamlessly integrate OpenAPI APIs into your agentic workflows in a secure and scalable way.
 
 This example will show you how to proxy the [Swagger Petstore](https://petstore3.swagger.io) as the example MCP service.
 

@@ -1,9 +1,9 @@
 ARG VERSION="latest"
-FROM ghcr.io/agentgateway/agentproxy:${VERSION} as source
+FROM ghcr.io/agentgateway/agentgateway:${VERSION} as source
 
 FROM ghcr.io/astral-sh/uv:0.6.5-debian-slim AS final
 
-COPY --from=source /app/agentproxy /bin/agentproxy
+COPY --from=source /app/agentgateway /bin/agentgateway
 
 ARG TARGETARCH
 
@@ -24,4 +24,4 @@ RUN mkdir -p /etc/apt/keyrings \
 
 RUN uv python install 3.12
 
-ENTRYPOINT ["/bin/agentproxy"]
+ENTRYPOINT ["/bin/agentgateway"]

@@ -2,9 +2,9 @@ use std::sync::Arc;
 use tracing::{debug, info, trace};
 
 use crate::inbound;
-use crate::proto::agentproxy::dev::a2a::target::Target as XdsA2aTarget;
-use crate::proto::agentproxy::dev::listener::Listener as XdsListener;
-use crate::proto::agentproxy::dev::mcp::target::Target as XdsMcpTarget;
+use crate::proto::agentgateway::dev::a2a::target::Target as XdsA2aTarget;
+use crate::proto::agentgateway::dev::listener::Listener as XdsListener;
+use crate::proto::agentgateway::dev::mcp::target::Target as XdsMcpTarget;
 use crate::xds::XdsStore as ProxyState;
 #[derive(Default, Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]

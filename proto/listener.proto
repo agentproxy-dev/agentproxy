@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package agentproxy.dev.listener;
+package agentgateway.dev.listener;
 
 import "common.proto";
 import "rbac.proto";
@@ -28,8 +28,8 @@ message SseListener {
   uint32 port = 2;
 
   message TlsConfig {
-    agentproxy.dev.common.LocalDataSource key_pem = 1;
-    agentproxy.dev.common.LocalDataSource cert_pem = 2;
+    agentgateway.dev.common.LocalDataSource key_pem = 1;
+    agentgateway.dev.common.LocalDataSource cert_pem = 2;
   }
 
   TlsConfig tls = 3;
@@ -39,8 +39,8 @@ message SseListener {
       repeated string issuer = 1;
       repeated string audience = 2;
       oneof jwks {
-        agentproxy.dev.common.LocalDataSource local_jwks = 3;
-        agentproxy.dev.common.RemoteDataSource remote_jwks = 4;
+        agentgateway.dev.common.LocalDataSource local_jwks = 3;
+        agentgateway.dev.common.RemoteDataSource remote_jwks = 4;
       }
     }
 
@@ -49,7 +49,7 @@ message SseListener {
 
   Authn authn = 4;
 
-  repeated agentproxy.dev.rbac.RuleSet rbac = 5;
+  repeated agentgateway.dev.rbac.RuleSet rbac = 5;
 }
 
 message StdioListener {}

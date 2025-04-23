@@ -1,6 +1,6 @@
 ## RBAC Example
 
-This example shows how to use the agentproxy to perform MCP native RBAC.
+This example shows how to use the agentgateway to perform MCP native RBAC.
 
 ### Running the example
 

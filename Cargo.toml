@@ -1,5 +1,5 @@
 [package]
-name = "agentproxy"
+name = "agentgateway"
 version = "0.4.12"
 edition = "2024"
 rust-version = "1.85"
@@ -106,7 +106,7 @@ path = "src/lib.rs"
 bench = false
 
 [[bin]]
-name = "agentproxy"
+name = "agentgateway"
 path = "src/main.rs"
 bench = false
 

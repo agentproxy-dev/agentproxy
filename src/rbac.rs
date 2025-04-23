@@ -1,5 +1,5 @@
-use crate::proto::agentproxy::dev::rbac::rule;
-use crate::proto::agentproxy::dev::rbac::{Rule as XdsRule, RuleSet as XdsRuleSet};
+use crate::proto::agentgateway::dev::rbac::rule;
+use crate::proto::agentgateway::dev::rbac::{Rule as XdsRule, RuleSet as XdsRuleSet};
 use secrecy::SecretString;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

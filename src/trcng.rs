@@ -25,7 +25,7 @@ use tracing::info;
 
 pub fn get_tracer() -> &'static BoxedTracer {
 	static TRACER: OnceLock<BoxedTracer> = OnceLock::new();
-	TRACER.get_or_init(|| global::tracer("agentproxy"))
+	TRACER.get_or_init(|| global::tracer("agentgateway"))
 }
 
 // start_span starts a span that takes into account custom attributes
@@ -78,7 +78,7 @@ fn set_tag_rules(rules: HashMap<String, String>) {
 fn get_resource() -> Resource {
 	static RESOURCE: OnceLock<Resource> = OnceLock::new();
 	RESOURCE
-		.get_or_init(|| Resource::builder().with_service_name("agentproxy").build())
+		.get_or_init(|| Resource::builder().with_service_name("agentgateway").build())
 		.clone()
 }
 

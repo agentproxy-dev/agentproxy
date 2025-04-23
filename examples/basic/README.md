@@ -1,6 +1,6 @@
 ## Basic Example
 
-This example shows how to use the agentproxy to proxy requests to the `everything` tool.
+This example shows how to use the agentgateway to proxy requests to the `everything` tool.
 
 ### Running the example
 

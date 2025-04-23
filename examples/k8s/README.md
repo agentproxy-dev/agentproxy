@@ -1,30 +1,30 @@
 ## Kubernetes Example
 
-This example shows how to deploy the agentproxy in a Kubernetes cluster with a static config.
+This example shows how to deploy the agentgateway in a Kubernetes cluster with a static config.
 
 ### Running the MCP Proxy
 
 
 First let's apply our config to the cluster.
 ```bash
-kubectl create -n agentproxy configmap agentproxy-config --from-file=config.json=examples/k8s/config.json
+kubectl create -n agentgateway configmap agentgateway-config --from-file=config.json=examples/k8s/config.json
 ```
 
 Now we can deploy the MCP Proxy.
 ```bash
-kubectl apply -n agentproxy -f examples/k8s/manifest.yaml
+kubectl apply -n agentgateway -f examples/k8s/manifest.yaml
 ```
 
 
 ### Deploying the example
 
 ```bash
-kubectl apply -n agentproxy -f examples/k8s/manifest.yaml
+kubectl apply -n agentgateway -f examples/k8s/manifest.yaml
 ```
 
 Once all of the pods are up and running, you can test the proxy by port-forwarding the proxy pod, and then using the mcp inspector. In the first shell run:
 ```bash
-kubectl port-forward -n agentproxy deploy/agentproxy 3000
+kubectl port-forward -n agentgateway deploy/agentgateway 3000
 ```
 
 In the second shell run:
@@ -42,6 +42,6 @@ Let's try out one of the tools, like `everything:add`.
 To clean this up simply delete the namespace that this example ran in.
 
 ```bash
-kubectl delete namespace agentproxy
+kubectl delete namespace agentgateway
 ```
 

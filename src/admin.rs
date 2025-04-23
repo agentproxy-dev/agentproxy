@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
-use crate::proto::agentproxy::dev::listener::Listener;
-use crate::proto::agentproxy::dev::mcp::target::Target as McpTarget;
+use crate::proto::agentgateway::dev::listener::Listener;
+use crate::proto::agentgateway::dev::mcp::target::Target as McpTarget;
 use crate::xds::XdsStore;
-use crate::{inbound, proto::agentproxy::dev::a2a::target::Target as A2aTarget};
+use crate::{inbound, proto::agentgateway::dev::a2a::target::Target as A2aTarget};
 use axum::{
 	Json, Router,
 	extract::{Path, State},

@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package agentproxy.dev.mcp.target;
+package agentgateway.dev.mcp.target;
 
 import "common.proto";
 import "google/protobuf/empty.proto";
@@ -27,11 +27,11 @@ message Target {
     // The path of the target.
     string path = 3;
     // The headers of the target.
-    repeated agentproxy.dev.common.Header headers = 4;
+    repeated agentgateway.dev.common.Header headers = 4;
 
-    agentproxy.dev.common.BackendAuth auth = 5;
+    agentgateway.dev.common.BackendAuth auth = 5;
 
-    agentproxy.dev.common.BackendTls tls = 6;
+    agentgateway.dev.common.BackendTls tls = 6;
   }
 
   message StdioTarget {
@@ -49,13 +49,13 @@ message Target {
     // The port of the target.
     uint32 port = 2;
     // The schema of the target.
-    agentproxy.dev.common.LocalDataSource schema = 3;
+    agentgateway.dev.common.LocalDataSource schema = 3;
 
-    agentproxy.dev.common.BackendAuth auth = 4;
+    agentgateway.dev.common.BackendAuth auth = 4;
 
-    agentproxy.dev.common.BackendTls tls = 5;
+    agentgateway.dev.common.BackendTls tls = 5;
 
-    repeated agentproxy.dev.common.Header headers = 6;
+    repeated agentgateway.dev.common.Header headers = 6;
   }
 }
 

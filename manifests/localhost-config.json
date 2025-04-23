@@ -2,7 +2,7 @@
     "type": "xds",
     "xds_address": "http://127.0.0.1:9977",
     "metadata": {},
-    "alt_xds_hostname": "agentproxy.default.svc.cluster.local",
+    "alt_xds_hostname": "agentgateway.default.svc.cluster.local",
     "listener": {
       "type": "sse",
       "host": "0.0.0.0",

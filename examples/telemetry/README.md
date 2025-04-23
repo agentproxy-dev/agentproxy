@@ -1,6 +1,6 @@
 ## Telemetry Example
 
-This example shows how to use the agentproxy to visualize traces and metrics for MCP calls.
+This example shows how to use the agentgateway to visualize traces and metrics for MCP calls.
 This builds upon the [RBAC sample](../rbac).
 While you can use tracing without RBAC, this example uses both together to showcase augmenting traces with information from the authenicated user.
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright The agentproxy Authors.
+# Copyright The agentgateway Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@
 # The install script is based off of the MIT-licensed script from glide,
 # the package manager for Go: https://github.com/Masterminds/glide.sh/blob/master/get
 
-: ${BINARY_NAME:="agentproxy"}
+: ${BINARY_NAME:="agentgateway"}
 : ${USE_SUDO:="true"}
 : ${DEBUG:="false"}
 : ${VERIFY_CHECKSUM:="true"}
@@ -71,7 +71,7 @@ verifySupported() {
   local supported="darwin-amd64\ndarwin-arm64\nlinux-386\nlinux-amd64\nlinux-arm\nlinux-arm64\nlinux-ppc64le\nlinux-s390x\nlinux-riscv64\nwindows-amd64\nwindows-arm64"
   if ! echo "${supported}" | grep -q "${OS}-${ARCH}"; then
     echo "No prebuilt binary for ${OS}-${ARCH}."
-    echo "To build from source, go to https://github.com/agentgateway/agentproxy"
+    echo "To build from source, go to https://github.com/agentgateway/agentgateway"
     exit 1
   fi
 
@@ -91,7 +91,7 @@ verifySupported() {
   fi
 
   if [ "${HAS_TAR}" != "true" ]; then
-    echo "[ERROR] Could not find tar. It is required to extract the agentproxy binary archive."
+    echo "[ERROR] Could not find tar. It is required to extract the agentgateway binary archive."
     exit 1
   fi
 }
@@ -100,7 +100,7 @@ verifySupported() {
 checkDesiredVersion() {
   if [ "x$DESIRED_VERSION" == "x" ]; then
     # Get tag from release URL
-    local latest_release_url="https://api.github.com/repos/agentgateway/agentproxy/releases/latest"
+    local latest_release_url="https://api.github.com/repos/agentgateway/agentgateway/releases/latest"
     local latest_release_response=""
     if [ "${HAS_CURL}" == "true" ]; then
       latest_release_response=$( curl -L --silent --show-error --fail "$latest_release_url" 2>&1 || true )
@@ -123,10 +123,10 @@ checkAgentproxyInstalledVersion() {
   if [[ -f "${AGENTPROXY_INSTALL_DIR}/${BINARY_NAME}" ]]; then
     local version=$("${AGENTPROXY_INSTALL_DIR}/${BINARY_NAME}" version --template="{{ .Version }}")
     if [[ "$version" == "$TAG" ]]; then
-      echo "agentproxy ${version} is already ${DESIRED_VERSION:-latest}"
+      echo "agentgateway ${version} is already ${DESIRED_VERSION:-latest}"
       return 0
     else
-      echo "agentproxy ${TAG} is available. Changing from version ${version}."
+      echo "agentgateway ${TAG} is available. Changing from version ${version}."
       return 1
     fi
   else
@@ -137,10 +137,10 @@ checkAgentproxyInstalledVersion() {
 # downloadFile downloads the latest binary package and also the checksum
 # for that binary.
 downloadFile() {
-  AGENTPROXY_DIST="agentproxy-$OS-$ARCH"
-  DOWNLOAD_URL="https://github.com/agentgateway/agentproxy/releases/download/$TAG/$AGENTPROXY_DIST"
+  AGENTPROXY_DIST="agentgateway-$OS-$ARCH"
+  DOWNLOAD_URL="https://github.com/agentgateway/agentgateway/releases/download/$TAG/$AGENTPROXY_DIST"
   CHECKSUM_URL="$DOWNLOAD_URL.sha256"
-  AGENTPROXY_TMP_ROOT="$(mktemp -dt agentproxy-installer-XXXXXX)"
+  AGENTPROXY_TMP_ROOT="$(mktemp -dt agentgateway-installer-XXXXXX)"
   AGENTPROXY_TMP_FILE="$AGENTPROXY_TMP_ROOT/$AGENTPROXY_DIST"
   AGENTPROXY_SUM_FILE="$AGENTPROXY_TMP_ROOT/$AGENTPROXY_DIST.sha256"
   echo "Downloading $DOWNLOAD_URL"
@@ -162,7 +162,7 @@ verifyFile() {
   fi
 }
 
-# installFile installs the agentproxy binary.
+# installFile installs the agentgateway binary.
 installFile() {
   echo "Preparing to install $BINARY_NAME into ${AGENTPROXY_INSTALL_DIR}"
   runAsRoot chmod +x "$AGENTPROXY_TMP_ROOT/$BINARY_NAME-$OS-$ARCH"
@@ -192,7 +192,7 @@ fail_trap() {
     else
       echo "Failed to install $BINARY_NAME"
     fi
-    echo -e "\tFor support, go to https://github.com/agentgateway/agentproxy."
+    echo -e "\tFor support, go to https://github.com/agentgateway/agentgateway."
   fi
   cleanup
   exit $result
@@ -213,7 +213,7 @@ testVersion() {
 help () {
   echo "Accepted cli arguments are:"
   echo -e "\t[--help|-h ] ->> prints this help"
-  echo -e "\t[--version|-v <desired_version>] . When not defined it fetches the latest release tag from the agentproxy GitHub repository"
+  echo -e "\t[--version|-v <desired_version>] . When not defined it fetches the latest release tag from the agentgateway GitHub repository"
   echo -e "\te.g. --version v3.0.0 or -v canary"
   echo -e "\t[--no-sudo]  ->> install without sudo"
 }

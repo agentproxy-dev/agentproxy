@@ -2,7 +2,7 @@ use crate::a2a;
 use crate::authn;
 use crate::authn::JwtAuthenticator;
 use crate::proto;
-use crate::proto::agentproxy::dev::listener::{
+use crate::proto::agentgateway::dev::listener::{
 	Listener as XdsListener, SseListener as XdsSseListener, listener::Listener as XdsListenerSpec,
 	listener::Protocol as ListenerProtocol, sse_listener::TlsConfig as XdsTlsConfig,
 };

@@ -9,9 +9,9 @@ use tracing::error;
 
 use crate::admin::add_cors_layer;
 
-/// Creates a metrics sub registry for agentproxy.
+/// Creates a metrics sub registry for agentgateway.
 pub fn sub_registry(registry: &mut Registry) -> &mut Registry {
-	registry.sub_registry_with_prefix("agentproxy")
+	registry.sub_registry_with_prefix("agentgateway")
 }
 
 pub struct Deferred<'a, F, T>

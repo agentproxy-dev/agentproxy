@@ -2,43 +2,43 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: agentproxy
+  name: agentgateway
   labels:
-    app: agentproxy
+    app: agentgateway
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: agentproxy
+      app: agentgateway
   template:
     metadata:
       labels:
-        app: agentproxy
+        app: agentgateway
     spec:
       containers:
-        - name: agentproxy
-          image: ghcr.io/agentproxy/agentproxy:latest
+        - name: agentgateway
+          image: ghcr.io/agentgateway/agentgateway:latest
           args:
             - -f
-            - /etc/agentproxy/config.json
+            - /etc/agentgateway/config.json
           ports:
             - containerPort: 3000
           volumeMounts:
-            - name: agentproxy-config
-              mountPath: /etc/agentproxy/config.json
+            - name: agentgateway-config
+              mountPath: /etc/agentgateway/config.json
               subPath: config.json
       volumes:
-        - name: agentproxy-config
+        - name: agentgateway-config
           configMap:
-            name: agentproxy-config
+            name: agentgateway-config
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: agentproxy
+  name: agentgateway
 spec:
   selector:
-    app: agentproxy
+    app: agentgateway
   ports:
     - protocol: TCP
       port: 3000
@@ -63,15 +63,15 @@ spec:
     spec:
       containers:
         - name: everything
-          image: ghcr.io/agentproxy/agentproxy:latest-ext
+          image: ghcr.io/agentgateway/agentgateway:latest-ext
           args:
             - -f
-            - /etc/agentproxy/config.json
+            - /etc/agentgateway/config.json
           ports:
             - containerPort: 3000
           volumeMounts:
             - name: everything-config
-              mountPath: /etc/agentproxy/config.json
+              mountPath: /etc/agentgateway/config.json
               subPath: config.json
       volumes:
         - name: everything-config

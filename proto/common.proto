@@ -2,7 +2,7 @@ syntax = "proto3";
 
 import "google/protobuf/duration.proto";
 import "google/protobuf/empty.proto";
-package agentproxy.dev.common;
+package agentgateway.dev.common;
 
 message LocalDataSource {
   oneof source {

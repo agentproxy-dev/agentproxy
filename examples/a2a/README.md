@@ -1,6 +1,6 @@
 ## Basic Example
 
-This example shows how to use the agentproxy to proxy requests A2A requests.
+This example shows how to use the agentgateway to proxy requests A2A requests.
 
 ### Running the example
 

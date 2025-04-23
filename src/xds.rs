@@ -11,12 +11,12 @@ pub use metrics::*;
 pub use types::*;
 
 use self::envoy::service::discovery::v3::DeltaDiscoveryRequest;
-use crate::proto::agentproxy::dev::a2a::target::Target as A2aXdsTarget;
-use crate::proto::agentproxy::dev::common::BackendAuth as XdsAuth;
-use crate::proto::agentproxy::dev::common::backend_auth::Auth as XdsAuthSpec;
-use crate::proto::agentproxy::dev::listener::Listener as XdsListener;
-use crate::proto::agentproxy::dev::mcp::target::Target as McpXdsTarget;
-use crate::proto::agentproxy::dev::rbac::RuleSet as XdsRbac;
+use crate::proto::agentgateway::dev::a2a::target::Target as A2aXdsTarget;
+use crate::proto::agentgateway::dev::common::BackendAuth as XdsAuth;
+use crate::proto::agentgateway::dev::common::backend_auth::Auth as XdsAuthSpec;
+use crate::proto::agentgateway::dev::listener::Listener as XdsListener;
+use crate::proto::agentgateway::dev::mcp::target::Target as McpXdsTarget;
+use crate::proto::agentgateway::dev::rbac::RuleSet as XdsRbac;
 use crate::rbac;
 use crate::strng::Strng;
 use std::collections::HashMap;

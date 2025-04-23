@@ -1,13 +1,13 @@
 # Image configuration
 DOCKER_REGISTRY ?= ghcr.io
 DOCKER_REPO ?= agentgateway
-IMAGE_NAME ?= agentproxy
+IMAGE_NAME ?= agentgateway
 VERSION ?= $(shell git describe --tags --always --dirty)
 IMAGE_TAG ?= $(VERSION)
 IMAGE_FULL_NAME ?= $(DOCKER_REGISTRY)/$(DOCKER_REPO)/$(IMAGE_NAME):$(IMAGE_TAG)
 DOCKER_BUILDER ?= docker
 DOCKER_BUILD_ARGS ?=
-KIND_CLUSTER_NAME ?= agentproxy
+KIND_CLUSTER_NAME ?= agentgateway
 
 # docker
 .PHONY: docker

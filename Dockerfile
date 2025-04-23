@@ -28,16 +28,16 @@ COPY common ./common
 
 RUN make build
 
-RUN strip target/release/agentproxy
+RUN strip target/release/agentgateway
 
 FROM gcr.io/distroless/cc-debian12 AS runner 
 
 ARG TARGETARCH
 WORKDIR /app
 
-COPY --from=builder /app/target/release/agentproxy /app/agentproxy
+COPY --from=builder /app/target/release/agentgateway /app/agentgateway
 
-LABEL org.opencontainers.image.source=https://github.com/agentgateway/agentproxy
+LABEL org.opencontainers.image.source=https://github.com/agentgateway/agentgateway
 LABEL org.opencontainers.image.description="MCP gw is a proxy for MCP."
 
-ENTRYPOINT ["/app/agentproxy"]
+ENTRYPOINT ["/app/agentgateway"]
