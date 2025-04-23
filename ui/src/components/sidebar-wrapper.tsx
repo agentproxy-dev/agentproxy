@@ -7,7 +7,7 @@ import { useLoading } from "@/lib/loading-context";
 import { useWizard } from "@/lib/wizard-context";
 
 export function SidebarWrapper() {
-  const { targets, listeners, isConnected } = useServer();
+  const { isConnected } = useServer();
   const { setIsLoading } = useLoading();
   const [activeView, setActiveView] = useState("home");
   const { isWizardVisible } = useWizard();
@@ -24,12 +24,5 @@ export function SidebarWrapper() {
     return null;
   }
 
-  return (
-    <AppSidebar
-      targets={targets}
-      listeners={listeners}
-      activeView={activeView}
-      setActiveView={setActiveView}
-    />
-  );
+  return <AppSidebar activeView={activeView} setActiveView={setActiveView} />;
 }

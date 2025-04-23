@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 export interface Target {
   // The name of the target.
   name: string;
@@ -12,7 +14,7 @@ export interface Target {
   a2a?: A2aTarget;
 }
 
-export type TargetType = "sse" | "openapi" | "stdio" | "a2a";
+export type TargetType = "mcp" | "sse" | "openapi" | "stdio" | "a2a" | "unknown";
 
 export interface SseTarget {
   // The host of the target.
@@ -97,6 +99,12 @@ export interface Listener {
   sse: SseListener;
   // The policies attached to this listener
   policies?: RBACConfig[];
+  protocol: ListenerProtocol;
+}
+
+export enum ListenerProtocol {
+  MCP = "mcp",
+  A2A = "a2a",
 }
 
 export interface RemoteDataSource {
@@ -180,5 +188,29 @@ export interface Config {
   // The policies for the configuration.
   policies?: RBACConfig[];
   // The targets for the configuration.
-  targets: Target[];
+  targets: TargetWithType[];
+}
+
+export type TargetWithType = Target & { type: "mcp" | "a2a" | "openapi" | "stdio" | "sse" };
+
+// Schema specifically for Playground UI representation, might differ from backend config Listener
+export const PlaygroundListenerSchema = z.object({
+  name: z.string(),
+  protocol: z.nativeEnum(ListenerProtocol).optional(),
+  sse: z
+    .object({
+      port: z.number(),
+      host: z.string(),
+      tls: z.boolean().optional(),
+    })
+    .optional(),
+});
+
+// Type derived from the Playground-specific schema
+export type PlaygroundListener = z.infer<typeof PlaygroundListenerSchema>;
+
+// Type for listener info including protocol, extending the original Listener type
+// It combines the config Listener with the derived displayEndpoint for UI purposes
+export interface ListenerInfo extends Listener {
+  displayEndpoint: string;
 }

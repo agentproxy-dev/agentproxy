@@ -1,4 +1,4 @@
-import { Target, TargetType } from "@/lib/types";
+import { Target, TargetType, TargetWithType } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Trash2 } from "lucide-react";
@@ -11,16 +11,25 @@ interface TargetItemProps {
   isUpdating: boolean;
 }
 
-const getTargetType = (target: Target): TargetType => {
-  if (target.stdio) return "stdio";
-  if (target.sse) return "sse";
-  if (target.openapi) return "openapi";
-  if (target.a2a) return "a2a";
-  return "sse";
+export const getTargetType = (target: TargetWithType): TargetType => {
+  switch (target.type) {
+    case "a2a":
+      return "a2a";
+    case "mcp":
+      return "mcp";
+    case "openapi":
+      return "openapi";
+    case "stdio":
+      return "stdio";
+    case "sse":
+      return "sse";
+    default:
+      return "unknown";
+  }
 };
 
 export default function TargetItem({ target, index, onDelete, isUpdating }: TargetItemProps) {
-  const targetType = getTargetType(target);
+  const targetType = getTargetType(target as TargetWithType);
 
   return (
     <div className="flex items-center justify-between w-full">

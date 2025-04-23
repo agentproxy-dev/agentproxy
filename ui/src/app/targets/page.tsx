@@ -5,11 +5,10 @@ import { useServer } from "@/lib/server-context";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useState, useRef } from "react";
+import { useRef } from "react";
 
 export default function TargetsPage() {
-  const { config, setConfig, connectionError } = useServer();
-  const [isAddingTarget, setIsAddingTarget] = useState(false);
+  const { config, connectionError } = useServer();
   const targetsConfigRef = useRef<{ openAddTargetDialog: () => void } | null>(null);
 
   const handleAddTarget = () => {
@@ -39,13 +38,7 @@ export default function TargetsPage() {
           <AlertDescription>{connectionError}</AlertDescription>
         </Alert>
       ) : (
-        <TargetsConfig
-          ref={targetsConfigRef}
-          config={config}
-          onConfigChange={setConfig}
-          isAddingTarget={isAddingTarget}
-          setIsAddingTarget={setIsAddingTarget}
-        />
+        <TargetsConfig ref={targetsConfigRef} config={config} />
       )}
     </div>
   );

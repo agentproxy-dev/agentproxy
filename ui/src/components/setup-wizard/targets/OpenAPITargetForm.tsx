@@ -4,13 +4,13 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ChevronUp, ChevronDown } from "lucide-react";
-import { Target, Header, LocalDataSource } from "@/lib/types";
+import { Header, LocalDataSource, TargetWithType } from "@/lib/types";
 
 interface OpenAPITargetFormProps {
   targetName: string;
-  onSubmit: (target: Target) => Promise<void>;
+  onSubmit: (target: TargetWithType) => Promise<void>;
   isLoading: boolean;
-  existingTarget?: Target;
+  existingTarget?: TargetWithType;
   hideSubmitButton?: boolean;
 }
 
@@ -63,8 +63,9 @@ export const OpenAPITargetForm = forwardRef<
           ? { file_path: schemaFilePath }
           : { inline: new TextEncoder().encode(schemaInline) };
 
-      const target: Target = {
+      const target: TargetWithType = {
         name: targetName,
+        type: "openapi",
         openapi: {
           host,
           port: parseInt(port),
@@ -73,7 +74,7 @@ export const OpenAPITargetForm = forwardRef<
         },
       };
 
-      await onSubmit(target);
+      await onSubmit(target as TargetWithType);
     } catch (err) {
       console.error("Error creating OpenAPI target:", err);
       throw err;

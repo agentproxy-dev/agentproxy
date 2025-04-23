@@ -13,8 +13,9 @@ import { ArrowLeft, ArrowRight } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Config, Listener } from "@/lib/types";
+import { Config, Listener, ListenerProtocol } from "@/lib/types";
 import { createListener } from "@/lib/api";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 interface ListenerStepProps {
   onNext: () => void;
@@ -26,6 +27,7 @@ interface ListenerStepProps {
 export function ListenerStep({ onNext, onPrevious, config, onConfigChange }: ListenerStepProps) {
   const [listenerAddress, setListenerAddress] = useState("0.0.0.0");
   const [listenerPort, setListenerPort] = useState("5555");
+  const [selectedProtocol, setSelectedProtocol] = useState<ListenerProtocol>(ListenerProtocol.A2A);
   const [isUpdatingListener, setIsUpdatingListener] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,9 +36,9 @@ export function ListenerStep({ onNext, onPrevious, config, onConfigChange }: Lis
     setError(null);
 
     try {
-      // Create a new listener configuration
       const newListener: Listener = {
         name: "default",
+        protocol: selectedProtocol,
         sse: {
           address: listenerAddress,
           port: parseInt(listenerPort, 10),
@@ -45,19 +47,15 @@ export function ListenerStep({ onNext, onPrevious, config, onConfigChange }: Lis
         },
       };
 
-      // Update the config with the new listener
       const newConfig = {
         ...config,
         listeners: [newListener],
       };
 
-      // Update the local state
       onConfigChange(newConfig);
 
-      // Call the API to create/update the listener
       await createListener(newListener);
 
-      // Call onNext to navigate to the next step
       onNext();
     } catch (err) {
       console.error("Error updating listener configuration:", err);
@@ -79,16 +77,39 @@ export function ListenerStep({ onNext, onPrevious, config, onConfigChange }: Lis
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="space-y-4">
+        <div className="space-y-6">
           <div className="space-y-2">
             <h3 className="font-medium">What is a Listener?</h3>
             <p className="text-sm text-muted-foreground">
               A listener is a network endpoint that accepts incoming connections. You can configure
-              the address, port, and protocol for your listener.
+              the protocol (MCP or A2A), address, and port. MCP listeners support connections from
+              MCP Servers and OpenAPI endpoints, while A2A listeners handle Google&apos;s
+              Agent2Agent protocol.
             </p>
           </div>
 
           <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Protocol</Label>
+              <RadioGroup
+                value={selectedProtocol}
+                onValueChange={(value) => setSelectedProtocol(value as ListenerProtocol)}
+                className="flex space-x-4"
+              >
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value={ListenerProtocol.A2A} id="a2a-protocol" />
+                  <Label htmlFor="a2a-protocol">A2A (Agent2Agent)</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value={ListenerProtocol.MCP} id="mcp-protocol" />
+                  <Label htmlFor="mcp-protocol">MCP (MCP Server / OpenAPI)</Label>
+                </div>
+              </RadioGroup>
+              <p className="text-xs text-muted-foreground">
+                Choose the protocol the listener will handle.
+              </p>
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="listenerAddress">Address</Label>
               <Input
@@ -109,6 +130,7 @@ export function ListenerStep({ onNext, onPrevious, config, onConfigChange }: Lis
                 value={listenerPort}
                 onChange={(e) => setListenerPort(e.target.value)}
                 placeholder="e.g., 5555"
+                type="number"
               />
               <p className="text-xs text-muted-foreground">
                 The port number the listener is using.

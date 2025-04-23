@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect } from "react";
-import { Config, Target, RBACConfig, Listener } from "@/lib/types";
+import { Config, Target, RBACConfig, Listener, TargetWithType } from "@/lib/types";
 import { fetchListeners, fetchMcpTargets, fetchA2aTargets } from "@/lib/api";
 
 interface ServerContextType {
@@ -30,7 +30,7 @@ export function ServerProvider({ children }: { children: React.ReactNode }) {
   const [isConnected, setIsConnected] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [listeners, setListeners] = useState<Listener[]>([]);
-  const [targets, setTargets] = useState<Target[]>([]);
+  const [targets, setTargets] = useState<TargetWithType[]>([]);
   const [policies, setPolicies] = useState<RBACConfig[]>([]);
 
   // Function to refresh listeners

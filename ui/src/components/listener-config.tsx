@@ -3,10 +3,19 @@
 import { useState, useEffect } from "react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Listener } from "@/lib/types";
+import { Listener, ListenerProtocol } from "@/lib/types";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertCircle, Trash2, Shield, Lock, Key, Settings2, MoreVertical } from "lucide-react";
-import { fetchListeners, addListener, deleteListener, fetchListenerTargets } from "@/lib/api";
+import {
+  AlertCircle,
+  Trash2,
+  Shield,
+  Lock,
+  Key,
+  Settings2,
+  MoreVertical,
+  Loader2,
+} from "lucide-react";
+import { addListener, deleteListener, fetchListenerTargets } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -34,6 +43,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useServer } from "@/lib/server-context";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 interface ListenerConfigProps {
   isAddingListener?: boolean;
@@ -44,6 +54,7 @@ interface NewListenerState {
   name: string;
   address: string;
   port: string;
+  protocol: ListenerProtocol;
   type: "sse";
 }
 
@@ -67,10 +78,12 @@ export function ListenerConfig({
   isAddingListener = false,
   setIsAddingListener = () => {},
 }: ListenerConfigProps) {
-  const [listeners, setListeners] = useState<ListenerWithTargets[]>([]);
+  // Get listeners from context, remove local state fetch
+  const { listeners: contextListeners, refreshListeners } = useServer();
+  const [listenersWithTargets, setListenersWithTargets] = useState<ListenerWithTargets[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const { refreshListeners } = useServer();
+  const [isLoadingCounts, setIsLoadingCounts] = useState(true); // Renamed isLoading for clarity
+  const [isSubmitting, setIsSubmitting] = useState(false); // State for add/update/delete operations
   const [configDialog, setConfigDialog] = useState<ConfigDialogState>({
     type: null,
     isOpen: false,
@@ -81,6 +94,7 @@ export function ListenerConfig({
     name: "",
     address: "0.0.0.0",
     port: "5555",
+    protocol: ListenerProtocol.MCP,
     type: "sse",
   });
   const [deleteDialog, setDeleteDialog] = useState<DeleteDialogState>({
@@ -88,21 +102,20 @@ export function ListenerConfig({
     listenerIndex: -1,
   });
 
-  // Fetch listener configuration and target counts
+  // Fetch target counts when context listeners change
   useEffect(() => {
-    const fetchListenerConfig = async () => {
-      setIsLoading(true);
+    const fetchAllTargetCounts = async () => {
+      if (!contextListeners || contextListeners.length === 0) {
+        setListenersWithTargets([]);
+        setIsLoadingCounts(false);
+        return;
+      }
+
+      setIsLoadingCounts(true);
       setError(null);
-
       try {
-        const fetchedListeners = await fetchListeners();
-        const listenersArray = Array.isArray(fetchedListeners)
-          ? fetchedListeners
-          : [fetchedListeners];
-
-        // Fetch target counts for each listener
-        const listenersWithTargets = await Promise.all(
-          listenersArray.map(async (listener) => {
+        const listenersWithFetchedTargets = await Promise.all(
+          contextListeners.map(async (listener) => {
             try {
               const targets = await fetchListenerTargets(listener.name);
               return {
@@ -111,6 +124,7 @@ export function ListenerConfig({
               };
             } catch (err) {
               console.error(`Error fetching targets for listener ${listener.name}:`, err);
+              // Return listener with 0 count or handle error as needed
               return {
                 ...listener,
                 targetCount: 0,
@@ -118,26 +132,28 @@ export function ListenerConfig({
             }
           })
         );
-
-        setListeners(listenersWithTargets);
+        setListenersWithTargets(listenersWithFetchedTargets);
       } catch (err) {
-        console.error("Error fetching listener configuration:", err);
-        setError(err instanceof Error ? err.message : "Failed to fetch listener configuration");
+        console.error("Error fetching target counts:", err);
+        setError(err instanceof Error ? err.message : "Failed to fetch target counts");
+        setListenersWithTargets(contextListeners.map((l) => ({ ...l, targetCount: undefined })));
       } finally {
-        setIsLoading(false);
+        setIsLoadingCounts(false);
       }
     };
 
-    fetchListenerConfig();
-  }, []);
+    fetchAllTargetCounts();
+  }, [contextListeners]);
 
   const handleAddListener = async () => {
-    setIsLoading(true);
+    // Use submitting state
+    setIsSubmitting(true);
     setError(null);
 
     try {
       const listenerToAdd: Listener = {
-        name: newListener.name || `listener-${listeners.length + 1}`,
+        name: newListener.name || `listener-${listenersWithTargets.length + 1}`,
+        protocol: newListener.protocol,
         sse: {
           address: newListener.address,
           port: parseInt(newListener.port),
@@ -146,7 +162,7 @@ export function ListenerConfig({
 
       await addListener(listenerToAdd);
 
-      // Refresh the listeners list
+      // Refresh the listeners list (from context)
       await refreshListeners();
 
       // Reset the form
@@ -154,6 +170,7 @@ export function ListenerConfig({
         name: "",
         address: "0.0.0.0",
         port: "5555",
+        protocol: ListenerProtocol.MCP,
         type: "sse",
       });
 
@@ -162,17 +179,18 @@ export function ListenerConfig({
       console.error("Error adding listener:", err);
       setError(err instanceof Error ? err.message : "Failed to add listener");
     } finally {
-      setIsLoading(false);
+      setIsSubmitting(false);
     }
   };
 
   const handleUpdateListener = async (updatedListener: Listener) => {
-    setIsLoading(true);
+    setIsSubmitting(true);
     setError(null);
 
     // Make sure the updatedListener only includes the fields from the Listener type
-    const updatedListenerOnly = {
+    const updatedListenerOnly: Listener = {
       name: updatedListener.name,
+      protocol: updatedListener.protocol,
       sse: updatedListener.sse,
       policies: updatedListener.policies,
     };
@@ -180,7 +198,7 @@ export function ListenerConfig({
     try {
       await addListener(updatedListenerOnly);
 
-      // Refresh the listeners list
+      // Refresh the listeners list (from context)
       await refreshListeners();
 
       setConfigDialog({
@@ -193,28 +211,34 @@ export function ListenerConfig({
       console.error("Error updating listener:", err);
       setError(err instanceof Error ? err.message : "Failed to update listener");
     } finally {
-      setIsLoading(false);
+      // Use submitting state
+      setIsSubmitting(false);
     }
   };
 
   const handleDeleteListener = async (index: number) => {
-    setIsLoading(true);
+    // Use submitting state
+    setIsSubmitting(true);
     setError(null);
 
     try {
-      const listenerToDelete = listeners[index];
-      // Extract the listener name or use a default if not available
-      const listenerName = listenerToDelete.name || `listener-${index}`;
+      // Get listener from the state that includes target counts, but use index safely
+      if (index < 0 || index >= listenersWithTargets.length) {
+        throw new Error("Invalid listener index for deletion.");
+      }
+      const listenerToDelete = listenersWithTargets[index];
 
-      // Create a copy of the listener with the name property
-      const listenerWithName = {
-        ...listenerToDelete,
-        name: listenerName,
+      // API expects basic Listener type
+      const listenerApiPayload: Listener = {
+        name: listenerToDelete.name,
+        sse: listenerToDelete.sse,
+        protocol: listenerToDelete.protocol,
+        policies: listenerToDelete.policies,
       };
 
-      await deleteListener(listenerWithName);
+      await deleteListener(listenerApiPayload);
 
-      // Refresh the listeners list
+      // Refresh the listeners list (from context)
       await refreshListeners();
 
       // Close the delete dialog
@@ -223,7 +247,7 @@ export function ListenerConfig({
       console.error("Error deleting listener:", err);
       setError(err instanceof Error ? err.message : "Failed to delete listener");
     } finally {
-      setIsLoading(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -236,12 +260,12 @@ export function ListenerConfig({
         </Alert>
       )}
 
-      {isLoading ? (
+      {isLoadingCounts ? (
         <div className="flex items-center justify-center py-8">
           <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
-          <span className="ml-2">Loading listener configuration...</span>
+          <span className="ml-2">Loading listener details...</span>
         </div>
-      ) : listeners.length === 0 ? (
+      ) : listenersWithTargets.length === 0 ? (
         <div className="text-center py-12 border rounded-md bg-muted/20">
           <p className="text-muted-foreground">
             No listeners configured. Add a listener to get started.
@@ -253,6 +277,7 @@ export function ListenerConfig({
             <TableHeader>
               <TableRow className="bg-muted/50">
                 <TableHead>Name</TableHead>
+                <TableHead>Protocol</TableHead>
                 <TableHead>Address</TableHead>
                 <TableHead>Targets</TableHead>
                 <TableHead>Authentication</TableHead>
@@ -262,10 +287,17 @@ export function ListenerConfig({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {listeners.map((listener, index) => (
-                <TableRow key={index} className="hover:bg-muted/30">
+              {listenersWithTargets.map((listener, index) => (
+                <TableRow key={listener.name || index} className="hover:bg-muted/30">
                   <TableCell className="font-medium">
                     {listener.name || `listener-${index + 1}`}
+                  </TableCell>
+                  <TableCell>
+                    <Badge
+                      variant={listener.protocol === ListenerProtocol.A2A ? "secondary" : "outline"}
+                    >
+                      {listener.protocol === ListenerProtocol.A2A ? "A2A" : "MCP"}
+                    </Badge>
                   </TableCell>
                   <TableCell>
                     {listener.sse?.address}:{listener.sse?.port}
@@ -510,6 +542,30 @@ export function ListenerConfig({
               </p>
             </div>
             <div className="space-y-2">
+              <Label>Protocol</Label>
+              <RadioGroup
+                defaultValue={ListenerProtocol.MCP}
+                value={newListener.protocol}
+                onValueChange={(value) =>
+                  setNewListener({ ...newListener, protocol: value as ListenerProtocol })
+                }
+                className="flex space-x-4"
+              >
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value={ListenerProtocol.MCP} id="proto-mcp" />
+                  <Label htmlFor="proto-mcp">MCP</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value={ListenerProtocol.A2A} id="proto-a2a" />
+                  <Label htmlFor="proto-a2a">A2A</Label>
+                </div>
+              </RadioGroup>
+              <p className="text-xs text-muted-foreground">
+                Select the protocol this listener will handle (Model Control Protocol or
+                Agent-to-Agent).
+              </p>
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="address">Address</Label>
               <Input
                 id="address"
@@ -534,10 +590,17 @@ export function ListenerConfig({
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsAddingListener(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setIsAddingListener(false)}
+              disabled={isSubmitting}
+            >
               Cancel
             </Button>
-            <Button onClick={handleAddListener}>Add Listener</Button>
+            <Button onClick={handleAddListener} disabled={isSubmitting}>
+              {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Add Listener
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -612,13 +675,16 @@ export function ListenerConfig({
             <Button
               variant="outline"
               onClick={() => setDeleteDialog({ isOpen: false, listenerIndex: -1 })}
+              disabled={isSubmitting}
             >
               Cancel
             </Button>
             <Button
               variant="destructive"
               onClick={() => handleDeleteListener(deleteDialog.listenerIndex)}
+              disabled={isSubmitting}
             >
+              {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Delete
             </Button>
           </DialogFooter>

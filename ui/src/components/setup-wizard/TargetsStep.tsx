@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -13,14 +13,13 @@ import { Label } from "@/components/ui/label";
 import { MCPLogo } from "@/components/mcp-logo";
 import { ArrowLeft, ArrowRight, Globe, Server, Terminal, Trash2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { TooltipProvider, Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Config, Target, TargetType } from "@/lib/types";
+import { Config, ListenerProtocol, Target, TargetType, TargetWithType } from "@/lib/types";
 import { MCPTargetForm } from "./targets/MCPTargetForm";
 import { A2ATargetForm } from "./targets/A2ATargetForm";
-import { createMcpTarget, createA2aTarget, fetchListeners } from "@/lib/api";
-import { ListenerSelect } from "./targets/ListenerSelect";
+import { createMcpTarget, createA2aTarget } from "@/lib/api";
+import { getTargetType } from "../target-item";
 
 interface TargetsStepProps {
   onNext: () => void;
@@ -30,33 +29,22 @@ interface TargetsStepProps {
 }
 
 export function TargetsStep({ onNext, onPrevious, config, onConfigChange }: TargetsStepProps) {
-  const [targetCategory, setTargetCategory] = useState<"mcp" | "a2a">("mcp");
+  const listenerProtocol = config.listeners?.[0]?.protocol ?? ListenerProtocol.MCP;
+  const listenerName = config.listeners?.[0]?.name;
+
   const [targetName, setTargetName] = useState("");
-  const [selectedListeners, setSelectedListeners] = useState<string[]>([]);
   const [isAddingTarget, setIsAddingTarget] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [mcpFormRef, setMcpFormRef] = useState<{ submitForm: () => Promise<void> } | null>(null);
-  const [a2aFormRef, setA2aFormRef] = useState<{ submitForm: () => Promise<void> } | null>(null);
+  const mcpFormRef = useRef<{ submitForm: () => Promise<void> } | null>(null);
+  const a2aFormRef = useRef<{ submitForm: () => Promise<void> } | null>(null);
 
-  useEffect(() => {
-    const loadListeners = async () => {
-      try {
-        await fetchListeners();
-      } catch (err) {
-        console.error("Error fetching listeners:", err);
-        setError("Failed to load listeners. Please try again.");
-      }
-    };
-
-    loadListeners();
-  }, []);
-
-  const handleAddTarget = (target: Target) => {
+  const handleAddTarget = (target: TargetWithType) => {
     const newConfig = {
       ...config,
       targets: [...config.targets, target],
     };
     onConfigChange(newConfig);
+    setTargetName("");
   };
 
   const handleRemoveTarget = (index: number) => {
@@ -67,29 +55,59 @@ export function TargetsStep({ onNext, onPrevious, config, onConfigChange }: Targ
     onConfigChange(newConfig);
   };
 
-  const handleCreateTarget = async (target: Target) => {
+  const handleCreateTarget = async (targetData: any) => {
     setIsAddingTarget(true);
     setError(null);
 
-    try {
-      const targetWithListeners = {
-        ...target,
-        listeners: selectedListeners,
-      };
+    if (!listenerName) {
+      setError("Configuration Error: Listener name not found.");
+      setIsAddingTarget(false);
+      return;
+    }
 
-      if (targetCategory === "a2a") {
-        await createA2aTarget(targetWithListeners);
+    if (!targetName.trim()) {
+      setError("Target Name is required.");
+      setIsAddingTarget(false);
+      return;
+    }
+
+    try {
+      let determinedType: TargetType;
+      if (listenerProtocol === ListenerProtocol.A2A) {
+        determinedType = "a2a";
+        if (!targetData?.a2a) {
+          throw new Error("A2A target details are missing from the form submission.");
+        }
       } else {
-        await createMcpTarget(targetWithListeners);
+        if (targetData?.sse) determinedType = "sse";
+        else if (targetData?.stdio) determinedType = "stdio";
+        else if (targetData?.openapi) determinedType = "openapi";
+        else
+          throw new Error(
+            "Could not determine MCP target type or details are missing from the form submission."
+          );
       }
 
-      handleAddTarget(targetWithListeners);
+      const targetWithType: TargetWithType = {
+        ...(targetData as Omit<Target, "name">),
+        name: targetName,
+        listeners: [listenerName],
+        type: determinedType as TargetWithType["type"],
+      };
+
+      if (listenerProtocol === ListenerProtocol.A2A) {
+        await createA2aTarget(targetWithType);
+      } else {
+        await createMcpTarget(targetWithType);
+      }
+
+      handleAddTarget(targetWithType);
       setTargetName("");
-      setSelectedListeners([]);
     } catch (err) {
       console.error("Error creating target:", err);
-      setError(err instanceof Error ? err.message : "Failed to create target");
-      throw err;
+      const message = err instanceof Error ? err.message : "Failed to create target";
+      setError(message);
+      throw new Error(message);
     } finally {
       setIsAddingTarget(false);
     }
@@ -110,33 +128,38 @@ export function TargetsStep({ onNext, onPrevious, config, onConfigChange }: Targ
     }
   };
 
-  const getTargetType = (target: Target): TargetType => {
-    if (target.stdio) return "stdio";
-    if (target.sse) return "sse";
-    if (target.openapi) return "openapi";
-    if (target.a2a) return "a2a";
-    return "sse";
-  };
-
   const handleNext = async () => {
+    setError(null);
+    let currentError = null;
+
     try {
-      // Check if there's an incomplete target being added
+      let formSubmitPromise: Promise<void> | null = null;
+
       if (targetName.trim()) {
-        // If there's a target name entered, try to submit the current form
-        if (targetCategory === "mcp" && mcpFormRef) {
-          await mcpFormRef.submitForm();
-        } else if (targetCategory === "a2a" && a2aFormRef) {
-          await a2aFormRef.submitForm();
+        if (listenerProtocol === ListenerProtocol.MCP && mcpFormRef.current) {
+          formSubmitPromise = mcpFormRef.current.submitForm();
+        } else if (listenerProtocol === ListenerProtocol.A2A && a2aFormRef.current) {
+          formSubmitPromise = a2aFormRef.current.submitForm();
         }
-      } else if (config.targets.length === 0) {
-        // If no targets are configured and no target is being added, show error
-        setError("Please add at least one target before proceeding");
-        return;
       }
-      onNext();
+
+      if (formSubmitPromise) {
+        await formSubmitPromise;
+      }
+
+      if (config.targets.length === 0 && !targetName.trim()) {
+        console.log("No targets configured, proceeding...");
+      }
+
+      if (!error) {
+        onNext();
+      }
     } catch (err) {
-      console.error("Error submitting target:", err);
-      setError(err instanceof Error ? err.message : "Failed to create target");
+      console.error("Error during submitForm() call in handleNext:", err);
+      if (!error) {
+        currentError = err instanceof Error ? err.message : "Failed to save the current target.";
+        setError(currentError);
+      }
     }
   };
 
@@ -148,125 +171,105 @@ export function TargetsStep({ onNext, onPrevious, config, onConfigChange }: Targ
         </div>
         <CardTitle className="text-center">Configure Targets</CardTitle>
         <CardDescription className="text-center">
-          Add and configure the servers that your proxy will forward requests to
+          Add the {listenerProtocol === ListenerProtocol.A2A ? "A2A" : "MCP"} target(s) that your
+          proxy will forward requests to.
         </CardDescription>
       </CardHeader>
       <CardContent>
         <div className="space-y-6">
-          {/* Target Configuration Form */}
-          <div className="space-y-6 border rounded-lg p-4">
-            <Tabs
-              value={targetCategory}
-              onValueChange={(value) => setTargetCategory(value as "mcp" | "a2a")}
-            >
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Target Type</Label>
-                  <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="mcp">MCP Target</TabsTrigger>
-                    <TabsTrigger value="a2a">A2A Target</TabsTrigger>
-                  </TabsList>
-                </div>
+          <div className="space-y-4 border rounded-lg p-4">
+            <div className="space-y-2">
+              <Label htmlFor="targetName">Target Name *</Label>
+              <Input
+                id="targetName"
+                placeholder={`Enter unique name for the ${listenerProtocol} target`}
+                value={targetName}
+                onChange={(e) => {
+                  setTargetName(e.target.value);
+                  setError(null);
+                }}
+                required
+              />
+              <p className="text-xs text-muted-foreground">
+                A unique identifier for this target configuration.
+              </p>
+            </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="targetName">Target Name *</Label>
-                  <Input
-                    id="targetName"
-                    placeholder="Enter target name"
-                    value={targetName}
-                    onChange={(e) => {
-                      setTargetName(e.target.value);
-                      setError(null); // Clear error when user starts typing
-                    }}
-                    required
-                  />
-                </div>
+            {listenerProtocol === ListenerProtocol.MCP && (
+              <MCPTargetForm
+                targetName={targetName}
+                onTargetNameChange={setTargetName}
+                onSubmit={handleCreateTarget}
+                isLoading={isAddingTarget}
+                ref={mcpFormRef}
+              />
+            )}
 
-                <div className="space-y-2">
-                  <ListenerSelect
-                    selectedListeners={selectedListeners}
-                    onListenersChange={(listeners) => setSelectedListeners(listeners || [])}
-                  />
-                </div>
-
-                <TabsContent value="mcp">
-                  <MCPTargetForm
-                    targetName={targetName}
-                    onTargetNameChange={setTargetName}
-                    onSubmit={handleCreateTarget}
-                    isLoading={isAddingTarget}
-                    ref={setMcpFormRef}
-                  />
-                </TabsContent>
-
-                <TabsContent value="a2a">
-                  <A2ATargetForm
-                    targetName={targetName}
-                    onSubmit={handleCreateTarget}
-                    isLoading={isAddingTarget}
-                    ref={setA2aFormRef}
-                  />
-                </TabsContent>
-              </div>
-            </Tabs>
+            {listenerProtocol === ListenerProtocol.A2A && (
+              <A2ATargetForm
+                targetName={targetName}
+                onSubmit={handleCreateTarget}
+                isLoading={isAddingTarget}
+                ref={a2aFormRef}
+              />
+            )}
           </div>
 
           {error && (
             <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
+              <AlertDescription>{error || "An unspecified error occurred."}</AlertDescription>
             </Alert>
           )}
 
-          {/* Configured Targets List */}
           {config.targets.length > 0 && (
             <div className="space-y-2">
-              <h3 className="font-medium">Configured Targets</h3>
-              <div className="space-y-2">
+              <h3 className="font-medium">Configured Targets ({config.targets.length})</h3>
+              <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
                 {config.targets.map((target, index) => (
                   <div
                     key={index}
-                    className="flex items-center justify-between p-3 border rounded-md"
+                    className="flex items-center justify-between p-3 border rounded-md bg-background hover:bg-muted/50"
                   >
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-center space-x-3 overflow-hidden">
                       {getTargetIcon(getTargetType(target))}
-                      <div>
-                        <div className="font-medium">{target.name}</div>
-                        <TooltipProvider>
+                      <div className="overflow-hidden">
+                        <div className="font-medium truncate">{target.name}</div>
+                        <TooltipProvider delayDuration={300}>
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <div className="text-xs text-muted-foreground truncate max-w-[400px]">
-                                {target.sse &&
-                                  `${target.sse.host}:${target.sse.port}${target.sse.path}`}
-                                {target.stdio &&
-                                  `${target.stdio.cmd} ${target.stdio.args?.join(" ")}`}
-                                {target.openapi && `${target.openapi.host}:${target.openapi.port}`}
-                                {target.a2a &&
-                                  `${target.a2a.host}:${target.a2a.port}${target.a2a.path}`}
+                              <div className="text-xs text-muted-foreground truncate">
+                                {getTargetDetailsString(target)}
                               </div>
                             </TooltipTrigger>
                             <TooltipContent>
-                              {target.sse &&
-                                `${target.sse.host}:${target.sse.port}${target.sse.path}`}
-                              {target.stdio &&
-                                `${target.stdio.cmd} ${target.stdio.args?.join(" ")}`}
-                              {target.openapi && `${target.openapi.host}:${target.openapi.port}`}
-                              {target.a2a &&
-                                `${target.a2a.host}:${target.a2a.port}${target.a2a.path}`}
+                              <div>{getTargetDetailsString(target)}</div>
+                              {target.listeners && target.listeners.length > 0 && (
+                                <div className="mt-1 pt-1 border-t text-xs">
+                                  Listener: {target.listeners[0]}
+                                </div>
+                              )}
                             </TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
                       </div>
                     </div>
-                    <div className="flex items-center space-x-2">
-                      <Badge variant="outline">{getTargetType(target)}</Badge>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleRemoveTarget(index)}
-                        className="h-8 w-8"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                    <div className="flex items-center space-x-2 flex-shrink-0">
+                      <Badge variant="secondary">{getTargetType(target).toUpperCase()}</Badge>
+                      <TooltipProvider delayDuration={300}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleRemoveTarget(index)}
+                              className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Remove target &apos;{target.name}&apos;</TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                     </div>
                   </div>
                 ))}
@@ -280,11 +283,21 @@ export function TargetsStep({ onNext, onPrevious, config, onConfigChange }: Targ
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back
         </Button>
-        <Button onClick={handleNext}>
-          Complete Setup
+        <Button onClick={handleNext} disabled={isAddingTarget}>
+          {config.targets.length > 0 || targetName.trim()
+            ? "Next (Complete Setup)"
+            : "Skip & Complete Setup"}
           <ArrowRight className="ml-2 h-4 w-4" />
         </Button>
       </CardFooter>
     </Card>
   );
+}
+
+function getTargetDetailsString(target: Target): string {
+  if (target.sse) return `${target.sse.host}:${target.sse.port}${target.sse.path || "/"}`;
+  if (target.stdio) return `${target.stdio.cmd} ${target.stdio.args?.join(" ") || ""}`;
+  if (target.openapi) return `${target.openapi.host}:${target.openapi.port}`;
+  if (target.a2a) return `${target.a2a.host}:${target.a2a.port}${target.a2a.path || "/"}`;
+  return "Unknown configuration";
 }

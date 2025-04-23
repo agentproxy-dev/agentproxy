@@ -4,13 +4,13 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ChevronUp, ChevronDown } from "lucide-react";
-import { Target } from "@/lib/types";
+import { TargetWithType } from "@/lib/types";
 
 interface StdioTargetFormProps {
   targetName: string;
-  onSubmit: (target: Target) => Promise<void>;
+  onSubmit: (target: TargetWithType) => Promise<void>;
   isLoading: boolean;
-  existingTarget?: Target;
+  existingTarget?: TargetWithType;
   hideSubmitButton?: boolean;
 }
 
@@ -51,8 +51,9 @@ export const StdioTargetForm = forwardRef<
 
   const handleSubmit = async () => {
     try {
-      const target: Target = {
+      const target: TargetWithType = {
         name: targetName,
+        type: "stdio",
         stdio: {
           cmd: command,
           args: args.split(" ").filter((arg) => arg.trim() !== ""),
@@ -60,7 +61,7 @@ export const StdioTargetForm = forwardRef<
         },
       };
 
-      await onSubmit(target);
+      await onSubmit(target as TargetWithType);
     } catch (err) {
       console.error("Error creating stdio target:", err);
       throw err;

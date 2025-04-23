@@ -5,14 +5,14 @@ import { Globe2, Terminal, ServerIcon } from "lucide-react";
 import { SSETargetForm } from "./SSETargetForm";
 import { StdioTargetForm } from "./StdioTargetForm";
 import { OpenAPITargetForm } from "./OpenAPITargetForm";
-import { Target, TargetType } from "@/lib/types";
+import { TargetType, TargetWithType } from "@/lib/types";
 
 interface MCPTargetFormProps {
   targetName: string;
   onTargetNameChange: (name: string) => void;
-  onSubmit: (target: Target) => Promise<void>;
+  onSubmit: (target: TargetWithType) => Promise<void>;
   isLoading: boolean;
-  existingTarget?: Target;
+  existingTarget?: TargetWithType;
 }
 
 export const MCPTargetForm = forwardRef<{ submitForm: () => Promise<void> }, MCPTargetFormProps>(
@@ -25,7 +25,7 @@ export const MCPTargetForm = forwardRef<{ submitForm: () => Promise<void> }, MCP
     const openApiFormRef = useRef<{ submitForm: () => Promise<void> } | null>(null);
 
     // Initialize target type based on existing target if available
-    function getInitialTargetType(target?: Target): TargetType {
+    function getInitialTargetType(target?: TargetWithType): TargetType {
       if (target) {
         if (target.stdio) return "stdio";
         if (target.openapi) return "openapi";

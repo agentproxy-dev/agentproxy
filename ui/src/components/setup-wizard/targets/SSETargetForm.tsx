@@ -5,13 +5,13 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ChevronUp, ChevronDown } from "lucide-react";
-import { Target, Header } from "@/lib/types";
+import { Header, TargetWithType } from "@/lib/types";
 
 interface SSETargetFormProps {
   targetName: string;
-  onSubmit: (target: Target) => Promise<void>;
+  onSubmit: (target: TargetWithType) => Promise<void>;
   isLoading: boolean;
-  existingTarget?: Target;
+  existingTarget?: TargetWithType;
   hideSubmitButton?: boolean;
 }
 
@@ -75,8 +75,9 @@ export const SSETargetForm = forwardRef<{ submitForm: () => Promise<void> }, SSE
           port = urlObj.protocol === "https:" ? 443 : 80;
         }
 
-        const target: Target = {
+        const target: TargetWithType = {
           name: targetName,
+          type: "mcp",
           listeners: selectedListeners,
           sse: {
             host: urlObj.hostname,
@@ -100,7 +101,7 @@ export const SSETargetForm = forwardRef<{ submitForm: () => Promise<void> }, SSE
           };
         }
 
-        await onSubmit(target);
+        await onSubmit(target as TargetWithType);
       } catch (err) {
         console.error("Error creating SSE target:", err);
         throw err;

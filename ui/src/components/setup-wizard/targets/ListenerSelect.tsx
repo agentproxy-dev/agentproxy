@@ -102,25 +102,21 @@ export function ListenerSelect({ selectedListeners, onListenersChange }: Listene
       // Show badges for selected listeners
       return (
         <div className="flex gap-1 flex-wrap mr-2 overflow-hidden">
-          {specificSelectedListeners.slice(0, 3).map(
-            (
-              listenerName
-            ) => (
-              <Badge
-                variant="secondary"
-                key={listenerName}
-                className="mr-1 mb-1"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  handleSelect("specific", listenerName);
-                }}
-              >
-                {listenerName}
-                <X className="ml-1 h-3 w-3 cursor-pointer" />
-              </Badge>
-            )
-          )}
+          {specificSelectedListeners.slice(0, 3).map((listenerName) => (
+            <Badge
+              variant="secondary"
+              key={listenerName}
+              className="mr-1 mb-1"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleSelect("specific", listenerName);
+              }}
+            >
+              {listenerName}
+              <X className="ml-1 h-3 w-3 cursor-pointer" />
+            </Badge>
+          ))}
           {specificSelectedListeners.length > 3 && (
             <Badge variant="secondary" className="mr-1 mb-1">
               +{specificSelectedListeners.length - 3} more

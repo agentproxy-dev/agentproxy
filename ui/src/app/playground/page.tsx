@@ -1,136 +1,358 @@
 "use client";
 
-import { useState } from "react";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
+import { useState, useEffect } from "react";
+import { Client as McpClient } from "@modelcontextprotocol/sdk/client/index.js";
+import { SSEClientTransport as McpSseTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 import {
-  ClientRequest,
-  Result,
-  Request,
+  ClientRequest as McpClientRequest,
+  Result as McpResult,
+  Request as McpRequest,
   McpError,
-  ListToolsResultSchema,
-  Tool,
+  ListToolsResultSchema as McpListToolsResultSchema,
+  Tool as McpTool,
 } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { A2AClient, RpcError } from "@/lib/a2a-client";
+import { AgentSkill, Task, TaskSendParams, Message } from "@/lib/a2a-schema";
 import { useServer } from "@/lib/server-context";
-import { Loader2, Send } from "lucide-react";
-import { Listener } from "@/lib/types";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
+import { fetchListenerTargets } from "@/lib/api";
+import { ListenerInfo, ListenerProtocol } from "@/lib/types";
 import { toast } from "sonner";
+import { v4 as uuidv4 } from "uuid";
 
-// Schema for tool invocation response
-const ToolResponseSchema = z.any();
+// Import the playground components
+import { ConnectionSettings } from "@/components/playground/ConnectionSettings";
+import { CapabilitiesList } from "@/components/playground/CapabilitiesList";
+import { ActionPanel } from "@/components/playground/ActionPanel";
+import { ResponseDisplay } from "@/components/playground/ResponseDisplay";
+
+// Schema for MCP tool invocation response (kept for MCP)
+const McpToolResponseSchema = z.any();
+
+// Define state interfaces
+interface ConnectionState {
+  selectedEndpoint: string;
+  selectedListenerName: string | null;
+  selectedListenerProtocol: ListenerProtocol | null;
+  authToken: string;
+  connectionType: "mcp" | "a2a" | null;
+  isConnected: boolean;
+  isConnecting: boolean;
+  isLoadingA2aTargets: boolean;
+}
+
+interface McpState {
+  client: McpClient<McpRequest, any, McpResult> | null;
+  tools: McpTool[];
+  selectedTool: McpTool | null;
+  paramValues: Record<string, any>;
+  response: any;
+}
+
+interface A2aState {
+  client: A2AClient | null;
+  targets: string[];
+  selectedTarget: string | null;
+  skills: AgentSkill[];
+  selectedSkill: AgentSkill | null;
+  message: string;
+  response: Task | any | null;
+}
+
+interface UiState {
+  isRequestRunning: boolean;
+  isLoadingCapabilities: boolean;
+}
 
 export default function PlaygroundPage() {
-  const { listeners } = useServer();
-  const [selectedEndpoint, setSelectedEndpoint] = useState<string>("");
-  const [authToken, setAuthToken] = useState<string>("");
-  const [isConnected, setIsConnected] = useState(false);
-  const [isConnecting, setIsConnecting] = useState(false);
-  const [isLoadingTools, setIsLoadingTools] = useState(false);
-  const [isToolRunning, setIsToolRunning] = useState(false);
-  const [tools, setTools] = useState<Tool[]>([]);
-  const [selectedTool, setSelectedTool] = useState<Tool | null>(null);
-  const [paramValues, setParamValues] = useState<Record<string, any>>({});
-  const [response, setResponse] = useState<any>(null);
-  const [client, setClient] = useState<Client<Request, any, Result> | null>(null);
+  const { listeners: rawListeners } = useServer();
+  const [listeners, setListeners] = useState<ListenerInfo[]>([]);
+
+  const [connectionState, setConnectionState] = useState<ConnectionState>({
+    selectedEndpoint: "",
+    selectedListenerName: null,
+    selectedListenerProtocol: null,
+    authToken: "",
+    connectionType: null,
+    isConnected: false,
+    isConnecting: false,
+    isLoadingA2aTargets: false,
+  });
+
+  const [mcpState, setMcpState] = useState<McpState>({
+    client: null,
+    tools: [],
+    selectedTool: null,
+    paramValues: {},
+    response: null,
+  });
+
+  const [a2aState, setA2aState] = useState<A2aState>({
+    client: null,
+    targets: [],
+    selectedTarget: null,
+    skills: [],
+    selectedSkill: null,
+    message: "",
+    response: null,
+  });
+
+  const [uiState, setUiState] = useState<UiState>({
+    isRequestRunning: false,
+    isLoadingCapabilities: false,
+  });
+
+  // Process rawListeners on mount or when they change
+  useEffect(() => {
+    const processedListeners = rawListeners
+      .map((listener) => {
+        let displayEndpoint = "Unknown";
+        if (listener.sse) {
+          displayEndpoint = `localhost:${listener.sse.port}`;
+        }
+        return { ...listener, displayEndpoint };
+      })
+      .filter((l) => l.displayEndpoint !== "Unknown");
+
+    setListeners(processedListeners);
+  }, [rawListeners]);
+
+  // Handle Listener Endpoint Selection Change
+  const handleListenerSelect = async (endpoint: string) => {
+    setConnectionState((prev) => ({
+      ...prev,
+      selectedEndpoint: endpoint,
+      isConnected: false,
+    }));
+    setA2aState((prev) => ({
+      ...prev,
+      selectedTarget: null,
+      targets: [],
+    }));
+    resetClientState();
+
+    const listener = listeners.find((l) => l.displayEndpoint === endpoint);
+    if (!listener) {
+      setConnectionState((prev) => ({
+        ...prev,
+        selectedListenerName: null,
+        selectedListenerProtocol: null,
+      }));
+      return;
+    }
+
+    setConnectionState((prev) => ({
+      ...prev,
+      selectedListenerName: listener.name,
+      selectedListenerProtocol: listener.protocol,
+    }));
+
+    if (listener.protocol === ListenerProtocol.A2A) {
+      setConnectionState((prev) => ({ ...prev, isLoadingA2aTargets: true }));
+      try {
+        const targets = await fetchListenerTargets(listener.name);
+        const targetNames = targets.map((t) => t.name);
+        setA2aState((prev) => ({ ...prev, targets: targetNames }));
+        if (targets.length === 0) {
+          toast.info(`A2A listener ${listener.name} has no targets configured.`);
+        }
+      } catch (error) {
+        console.error("Failed to fetch A2A targets:", error);
+        toast.error("Failed to fetch A2A targets for this listener.");
+        setA2aState((prev) => ({ ...prev, targets: [] }));
+      } finally {
+        setConnectionState((prev) => ({ ...prev, isLoadingA2aTargets: false }));
+      }
+    } else {
+      setA2aState((prev) => ({ ...prev, targets: [], selectedTarget: null }));
+    }
+  };
+
+  // Clear client-specific state without clearing endpoint/token
+  const resetClientState = () => {
+    setConnectionState((prev) => ({ ...prev, connectionType: null }));
+    setMcpState((prev) => ({
+      ...prev,
+      client: null,
+      tools: [],
+      selectedTool: null,
+      paramValues: {},
+      response: null,
+    }));
+    setA2aState((prev) => ({
+      ...prev,
+      client: null,
+      skills: [],
+      selectedSkill: null,
+      message: "",
+      response: null,
+    }));
+    setUiState({
+      isLoadingCapabilities: false,
+      isRequestRunning: false,
+    });
+  };
 
   const connect = async () => {
+    const selectedListener = listeners.find(
+      (l) => l.displayEndpoint === connectionState.selectedEndpoint
+    );
+
+    if (!selectedListener || !selectedListener.sse) {
+      toast.error("Listener details not found or invalid.");
+      return;
+    }
+
+    const protocol = selectedListener.protocol;
+
+    if (protocol === ListenerProtocol.A2A && !a2aState.selectedTarget) {
+      toast.warning("Please select an A2A target to connect to.");
+      return;
+    }
+
+    setConnectionState((prev) => ({ ...prev, isConnecting: true }));
+    resetClientState();
+
+    const port = selectedListener.sse.port;
+    const useTls = !!selectedListener.sse.tls;
+    const httpProtocol = useTls ? "https" : "http";
+
+    const headers: HeadersInit = {};
+    if (connectionState.authToken) {
+      headers["Authorization"] = `Bearer ${connectionState.authToken}`;
+    }
+
     try {
-      setIsConnecting(true);
-      const [_, port] = selectedEndpoint.split(":");
+      if (protocol === ListenerProtocol.MCP || !protocol) {
+        setConnectionState((prev) => ({ ...prev, connectionType: "mcp" }));
+        const connectUrl = `${httpProtocol}://localhost:${port}/sse`;
+        console.log(`Connecting to MCP endpoint: ${connectUrl}`);
 
-      const mcpClient = new Client(
-        {
-          name: "agentproxy",
-          version: "1.0.0",
-        },
-        {
-          capabilities: {},
-        }
-      );
+        const client = new McpClient(
+          { name: "mcp-playground", version: "1.0.0" },
+          { capabilities: {} }
+        );
 
-      // Create SSE transport through the proxy
-      const headers: HeadersInit = {};
-      if (authToken) {
-        headers["Authorization"] = `Bearer ${authToken}`;
-      }
+        const transport = new McpSseTransport(new URL(connectUrl), {
+          eventSourceInit: {
+            fetch: (url, init) => fetch(url, { ...init, headers }),
+          },
+          requestInit: { headers },
+        });
 
-      const transport = new SSEClientTransport(new URL(`http://localhost:${port}/sse`), {
-        eventSourceInit: {
-          fetch: (url, init) => fetch(url, { ...init, headers }),
-        },
-        requestInit: {
-          headers,
-        },
-      });
+        await client.connect(transport);
+        setMcpState((prev) => ({ ...prev, client }));
+        setConnectionState((prev) => ({ ...prev, isConnected: true }));
+        toast.success("Connected to MCP endpoint");
 
-      // Connect the client
-      await mcpClient.connect(transport);
-      setClient(mcpClient);
-      setIsConnected(true);
+        setUiState((prev) => ({ ...prev, isLoadingCapabilities: true }));
+        const listToolsRequest: McpClientRequest = { method: "tools/list", params: {} };
+        const toolsResponse = await client.request(listToolsRequest, McpListToolsResultSchema);
+        setMcpState((prev) => ({ ...prev, tools: toolsResponse.tools }));
+        console.log("MCP Tools:", toolsResponse.tools);
+      } else if (protocol === ListenerProtocol.A2A) {
+        setConnectionState((prev) => ({ ...prev, connectionType: "a2a" }));
+        const baseUrl = `${httpProtocol}://localhost:${port}/${a2aState.selectedTarget}`;
+        console.log(`Connecting to A2A endpoint: ${baseUrl}`);
 
-      // Fetch tools after connection
-      setIsLoadingTools(true);
-      const listToolsRequest: ClientRequest = {
-        method: "tools/list",
-        params: {},
-      };
+        const client = new A2AClient(baseUrl, headers);
+        setA2aState((prev) => ({ ...prev, client }));
+        setConnectionState((prev) => ({ ...prev, isConnected: true }));
+        toast.success(
+          `Initialized A2A client for target ${a2aState.selectedTarget} (fetching Agent Card...)`
+        );
 
-      const toolsResponse = await mcpClient.request(listToolsRequest, ListToolsResultSchema);
-      setTools(toolsResponse.tools);
-    } catch (error) {
-      console.error("Failed to connect:", error);
-      if (error instanceof Error) {
-        if (error.message.includes("401")) {
-          toast.error("Unauthorized: Please check your bearer token");
-        } else {
-          toast.error(error.message);
-        }
+        setUiState((prev) => ({ ...prev, isLoadingCapabilities: true }));
+        const agentCard = await client.agentCard();
+        setA2aState((prev) => ({ ...prev, skills: agentCard.skills || [] }));
+        console.log("A2A Agent Card:", agentCard);
+        console.log("A2A Skills:", agentCard.skills);
+        toast.success(`Connected to A2A Agent: ${agentCard.name}`);
       } else {
-        toast.error("Failed to connect to server");
+        toast.error("Unknown listener protocol.");
+        setConnectionState((prev) => ({ ...prev, connectionType: null }));
       }
+    } catch (error: any) {
+      console.error("Failed to connect:", error);
+      const errorMessage =
+        error instanceof RpcError || error instanceof McpError || error instanceof Error
+          ? error.message
+          : "Unknown connection error";
+
+      if (errorMessage.includes("401") || (error instanceof RpcError && error.code === 401)) {
+        toast.error("Unauthorized: Check bearer token");
+      } else if (
+        errorMessage.includes("Not Found") ||
+        (error instanceof Error && error.message.includes("404"))
+      ) {
+        toast.error(`Connection failed: Endpoint or target not found (${errorMessage})`);
+      } else if (errorMessage.includes("Failed to fetch")) {
+        toast.error("Connection failed: Server unreachable or refused connection.");
+      } else {
+        toast.error(`Connection failed: ${errorMessage}`);
+      }
+      resetFullStateAfterDisconnect(); // Full reset on connection failure
     } finally {
-      setIsConnecting(false);
-      setIsLoadingTools(false);
+      setConnectionState((prev) => ({ ...prev, isConnecting: false }));
+      setUiState((prev) => ({ ...prev, isLoadingCapabilities: false }));
     }
   };
 
   const disconnect = async () => {
-    if (client) {
-      await client.close();
-      setClient(null);
-      setIsConnected(false);
-      setTools([]);
-      setSelectedTool(null);
-      setResponse(null);
+    console.log("Disconnecting...");
+    if (connectionState.connectionType === "mcp" && mcpState.client) {
+      try {
+        await mcpState.client.close();
+        console.log("MCP client closed.");
+      } catch (e) {
+        console.error("Error closing MCP client:", e);
+      }
     }
+    resetFullStateAfterDisconnect();
+    toast.info("Disconnected");
   };
 
-  const handleToolSelect = (tool: Tool) => {
-    setSelectedTool(tool);
-    setResponse(null);
-    // Initialize parameter values with defaults based on schema
+  // Resets everything including endpoint/token selections
+  const resetFullStateAfterDisconnect = () => {
+    setConnectionState({
+      // Reset full connection state
+      selectedEndpoint: "",
+      selectedListenerName: null,
+      selectedListenerProtocol: null,
+      authToken: connectionState.authToken, // Keep token maybe? Or reset? Let's keep it for now.
+      connectionType: null,
+      isConnected: false,
+      isConnecting: false,
+      isLoadingA2aTargets: false,
+    });
+    setMcpState({
+      // Reset full MCP state
+      client: null,
+      tools: [],
+      selectedTool: null,
+      paramValues: {},
+      response: null,
+    });
+    setA2aState({
+      // Reset full A2A state
+      client: null,
+      targets: [],
+      selectedTarget: null,
+      skills: [],
+      selectedSkill: null,
+      message: "",
+      response: null,
+    });
+    setUiState({
+      isRequestRunning: false,
+      isLoadingCapabilities: false,
+    });
+  };
+
+  const handleMcpToolSelect = (tool: McpTool) => {
+    setMcpState((prev) => ({ ...prev, selectedTool: tool, response: null }));
+    setA2aState((prev) => ({ ...prev, response: null })); // Clear other response type
+
     const initialParams: Record<string, any> = {};
     Object.entries(tool.inputSchema.properties || {}).forEach(([key, prop]: [string, any]) => {
       switch (prop.type) {
@@ -151,250 +373,153 @@ export default function PlaygroundPage() {
           initialParams[key] = "";
       }
     });
-    setParamValues(initialParams);
+    setMcpState((prev) => ({ ...prev, paramValues: initialParams }));
   };
 
-  const runTool = async () => {
-    if (!client || !selectedTool) return;
+  const runMcpTool = async () => {
+    if (!mcpState.client || !mcpState.selectedTool) return;
+
+    setUiState((prev) => ({ ...prev, isRequestRunning: true }));
+    setMcpState((prev) => ({ ...prev, response: null }));
+    setA2aState((prev) => ({ ...prev, response: null }));
 
     try {
-      setIsToolRunning(true);
-      const request: ClientRequest = {
+      const request: McpClientRequest = {
         method: "tools/call",
         params: {
-          name: selectedTool.name,
-          arguments: paramValues,
+          name: mcpState.selectedTool.name,
+          arguments: mcpState.paramValues,
         },
       };
-
-      const result = await client.request(request, ToolResponseSchema);
-      setResponse(result);
-    } catch (error) {
-      console.error("Failed to run tool:", error);
-      toast.error(error instanceof McpError ? error.message : "Failed to run tool");
+      const result = await mcpState.client.request(request, McpToolResponseSchema);
+      setMcpState((prev) => ({ ...prev, response: result }));
+      toast.success(`Tool ${mcpState.selectedTool?.name} executed.`);
+    } catch (error: any) {
+      const message = error instanceof McpError ? error.message : "Failed to run tool";
+      setMcpState((prev) => ({ ...prev, response: { error: message, details: error } }));
+      toast.error(message);
     } finally {
-      setIsToolRunning(false);
+      setUiState((prev) => ({ ...prev, isRequestRunning: false }));
     }
   };
 
-  const getListenerEndpoint = (listener: Listener) => {
-    if (listener.sse) {
-      const address = "localhost";
-      return `${address}:${listener.sse.port}`;
+  const handleA2aSkillSelect = (skill: AgentSkill) => {
+    setA2aState((prev) => ({ ...prev, selectedSkill: skill, response: null, message: "" }));
+    setMcpState((prev) => ({ ...prev, response: null }));
+  };
+
+  const runA2aSkill = async () => {
+    if (!a2aState.client || !a2aState.selectedSkill || !a2aState.message.trim()) {
+      if (!a2aState.message.trim()) toast.warning("Please enter a message for the agent.");
+      return;
     }
-    return null;
+
+    setUiState((prev) => ({ ...prev, isRequestRunning: true }));
+    setA2aState((prev) => ({ ...prev, response: null }));
+    setMcpState((prev) => ({ ...prev, response: null }));
+
+    try {
+      const message: Message = {
+        role: "user",
+        parts: [{ type: "text", text: a2aState.message }],
+      };
+
+      const params: TaskSendParams = {
+        id: uuidv4(),
+        message: message,
+      };
+
+      const taskResult = await a2aState.client.sendTask(params);
+      setA2aState((prev) => ({ ...prev, response: taskResult }));
+      toast.success(`Task sent to agent using skill ${a2aState.selectedSkill?.name}.`);
+    } catch (error: any) {
+      console.error("Failed to run A2A skill:", error);
+      const message =
+        error instanceof RpcError ? `Error ${error.code}: ${error.message}` : "Failed to send task";
+      setA2aState((prev) => ({ ...prev, response: { error: message, details: error } }));
+      toast.error(message);
+    } finally {
+      setUiState((prev) => ({ ...prev, isRequestRunning: false }));
+    }
+  };
+
+  const handleMcpParamChange = (key: string, value: any) => {
+    setMcpState((prev) => ({
+      ...prev,
+      paramValues: { ...prev.paramValues, [key]: value },
+    }));
+  };
+
+  const handleAuthTokenChange = (token: string) => {
+    setConnectionState((prev) => ({ ...prev, authToken: token }));
+  };
+
+  const handleA2aTargetSelect = (target: string | null) => {
+    setA2aState((prev) => ({ ...prev, selectedTarget: target }));
+  };
+
+  const handleA2aMessageChange = (message: string) => {
+    setA2aState((prev) => ({ ...prev, message }));
   };
 
   return (
     <div className="container mx-auto py-8 px-4 space-y-6">
       <div className="mb-6">
         <h1 className="text-3xl font-bold tracking-tight">Playground</h1>
-        <p className="text-muted-foreground mt-1">Test your MCP server with the playground</p>
+        <p className="text-muted-foreground mt-1">Test your MCP and A2A server endpoints</p>
       </div>
-      <Card>
-        <CardHeader>
-          <CardTitle>Connection Settings</CardTitle>
-          <CardDescription>Connect to an MCP server endpoint</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex gap-4">
-            <Select
-              disabled={isConnected}
-              onValueChange={setSelectedEndpoint}
-              value={selectedEndpoint}
-            >
-              <SelectTrigger className="w-[200px]">
-                <SelectValue placeholder="Select endpoint" />
-              </SelectTrigger>
-              <SelectContent>
-                {listeners.map((listener) => {
-                  const endpoint = getListenerEndpoint(listener);
-                  if (!endpoint) return null;
-                  return (
-                    <SelectItem key={endpoint} value={endpoint}>
-                      {endpoint}
-                    </SelectItem>
-                  );
-                })}
-              </SelectContent>
-            </Select>
-            <Input
-              placeholder="Bearer token (optional)"
-              type="password"
-              value={authToken}
-              onChange={(e) => setAuthToken(e.target.value)}
-              disabled={isConnected}
-              className="flex-1"
-            />
-            <Button
-              onClick={isConnected ? disconnect : connect}
-              disabled={!selectedEndpoint || isConnecting}
-            >
-              {isConnecting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Connecting...
-                </>
-              ) : isConnected ? (
-                "Disconnect"
-              ) : (
-                "Connect"
-              )}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
 
-      {isConnected && (
+      <ConnectionSettings
+        listeners={listeners}
+        a2aTargets={a2aState.targets}
+        isLoadingA2aTargets={connectionState.isLoadingA2aTargets}
+        selectedEndpoint={connectionState.selectedEndpoint}
+        selectedA2aTarget={a2aState.selectedTarget}
+        authToken={connectionState.authToken}
+        isConnected={connectionState.isConnected}
+        isConnecting={connectionState.isConnecting}
+        selectedListenerProtocol={connectionState.selectedListenerProtocol}
+        onListenerSelect={handleListenerSelect}
+        onA2aTargetSelect={handleA2aTargetSelect}
+        onAuthTokenChange={handleAuthTokenChange}
+        onConnect={connect}
+        onDisconnect={disconnect}
+      />
+
+      {connectionState.isConnected && (
         <>
-          <div className="flex gap-4">
-            <Card className="flex-1">
-              <CardHeader>
-                <CardTitle>Available Tools</CardTitle>
-                <CardDescription>Select a tool to use</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {isLoadingTools ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                    <span className="ml-3 text-muted-foreground">Loading tools...</span>
-                  </div>
-                ) : tools.length === 0 ? (
-                  <div className="flex items-center justify-center py-8">
-                    <span className="text-muted-foreground">No tools discovered.</span>
-                  </div>
-                ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Name</TableHead>
-                        <TableHead>Description</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {tools.map((tool) => (
-                        <TableRow
-                          key={tool.name}
-                          className="cursor-pointer hover:bg-muted/50"
-                          onClick={() => handleToolSelect(tool)}
-                        >
-                          <TableCell className="font-medium">{tool.name}</TableCell>
-                          <TableCell>{tool.description}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                )}
-              </CardContent>
-            </Card>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <CapabilitiesList
+              mcpTools={mcpState.tools}
+              a2aSkills={a2aState.skills}
+              connectionType={connectionState.connectionType}
+              isLoading={uiState.isLoadingCapabilities}
+              selectedMcpToolName={mcpState.selectedTool?.name ?? null}
+              selectedA2aSkillId={a2aState.selectedSkill?.id ?? null}
+              onMcpToolSelect={handleMcpToolSelect}
+              onA2aSkillSelect={handleA2aSkillSelect}
+            />
 
-            {selectedTool ? (
-              <Card className="flex-1">
-                <CardHeader>
-                  <CardTitle>{selectedTool.name}</CardTitle>
-                  <CardDescription>{selectedTool.description}</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {Object.entries(selectedTool.inputSchema.properties || {}).map(
-                    ([key, prop]: [string, any]) => (
-                      <div key={key} className="space-y-2">
-                        <Label htmlFor={key}>
-                          {key}
-                          {Array.isArray(selectedTool.inputSchema.required) &&
-                            selectedTool.inputSchema.required.includes(key) && (
-                              <span className="text-red-500 ml-1">*</span>
-                            )}
-                        </Label>
-                        {prop.type === "boolean" ? (
-                          <div className="flex items-center space-x-2">
-                            <Checkbox
-                              id={key}
-                              checked={!!paramValues[key]}
-                              onCheckedChange={(checked) =>
-                                setParamValues({
-                                  ...paramValues,
-                                  [key]: checked,
-                                })
-                              }
-                            />
-                            <label htmlFor={key} className="text-sm text-muted-foreground">
-                              {prop.description || "Toggle this option"}
-                            </label>
-                          </div>
-                        ) : prop.type === "string" && prop.format === "textarea" ? (
-                          <Textarea
-                            id={key}
-                            placeholder={prop.description}
-                            value={paramValues[key] || ""}
-                            onChange={(e) =>
-                              setParamValues({
-                                ...paramValues,
-                                [key]: e.target.value,
-                              })
-                            }
-                          />
-                        ) : prop.type === "number" || prop.type === "integer" ? (
-                          <Input
-                            type="number"
-                            id={key}
-                            placeholder={prop.description}
-                            value={paramValues[key] || ""}
-                            onChange={(e) =>
-                              setParamValues({
-                                ...paramValues,
-                                [key]: Number(e.target.value),
-                              })
-                            }
-                          />
-                        ) : (
-                          <Input
-                            id={key}
-                            placeholder={prop.description}
-                            value={paramValues[key] || ""}
-                            onChange={(e) =>
-                              setParamValues({
-                                ...paramValues,
-                                [key]: e.target.value,
-                              })
-                            }
-                          />
-                        )}
-                      </div>
-                    )
-                  )}
-                  <Button onClick={runTool} disabled={isToolRunning} className="w-full">
-                    {isToolRunning ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Running...
-                      </>
-                    ) : (
-                      <>
-                        <Send className="mr-2 h-4 w-4" />
-                        Run Tool
-                      </>
-                    )}
-                  </Button>
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="flex-1 flex items-center justify-center p-4 border rounded-lg text-muted-foreground bg-card">
-                Select one of the available tools
-              </div>
-            )}
+            <ActionPanel
+              connectionType={connectionState.connectionType}
+              mcpSelectedTool={mcpState.selectedTool}
+              a2aSelectedSkill={a2aState.selectedSkill}
+              mcpParamValues={mcpState.paramValues}
+              a2aMessage={a2aState.message}
+              isRequestRunning={uiState.isRequestRunning}
+              onMcpParamChange={handleMcpParamChange}
+              onA2aMessageChange={handleA2aMessageChange}
+              onRunMcpTool={runMcpTool}
+              onRunA2aSkill={runA2aSkill}
+            />
           </div>
 
-          {response && (
-            <Card className="mt-4">
-              <CardHeader>
-                <CardTitle>Response</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <pre className="bg-secondary p-4 rounded-lg overflow-auto">
-                  {JSON.stringify(response, null, 2)}
-                </pre>
-              </CardContent>
-            </Card>
+          {(mcpState.response || a2aState.response) && (
+            <ResponseDisplay
+              mcpResponse={mcpState.response}
+              a2aResponse={a2aState.response}
+              connectionType={connectionState.connectionType}
+            />
           )}
         </>
       )}

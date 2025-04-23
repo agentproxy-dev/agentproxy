@@ -1,16 +1,17 @@
 "use client";
 
-import { useState, forwardRef, useImperativeHandle } from "react";
+import { useState, forwardRef, useImperativeHandle, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Loader2, Info, Edit2, HelpCircle } from "lucide-react";
-import { Target, Config } from "@/lib/types";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Loader2, Info, Edit2, AlertCircle } from "lucide-react";
+import { Target, Config, TargetWithType, Listener, ListenerProtocol } from "@/lib/types";
 import {
   updateTarget,
   createMcpTarget,
   createA2aTarget,
   deleteA2aTarget,
   deleteMcpTarget,
+  fetchListeners,
 } from "@/lib/api";
 import {
   Dialog,
@@ -19,9 +20,8 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
+  DialogClose,
 } from "@/components/ui/dialog";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import TargetItem from "./target-item";
 import { MCPTargetForm } from "./setup-wizard/targets/MCPTargetForm";
 import { A2ATargetForm } from "./setup-wizard/targets/A2ATargetForm";
@@ -30,42 +30,106 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { ListenerSelect } from "./setup-wizard/targets/ListenerSelect";
 import { toast } from "sonner";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { cn } from "@/lib/utils";
+
+type SelectableTargetType = "a2a" | "mcp";
 
 interface TargetsConfigProps {
   config: Config;
-  onConfigChange: (config: Config) => void;
-  isAddingTarget?: boolean;
-  setIsAddingTarget?: (isAdding: boolean) => void;
 }
 
 export const TargetsConfig = forwardRef<{ openAddTargetDialog: () => void }, TargetsConfigProps>(
-  (
-    {
-      config,
-      onConfigChange,
-      isAddingTarget: externalIsAddingTarget,
-      setIsAddingTarget: externalSetIsAddingTarget,
-    },
-    ref
-  ) => {
+  ({ config }, ref) => {
     const { refreshTargets } = useServer();
-    const [targetCategory, setTargetCategory] = useState<"mcp" | "a2a">("mcp");
+    const [isDialogOpen, setIsDialogOpen] = useState(false);
+    const [editingTarget, setEditingTarget] = useState<TargetWithType | undefined>(undefined);
+
+    const [selectedTargetType, setSelectedTargetType] = useState<SelectableTargetType | null>(null);
     const [targetName, setTargetName] = useState("");
     const [selectedListeners, setSelectedListeners] = useState<string[] | undefined>([]);
+    const [allListeners, setAllListeners] = useState<Listener[]>([]);
+    const [compatibleListeners, setCompatibleListeners] = useState<Listener[]>([]);
+
     const [targetNameError, setTargetNameError] = useState<string | null>(null);
-    const [internalIsAddingTarget, setInternalIsAddingTarget] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const [isUpdating, setIsUpdating] = useState(false);
-    const [isDialogOpen, setIsDialogOpen] = useState(false);
-    const [editingTarget, setEditingTarget] = useState<Target | undefined>(undefined);
+    const [listenerError, setListenerError] = useState<string | null>(null);
+    const [formError, setFormError] = useState<string | null>(null);
+    const [isLoadingListeners, setIsLoadingListeners] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
     const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
     const [targetToDelete, setTargetToDelete] = useState<{ index: number; name: string } | null>(
       null
     );
 
-    // Use external state if provided, otherwise use internal state
-    const isAddingTarget = externalIsAddingTarget ?? internalIsAddingTarget;
-    const setIsAddingTarget = externalSetIsAddingTarget ?? setInternalIsAddingTarget;
+    const mcpFormRef = useRef<{ submitForm: () => Promise<void> } | null>(null);
+    const a2aFormRef = useRef<{ submitForm: () => Promise<void> } | null>(null);
+
+    useEffect(() => {
+      if (isDialogOpen) {
+        const loadListeners = async () => {
+          setIsLoadingListeners(true);
+          setListenerError(null);
+          try {
+            const fetchedListeners = await fetchListeners();
+            setAllListeners(fetchedListeners);
+          } catch (err) {
+            console.error("Error fetching listeners:", err);
+            setListenerError(err instanceof Error ? err.message : "Failed to load listeners.");
+            setAllListeners([]);
+          } finally {
+            setIsLoadingListeners(false);
+          }
+        };
+        loadListeners();
+      } else {
+        setAllListeners([]);
+        setCompatibleListeners([]);
+      }
+    }, [isDialogOpen]);
+
+    useEffect(() => {
+      if (!selectedTargetType) {
+        setCompatibleListeners([]);
+        setListenerError(null);
+        return;
+      }
+
+      const requiredProtocol =
+        selectedTargetType === "a2a" ? ListenerProtocol.A2A : ListenerProtocol.MCP;
+
+      const filtered = allListeners.filter((listener) => {
+        if (requiredProtocol === ListenerProtocol.A2A) {
+          return listener.protocol === requiredProtocol;
+        } else {
+          return listener.protocol !== ListenerProtocol.A2A;
+        }
+      });
+
+      setCompatibleListeners(filtered);
+
+      if (filtered.length === 0 && !isLoadingListeners) {
+        setListenerError(`No ${requiredProtocol} listeners found. Please create one first.`);
+      } else {
+        setListenerError(null);
+      }
+
+      setSelectedListeners(
+        editingTarget?.listeners?.filter((lName) => filtered.some((cl) => cl.name === lName)) ?? []
+      );
+    }, [selectedTargetType, allListeners, isLoadingListeners, editingTarget]);
+
+    const resetFormState = () => {
+      setEditingTarget(undefined);
+      setSelectedTargetType(null);
+      setTargetName("");
+      setSelectedListeners([]);
+      setCompatibleListeners([]);
+      setTargetNameError(null);
+      setListenerError(null);
+      setFormError(null);
+      setIsSubmitting(false);
+    };
 
     const handleRemoveTarget = async (index: number) => {
       const target = config.targets[index];
@@ -74,171 +138,152 @@ export const TargetsConfig = forwardRef<{ openAddTargetDialog: () => void }, Tar
     };
 
     const confirmDelete = async () => {
+      console.log("confirming delete", targetToDelete);
       if (!targetToDelete) return;
-
+      setIsSubmitting(true);
       try {
         const target = config.targets[targetToDelete.index];
-
-        // Call the appropriate delete API based on target type
-        if (target.a2a) {
+        if (target.type === "a2a") {
           await deleteA2aTarget(target.name);
         } else {
           await deleteMcpTarget(target.name);
         }
-
-        // Only update local state after successful API call
-        const newConfig = {
-          ...config,
-          targets: config.targets.filter((_, i) => i !== targetToDelete.index),
-        };
-        onConfigChange(newConfig);
-
-        // Refresh targets from the server
         await refreshTargets();
-
-        toast.success("Target removed", {
-          description: "The target has been removed from your configuration.",
-        });
+        toast.success("Target removed", { description: `Target '${target.name}' removed.` });
+        setDeleteConfirmOpen(false);
+        setTargetToDelete(null);
       } catch (err) {
         console.error("Error deleting target:", err);
         toast.error("Error deleting target", {
-          description:
-            err instanceof Error
-              ? err.message
-              : "Failed to delete target. The target may be in use or the server encountered an error.",
+          description: err instanceof Error ? err.message : "Failed to delete target.",
         });
       } finally {
-        setDeleteConfirmOpen(false);
-        setTargetToDelete(null);
+        setIsSubmitting(false);
+        if (deleteConfirmOpen) setDeleteConfirmOpen(false);
+        if (targetToDelete) setTargetToDelete(null);
       }
     };
 
-    const handleCreateTarget = async (target: Target) => {
-      // Validate target name
+    const handleFormSubmit = async (formData: Omit<Target, "name" | "listeners">) => {
+      if (!selectedTargetType) {
+        setFormError("Please select a target type (MCP or A2A).");
+        return;
+      }
       if (!targetName.trim()) {
-        setTargetNameError("Target name is required");
+        setTargetNameError("Target name is required.");
+        return;
+      }
+      if (!selectedListeners || selectedListeners.length === 0) {
+        setListenerError("At least one compatible listener must be selected.");
         return;
       }
 
-      if (setIsAddingTarget) {
-        setIsAddingTarget(true);
-      }
-      setError(null);
+      setIsSubmitting(true);
+      setFormError(null);
       setTargetNameError(null);
 
-      try {
-        const targetWithListeners = {
-          ...target,
-          listeners: selectedListeners,
-        };
+      const targetPayload: Target = {
+        ...(formData as Target),
+        name: targetName,
+        listeners: selectedListeners,
+      };
 
-        if (targetCategory === "a2a") {
-          await createA2aTarget(targetWithListeners);
+      try {
+        let successMessage = "";
+        if (editingTarget) {
+          await updateTarget(targetPayload);
+          successMessage = `Target '${targetPayload.name}' updated.`;
         } else {
-          await createMcpTarget(targetWithListeners);
+          if (selectedTargetType === "a2a") {
+            await createA2aTarget(targetPayload);
+          } else {
+            await createMcpTarget(targetPayload);
+          }
+          successMessage = `Target '${targetPayload.name}' created.`;
         }
 
-        // Refresh targets from the server
         await refreshTargets();
-
-        setTargetName("");
-        setSelectedListeners([]);
-        setIsDialogOpen(false);
-        toast.success("Target created", {
-          description: `Successfully created ${target.name} target.`,
-        });
+        handleDialogClose();
+        toast.success(successMessage);
       } catch (err) {
-        console.error("Error creating target:", err);
-        setError(err instanceof Error ? err.message : "Failed to create target");
-        toast.error("Error creating target", {
-          description: err instanceof Error ? err.message : "Failed to create target",
+        console.error(`Error ${editingTarget ? "updating" : "creating"} target:`, err);
+        const message =
+          err instanceof Error
+            ? err.message
+            : `Failed to ${editingTarget ? "update" : "create"} target.`;
+        setFormError(message);
+        toast.error(`Error ${editingTarget ? "updating" : "creating"} target`, {
+          description: message,
         });
       } finally {
-        if (setIsAddingTarget) {
-          setIsAddingTarget(false);
-        }
-      }
-    };
-
-    const handleUpdateTarget = async (target: Target) => {
-      setIsUpdating(true);
-      try {
-        const targetWithListeners = {
-          ...target,
-          listeners: selectedListeners,
-        };
-        await updateTarget(targetWithListeners);
-
-        // Refresh targets from the server
-        await refreshTargets();
-
-        setIsDialogOpen(false);
-        setEditingTarget(undefined);
-        setSelectedListeners([]);
-        toast.success("Target updated", {
-          description: `Successfully updated ${target.name} target.`,
-        });
-      } catch (err) {
-        console.error("Error updating target:", err);
-        setError(err instanceof Error ? err.message : "Failed to update target");
-        toast.error("Error updating target", {
-          description: err instanceof Error ? err.message : "Failed to update target",
-        });
-      } finally {
-        setIsUpdating(false);
+        setIsSubmitting(false);
       }
     };
 
     const openAddTargetDialog = () => {
-      setTargetName("");
-      setSelectedListeners(undefined);
-      setTargetNameError(null);
-      setTargetCategory("mcp");
-      setEditingTarget(undefined);
+      resetFormState();
       setIsDialogOpen(true);
     };
 
-    const openEditTargetDialog = (target: Target) => {
+    const openEditTargetDialog = (target: TargetWithType) => {
+      resetFormState();
+      setEditingTarget(target);
+      setSelectedTargetType(target.type === "a2a" ? "a2a" : "mcp");
+
       setTargetName(target.name);
       setSelectedListeners(target.listeners);
-      if (target.a2a) {
-        setTargetCategory("a2a");
-      } else {
-        setTargetCategory("mcp");
-      }
-      setEditingTarget(target);
       setIsDialogOpen(true);
     };
 
     const handleDialogClose = () => {
       setIsDialogOpen(false);
-      setEditingTarget(undefined);
-      setTargetName("");
-      setSelectedListeners([]);
-      setTargetNameError(null);
-      if (setIsAddingTarget) {
-        setIsAddingTarget(false);
-      }
+      resetFormState();
     };
 
     useImperativeHandle(ref, () => ({
       openAddTargetDialog,
     }));
 
+    const renderFormFields = () => {
+      if (!selectedTargetType) return null;
+
+      switch (selectedTargetType) {
+        case "a2a":
+          return (
+            <A2ATargetForm
+              targetName={targetName}
+              onSubmit={handleFormSubmit}
+              isLoading={isSubmitting}
+              existingTarget={editingTarget?.type === "a2a" ? editingTarget : undefined}
+              hideSubmitButton={true}
+              ref={a2aFormRef}
+            />
+          );
+        case "mcp":
+          return (
+            <MCPTargetForm
+              targetName={targetName}
+              onTargetNameChange={setTargetName}
+              onSubmit={handleFormSubmit}
+              isLoading={isSubmitting}
+              existingTarget={editingTarget?.type !== "a2a" ? editingTarget : undefined}
+              ref={mcpFormRef}
+            />
+          );
+        default:
+          return <p>Invalid target type selected.</p>;
+      }
+    };
+
+    const showListenerSelection = selectedTargetType && !isLoadingListeners;
+    const noListenersFound = showListenerSelection && compatibleListeners.length === 0;
+    const canProceed = selectedTargetType && !isLoadingListeners && !listenerError;
+
     return (
       <div>
-        {error && (
+        {formError && (
           <Alert variant="destructive">
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
-
-        {isUpdating && (
-          <Alert>
-            <AlertDescription className="flex items-center">
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Updating targets...
-            </AlertDescription>
+            <AlertDescription>{formError}</AlertDescription>
           </Alert>
         )}
 
@@ -248,21 +293,21 @@ export const TargetsConfig = forwardRef<{ openAddTargetDialog: () => void }, Tar
             <div className="space-y-2">
               {config.targets.map((target, index) => (
                 <div
-                  key={index}
-                  className="flex items-center justify-between p-3 border rounded-md"
+                  key={target.name || index}
+                  className="flex items-center justify-between p-3 border rounded-md bg-background hover:bg-muted/50"
                 >
                   <TargetItem
                     target={target}
                     index={index}
                     onDelete={handleRemoveTarget}
-                    isUpdating={isUpdating}
+                    isUpdating={isSubmitting}
                   />
                   <Button
                     variant="ghost"
                     size="icon"
                     onClick={() => openEditTargetDialog(target)}
-                    className="h-8 w-8 ml-2"
-                    disabled={isUpdating}
+                    className="h-8 w-8 ml-2 text-muted-foreground hover:text-primary flex-shrink-0"
+                    disabled={isSubmitting}
                   >
                     <Edit2 className="h-4 w-4" />
                   </Button>
@@ -271,181 +316,154 @@ export const TargetsConfig = forwardRef<{ openAddTargetDialog: () => void }, Tar
             </div>
           </div>
         ) : (
-          <Alert>
-            <Info className="h-4 w-4" />
-            <AlertDescription>
-              No targets configured yet. Click &apos;Add Target&apos; to create your first target.
-            </AlertDescription>
-          </Alert>
+          <div className="mt-6 text-center text-muted-foreground">
+            <Info className="inline-block h-5 w-5 mr-2" />
+            No targets configured yet.
+          </div>
         )}
 
-        <Dialog open={isDialogOpen} onOpenChange={handleDialogClose}>
+        <Dialog open={isDialogOpen} onOpenChange={(open) => !open && handleDialogClose()}>
           <DialogContent className="sm:max-w-[600px]">
             <DialogHeader>
               <DialogTitle>{editingTarget ? "Edit Target" : "Add New Target"}</DialogTitle>
               <DialogDescription>
-                {editingTarget
-                  ? "Update the configuration for your target server."
-                  : "Configure a new target server for your proxy."}
+                Configure the details for your target server. Choose MCP or A2A.
               </DialogDescription>
             </DialogHeader>
 
-            <div className="space-y-4">
+            <div className="grid gap-4 py-4">
               <div className="space-y-2">
-                <Label htmlFor="targetName">
-                  Target Name <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  id="targetName"
-                  value={targetName}
-                  onChange={(e) => {
-                    setTargetName(e.target.value);
-                    if (e.target.value.trim()) {
-                      setTargetNameError(null);
-                    }
-                  }}
-                  placeholder="e.g., local-model"
-                  className={targetNameError ? "border-red-500" : ""}
-                />
-                {targetNameError && <p className="text-sm text-red-500">{targetNameError}</p>}
-              </div>
-
-              <div className="space-y-2">
-                <ListenerSelect
-                  selectedListeners={selectedListeners}
-                  onListenersChange={setSelectedListeners}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center space-x-2">
-                  <Label>Target Type</Label>
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger>
-                        <HelpCircle className="h-4 w-4 text-muted-foreground" />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p className="max-w-xs">
-                          Choose between MCP for AI model servers or A2A for agent-to-agent
-                          communication
-                        </p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </div>
-
+                <Label>Target Type *</Label>
                 <RadioGroup
-                  value={targetCategory}
-                  onValueChange={(value) => {
-                    setTargetCategory(value as "mcp" | "a2a");
-                    // Clear editing target when switching categories to prevent form field confusion
-                    if (
-                      editingTarget &&
-                      ((value === "a2a" && !editingTarget.a2a) ||
-                        (value === "mcp" && editingTarget.a2a))
-                    ) {
-                      setEditingTarget(undefined);
-                    }
-                  }}
+                  value={selectedTargetType ?? ""}
+                  onValueChange={(value) => setSelectedTargetType(value as SelectableTargetType)}
                   className="grid grid-cols-2 gap-4"
+                  disabled={!!editingTarget || isLoadingListeners}
                 >
-                  <div className="flex items-center space-x-2">
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="mcp" id="mcp" />
-                            <Label htmlFor="mcp" className="cursor-pointer">
-                              MCP Target
-                            </Label>
-                          </div>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p className="max-w-xs">
-                            MCP (Model Control Protocol) targets are used to connect to AI model
-                            servers that support the MCP protocol. These are typically used for AI
-                            model inference and control.
-                          </p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  </div>
-
-                  <div className="flex items-center space-x-2">
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="a2a" id="a2a" />
-                            <Label htmlFor="a2a" className="cursor-pointer">
-                              A2A Target
-                            </Label>
-                          </div>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p className="max-w-xs">
-                            A2A (Agent-to-Agent) targets are used to connect to other agent systems
-                            that support the A2A protocol. These are typically used for
-                            agent-to-agent communication and collaboration.
-                          </p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  </div>
+                  <Label
+                    htmlFor="mcp-target-type"
+                    className={cn(
+                      "flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground",
+                      selectedTargetType === "mcp" && "border-primary"
+                    )}
+                  >
+                    <RadioGroupItem value="mcp" id="mcp-target-type" className="sr-only" />
+                    MCP Target
+                    <span className="block text-xs font-normal text-muted-foreground mt-1 text-center">
+                      For SSE, Stdio, OpenAPI backends
+                    </span>
+                  </Label>
+                  <Label
+                    htmlFor="a2a-target-type"
+                    className={cn(
+                      "flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground",
+                      selectedTargetType === "a2a" && "border-primary"
+                    )}
+                  >
+                    <RadioGroupItem value="a2a" id="a2a-target-type" className="sr-only" />
+                    A2A Target
+                    <span className="block text-xs font-normal text-muted-foreground mt-1 text-center">
+                      For Agent-to-Agent protocol
+                    </span>
+                  </Label>
                 </RadioGroup>
               </div>
 
-              <div className="pt-4">
-                {targetCategory === "mcp" ? (
-                  <MCPTargetForm
-                    targetName={targetName}
-                    onTargetNameChange={setTargetName}
-                    onSubmit={editingTarget ? handleUpdateTarget : handleCreateTarget}
-                    isLoading={isAddingTarget || isUpdating}
-                    existingTarget={editingTarget?.a2a ? undefined : editingTarget}
+              {isLoadingListeners && selectedTargetType && (
+                <div className="flex items-center text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Loading compatible listeners...
+                </div>
+              )}
+
+              {showListenerSelection && (
+                <div className="space-y-2">
+                  <Label htmlFor="target-listeners">Associate with Listener(s) *</Label>
+                  {noListenersFound && listenerError ? (
+                    <Alert variant="default">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertTitle>No Compatible Listeners Found</AlertTitle>
+                      <AlertDescription>{listenerError}</AlertDescription>
+                    </Alert>
+                  ) : (
+                    <>
+                      <ListenerSelect
+                        selectedListeners={selectedListeners}
+                        onListenersChange={setSelectedListeners}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Select the listener(s) that can route requests to this target.
+                      </p>
+                      {listenerError && !noListenersFound && (
+                        <p className="text-xs text-destructive">{listenerError}</p>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+
+              {canProceed && (
+                <div className="space-y-2">
+                  <Label htmlFor="targetName">Target Name *</Label>
+                  <Input
+                    id="targetName"
+                    placeholder="Enter unique target name"
+                    value={targetName}
+                    onChange={(e) => {
+                      setTargetName(e.target.value);
+                      if (targetNameError) setTargetNameError(null);
+                    }}
+                    disabled={!!editingTarget || isSubmitting}
+                    required
                   />
-                ) : (
-                  <A2ATargetForm
-                    targetName={targetName}
-                    onSubmit={editingTarget ? handleUpdateTarget : handleCreateTarget}
-                    isLoading={isAddingTarget || isUpdating}
-                    existingTarget={editingTarget?.a2a ? editingTarget : undefined}
-                  />
-                )}
-              </div>
+                  {targetNameError && <p className="text-xs text-destructive">{targetNameError}</p>}
+                  <p className="text-xs text-muted-foreground">
+                    A unique identifier for this target.
+                  </p>
+                </div>
+              )}
+
+              {canProceed && renderFormFields()}
+
+              {formError && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{formError}</AlertDescription>
+                </Alert>
+              )}
             </div>
 
-            <DialogFooter className="gap-2 mt-6">
+            <DialogFooter>
+              <DialogClose asChild>
+                <Button variant="outline">Cancel</Button>
+              </DialogClose>
               <Button
-                variant="outline"
-                onClick={handleDialogClose}
-                disabled={isAddingTarget || isUpdating}
+                type="button"
+                onClick={() => {
+                  const formRef = selectedTargetType === "a2a" ? a2aFormRef : mcpFormRef;
+                  if (formRef.current?.submitForm) {
+                    formRef.current.submitForm();
+                  } else {
+                    console.error("Form ref not available or submitForm missing");
+                    setFormError("Could not submit form. Ref is missing.");
+                  }
+                }}
+                disabled={
+                  !canProceed ||
+                  noListenersFound ||
+                  isSubmitting ||
+                  !targetName.trim() ||
+                  !selectedListeners?.length
+                }
               >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                form={targetCategory === "mcp" ? "mcp-target-form" : "a2a-target-form"}
-                disabled={isAddingTarget || isUpdating}
-              >
-                {isAddingTarget || isUpdating ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    {editingTarget ? "Updating..." : "Adding..."}
-                  </>
-                ) : editingTarget ? (
-                  "Update Target"
-                ) : (
-                  "Add Target"
-                )}
+                {isSubmitting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                {editingTarget ? "Save Changes" : "Add Target"}
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
 
         <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
-          <DialogContent className="sm:max-w-[425px]">
+          <DialogContent>
             <DialogHeader>
               <DialogTitle>Confirm Deletion</DialogTitle>
               <DialogDescription>
@@ -456,14 +474,13 @@ export const TargetsConfig = forwardRef<{ openAddTargetDialog: () => void }, Tar
             <DialogFooter>
               <Button
                 variant="outline"
-                onClick={() => {
-                  setDeleteConfirmOpen(false);
-                  setTargetToDelete(null);
-                }}
+                onClick={() => setDeleteConfirmOpen(false)}
+                disabled={isSubmitting}
               >
                 Cancel
               </Button>
-              <Button variant="destructive" onClick={confirmDelete}>
+              <Button variant="destructive" onClick={confirmDelete} disabled={isSubmitting}>
+                {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                 Delete
               </Button>
             </DialogFooter>

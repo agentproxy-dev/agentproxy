@@ -20,12 +20,19 @@ export async function updateTarget(target: Target): Promise<void> {
         throw new Error(`Failed to update target: ${response.status} ${response.statusText}`);
       }
     } else if (target.a2a) {
+      // Convert the A2a target to the correct format
+      const a2aTarget = {
+        name: target.name,
+        listeners: target.listeners,
+        ...target.a2a,
+      };
+
       const response = await fetch(`${API_URL}/targets/a2a`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(target),
+        body: JSON.stringify(a2aTarget),
       });
       if (!response.ok) {
         throw new Error(`Failed to update target: ${response.status} ${response.statusText}`);
@@ -103,12 +110,14 @@ export async function fetchMcpTargets(): Promise<any[]> {
  */
 export async function createMcpTarget(target: Target): Promise<void> {
   try {
+    // remove the type from the target
+    const targetWithoutType = { ...target, type: undefined };
     const response = await fetch(`${API_URL}/targets/mcp`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(target),
+      body: JSON.stringify(targetWithoutType),
     });
 
     if (!response.ok) {
@@ -181,12 +190,19 @@ export async function fetchA2aTargets(): Promise<any[]> {
  */
 export async function createA2aTarget(target: Target): Promise<void> {
   try {
+    // Convert the A2a target to the correct format
+    const a2aTarget = {
+      name: target.name,
+      listeners: target.listeners,
+      ...target.a2a,
+    };
+
     const response = await fetch(`${API_URL}/targets/a2a`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(target),
+      body: JSON.stringify(a2aTarget),
     });
 
     if (!response.ok) {
@@ -287,10 +303,6 @@ export async function createListener(listener: Listener): Promise<void> {
       },
       body: JSON.stringify(listener),
     });
-    console.log("createListener listener", listener);
-
-    console.log("createListener response", response);
-
     if (!response.ok) {
       throw new Error(`Failed to create listener: ${response.status} ${response.statusText}`);
     }
@@ -312,9 +324,6 @@ export async function addListener(listener: Listener): Promise<void> {
       },
       body: JSON.stringify(listener),
     });
-
-    console.log("addListener listener", response);
-    console.log("addListener listener", listener);
 
     if (!response.ok) {
       throw new Error(`Failed to add listener: ${response.status} ${response.statusText}`);
