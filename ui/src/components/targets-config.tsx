@@ -96,17 +96,12 @@ export const TargetsConfig = forwardRef<{ openAddTargetDialog: () => void }, Tar
       }
 
       const requiredProtocol =
-        selectedTargetType === "a2a" ? ListenerProtocol.A2A : ListenerProtocol.MCP;
+        selectedTargetType.toLocaleUpperCase() === "A2A" ? ListenerProtocol.A2A : ListenerProtocol.MCP;
 
-      const filtered = allListeners.filter((listener) => {
-        if (requiredProtocol === ListenerProtocol.A2A) {
-          return listener.protocol === requiredProtocol;
-        } else {
-          return listener.protocol !== ListenerProtocol.A2A;
-        }
-      });
-
+      const filtered = allListeners.filter((listener) => listener.protocol === requiredProtocol);
       setCompatibleListeners(filtered);
+
+      console.log("filtered", filtered);
 
       if (filtered.length === 0 && !isLoadingListeners) {
         setListenerError(`No ${requiredProtocol} listeners found. Please create one first.`);
@@ -343,7 +338,7 @@ export const TargetsConfig = forwardRef<{ openAddTargetDialog: () => void }, Tar
                   <Label
                     htmlFor="mcp-target-type"
                     className={cn(
-                      "flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground",
+                      "flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent/20 hover:text-accent-foreground",
                       selectedTargetType === "mcp" && "border-primary"
                     )}
                   >
@@ -356,7 +351,7 @@ export const TargetsConfig = forwardRef<{ openAddTargetDialog: () => void }, Tar
                   <Label
                     htmlFor="a2a-target-type"
                     className={cn(
-                      "flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground",
+                      "flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent/20 hover:text-accent-foreground",
                       selectedTargetType === "a2a" && "border-primary"
                     )}
                   >

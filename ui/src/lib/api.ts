@@ -322,23 +322,38 @@ export async function createListener(listener: Listener): Promise<void> {
  */
 export async function addListener(listener: Listener): Promise<void> {
   try {
-    let payload: any = listener;
+    console.log("listener", listener);
 
-    // If the protocol is mcp, remove the protocol from the payload
-    if (listener.protocol === ListenerProtocol.MCP) {
-      const { protocol, ...rest } = listener;
-      payload = rest;
-    } else if (listener.protocol === ListenerProtocol.A2A) {
-      payload = { ...listener, protocol: "a2a" };
+    // Convert protocol string to number for the backend
+    let protocolNumber: number;
+    switch (listener.protocol) {
+      case ListenerProtocol.MCP:
+        protocolNumber = 0;
+        break;
+      case ListenerProtocol.A2A:
+        protocolNumber = 1;
+        break;
+      default:
+        // Handle unexpected protocol value if necessary
+        console.error("Invalid listener protocol:", listener.protocol);
+        throw new Error("Invalid listener protocol");
     }
+
+    // Prepare the payload with the numeric protocol
+    const payload = {
+      ...listener,
+      protocol: protocolNumber,
+    };
 
     const response = await fetch(`${API_URL}/listeners`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(payload), // Use the payload with numeric protocol
     });
+
+    console.log("response", response);
 
     if (!response.ok) {
       throw new Error(`Failed to add listener: ${response.status} ${response.statusText}`);

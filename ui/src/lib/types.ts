@@ -103,8 +103,8 @@ export interface Listener {
 }
 
 export enum ListenerProtocol {
-  MCP = "mcp",
-  A2A = "a2a",
+  MCP = "MCP",
+  A2A = "A2A",
 }
 
 export interface RemoteDataSource {
