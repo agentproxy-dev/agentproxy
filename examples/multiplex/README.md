@@ -8,7 +8,7 @@ This example shows how to use the agentgateway to proxy requests to the `everyth
 cargo run -- -f examples/basic/config.json
 ```
 
-Let's look at the config to understand what's going on. First off we have a listener, which tells the proxy how to listen for incoming requests/connections. In this case we're using the `sse` listener, which is a simple HTTP listener that listens on port 3000.
+Let's look at the config to understand what's going on. First off we have a listener, which tells the gateway how to listen for incoming requests/connections. In this case we're using the `sse` listener, which is a simple HTTP listener that listens on port 3000.
 
 ```json
   "listeners": [
@@ -21,7 +21,7 @@ Let's look at the config to understand what's going on. First off we have a list
   ],
 ```
 
-Next we have a targets section, which tells the proxy how to proxy the incoming requests. In this case we're using the `everything` tool, which is a tool that can do everything. However unlike the basic example, we added a second target that will proxy requests to the `everything_else` tool. In a real world scenario, this could be any other MCP compatible server, or even servers which we support translating from MCP.
+Next we have a targets section, which tells the gateway how to proxy the incoming requests. In this case we're using the `everything` tool, which is a tool that can do everything. However unlike the basic example, we added a second target that will proxy requests to the `everything_else` tool. In a real world scenario, this could be any other MCP compatible server, or even servers which we support translating from MCP.
 
 ```json
   "targets": {
@@ -48,7 +48,7 @@ Next we have a targets section, which tells the proxy how to proxy the incoming 
   }
 ```
 
-Now that we have the proxy running, we can use the [mcpinspector](https://github.com/modelcontextprotocol/inspector) to try it out.
+Now that we have the gateway running, we can use the [mcpinspector](https://github.com/modelcontextprotocol/inspector) to try it out.
 ```bash
 npx @modelcontextprotocol/inspector
 ```
@@ -64,10 +64,10 @@ Let's try out one of the tools, like `everything:echo`.
 
 ![Echo](./img/call_0.png)
 
-That worked! The proxy was able to proxy the request to the `everything` tool and return the response. Now let's try out the `everything_else` tool.
+That worked! The gateway was able to proxy the request to the `everything` tool and return the response. Now let's try out the `everything_else` tool.
 
 ![Echo](./img/call_1.png)
 
-That worked! The proxy was able to proxy the request to the `everything_else` tool and return the response.
+That worked! The gateway was able to proxy the request to the `everything_else` tool and return the response.
 
 

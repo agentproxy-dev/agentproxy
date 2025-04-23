@@ -21,7 +21,7 @@
 : ${USE_SUDO:="true"}
 : ${DEBUG:="false"}
 : ${VERIFY_CHECKSUM:="true"}
-: ${AGENTPROXY_INSTALL_DIR:="/usr/local/bin"}
+: ${AGENTGATEWAY_INSTALL_DIR:="/usr/local/bin"}
 
 HAS_CURL="$(type "curl" &> /dev/null && echo true || echo false)"
 HAS_WGET="$(type "wget" &> /dev/null && echo true || echo false)"
@@ -117,11 +117,11 @@ checkDesiredVersion() {
   fi
 }
 
-# checkAgentproxyInstalledVersion checks which version of    is installed and
+# checkAgentGatewayInstalledVersion checks which version of    is installed and
 # if it needs to be changed.
-checkAgentproxyInstalledVersion() {
-  if [[ -f "${AGENTPROXY_INSTALL_DIR}/${BINARY_NAME}" ]]; then
-    local version=$("${AGENTPROXY_INSTALL_DIR}/${BINARY_NAME}" version --template="{{ .Version }}")
+checkAgentGatewayInstalledVersion() {
+  if [[ -f "${AGENTGATEWAY_INSTALL_DIR}/${BINARY_NAME}" ]]; then
+    local version=$("${AGENTGATEWAY_INSTALL_DIR}/${BINARY_NAME}" version --template="{{ .Version }}")
     if [[ "$version" == "$TAG" ]]; then
       echo "agentgateway ${version} is already ${DESIRED_VERSION:-latest}"
       return 0
@@ -137,19 +137,19 @@ checkAgentproxyInstalledVersion() {
 # downloadFile downloads the latest binary package and also the checksum
 # for that binary.
 downloadFile() {
-  AGENTPROXY_DIST="agentgateway-$OS-$ARCH"
-  DOWNLOAD_URL="https://github.com/agentgateway/agentgateway/releases/download/$TAG/$AGENTPROXY_DIST"
+  AGENTGATEWAY_DIST="agentgateway-$OS-$ARCH"
+  DOWNLOAD_URL="https://github.com/agentgateway/agentgateway/releases/download/$TAG/$AGENTGATEWAY_DIST"
   CHECKSUM_URL="$DOWNLOAD_URL.sha256"
-  AGENTPROXY_TMP_ROOT="$(mktemp -dt agentgateway-installer-XXXXXX)"
-  AGENTPROXY_TMP_FILE="$AGENTPROXY_TMP_ROOT/$AGENTPROXY_DIST"
-  AGENTPROXY_SUM_FILE="$AGENTPROXY_TMP_ROOT/$AGENTPROXY_DIST.sha256"
+  AGENTGATEWAY_TMP_ROOT="$(mktemp -dt agentgateway-installer-XXXXXX)"
+  AGENTGATEWAY_TMP_FILE="$AGENTGATEWAY_TMP_ROOT/$AGENTGATEWAY_DIST"
+  AGENTGATEWAY_SUM_FILE="$AGENTGATEWAY_TMP_ROOT/$AGENTGATEWAY_DIST.sha256"
   echo "Downloading $DOWNLOAD_URL"
   if [ "${HAS_CURL}" == "true" ]; then
-    curl -SsL "$CHECKSUM_URL" -o "$AGENTPROXY_SUM_FILE"
-    curl -SsL "$DOWNLOAD_URL" -o "$AGENTPROXY_TMP_FILE"
+    curl -SsL "$CHECKSUM_URL" -o "$AGENTGATEWAY_SUM_FILE"
+    curl -SsL "$DOWNLOAD_URL" -o "$AGENTGATEWAY_TMP_FILE"
   elif [ "${HAS_WGET}" == "true" ]; then
-    wget -q -O "$AGENTPROXY_SUM_FILE" "$CHECKSUM_URL"
-    wget -q -O "$AGENTPROXY_TMP_FILE" "$DOWNLOAD_URL"
+    wget -q -O "$AGENTGATEWAY_SUM_FILE" "$CHECKSUM_URL"
+    wget -q -O "$AGENTGATEWAY_TMP_FILE" "$DOWNLOAD_URL"
   fi
 }
 
@@ -164,19 +164,19 @@ verifyFile() {
 
 # installFile installs the agentgateway binary.
 installFile() {
-  echo "Preparing to install $BINARY_NAME into ${AGENTPROXY_INSTALL_DIR}"
-  runAsRoot chmod +x "$AGENTPROXY_TMP_ROOT/$BINARY_NAME-$OS-$ARCH"
-  runAsRoot cp "$AGENTPROXY_TMP_ROOT/$BINARY_NAME-$OS-$ARCH" "$AGENTPROXY_INSTALL_DIR/$BINARY_NAME"
-  echo "$BINARY_NAME installed into $AGENTPROXY_INSTALL_DIR/$BINARY_NAME"
+  echo "Preparing to install $BINARY_NAME into ${AGENTGATEWAY_INSTALL_DIR}"
+  runAsRoot chmod +x "$AGENTGATEWAY_TMP_ROOT/$BINARY_NAME-$OS-$ARCH"
+  runAsRoot cp "$AGENTGATEWAY_TMP_ROOT/$BINARY_NAME-$OS-$ARCH" "$AGENTGATEWAY_INSTALL_DIR/$BINARY_NAME"
+  echo "$BINARY_NAME installed into $AGENTGATEWAY_INSTALL_DIR/$BINARY_NAME"
 }
 
 # verifyChecksum verifies the SHA256 checksum of the binary package.
 verifyChecksum() {
   printf "Verifying checksum... "
-  local sum=$(openssl sha1 -sha256 ${AGENTPROXY_TMP_FILE} | awk '{print $2}')
-  local expected_sum=$(cat ${AGENTPROXY_SUM_FILE} | awk '{print $1}')
+  local sum=$(openssl sha1 -sha256 ${AGENTGATEWAY_TMP_FILE} | awk '{print $2}')
+  local expected_sum=$(cat ${AGENTGATEWAY_SUM_FILE} | awk '{print $1}')
   if [ "$sum" != "$expected_sum" ]; then
-    echo "SHA sum of ${AGENTPROXY_TMP_FILE} does not match. Aborting."
+    echo "SHA sum of ${AGENTGATEWAY_TMP_FILE} does not match. Aborting."
     exit 1
   fi
   echo "Done."
@@ -201,9 +201,9 @@ fail_trap() {
 # testVersion tests the installed client to make sure it is working.
 testVersion() {
   set +e
-  AGENTPROXY="$(command -v $BINARY_NAME)"
+  AGENTGATEWAY="$(command -v $BINARY_NAME)"
   if [ "$?" = "1" ]; then
-    echo "$BINARY_NAME not found. Is $AGENTPROXY_INSTALL_DIR on your "'$PATH?'
+    echo "$BINARY_NAME not found. Is $AGENTGATEWAY_INSTALL_DIR on your "'$PATH?'
     exit 1
   fi
   set -e
@@ -220,8 +220,8 @@ help () {
 
 # cleanup temporary files to avoid https://github.com/helm/helm/issues/2977
 cleanup() {
-  if [[ -d "${AGENTPROXY_TMP_ROOT:-}" ]]; then
-    rm -rf "$AGENTPROXY_TMP_ROOT"
+  if [[ -d "${AGENTGATEWAY_TMP_ROOT:-}" ]]; then
+    rm -rf "$AGENTGATEWAY_TMP_ROOT"
   fi
 }
 
@@ -272,7 +272,7 @@ initArch
 initOS
 verifySupported
 checkDesiredVersion
-if ! checkAgentproxyInstalledVersion; then
+if ! checkAgentGatewayInstalledVersion; then
   downloadFile
   verifyFile
   installFile

@@ -16,7 +16,7 @@
     </a>
   </div>
   <div>
-    The first <strong>full featured</strong>, <strong>enterprise-grade</strong> Agent first proxy.
+    The first <strong>full featured</strong>, <strong>enterprise-grade</strong> Agent Gateway.
   </div>
 </div>
 

@@ -2,7 +2,7 @@
 
 This example shows how to deploy the agentgateway in a Kubernetes cluster with a static config.
 
-### Running the MCP Proxy
+### Running the Agent Gateway
 
 
 First let's apply our config to the cluster.
@@ -10,7 +10,7 @@ First let's apply our config to the cluster.
 kubectl create -n agentgateway configmap agentgateway-config --from-file=config.json=examples/k8s/config.json
 ```
 
-Now we can deploy the MCP Proxy.
+Now we can deploy the Agent Gateway .
 ```bash
 kubectl apply -n agentgateway -f examples/k8s/manifest.yaml
 ```
@@ -22,7 +22,7 @@ kubectl apply -n agentgateway -f examples/k8s/manifest.yaml
 kubectl apply -n agentgateway -f examples/k8s/manifest.yaml
 ```
 
-Once all of the pods are up and running, you can test the proxy by port-forwarding the proxy pod, and then using the mcp inspector. In the first shell run:
+Once all of the pods are up and running, you can test the gateway by port-forwarding the gateway pod, and then using the mcp inspector. In the first shell run:
 ```bash
 kubectl port-forward -n agentgateway deploy/agentgateway 3000
 ```
