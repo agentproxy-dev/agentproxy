@@ -1,11 +1,11 @@
 openapi: 3.1.0
 info:
-  title: agentproxy API
+  title: Agent Gateway API
   version: 1.0.0
-  description: Admin API for managing agentproxy targets and listeners.
+  description: Admin API for managing Agent Gateway targets and listeners.
   contact:
     name: GitHub Repository
-    url: https://github.com/agentproxy-dev/agentproxy
+    url: https://github.com/agentgateway/agentgateway
   license:
     name: Apache 2.0
     url: https://www.apache.org/licenses/LICENSE-2.0
