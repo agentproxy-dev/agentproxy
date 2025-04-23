@@ -78,7 +78,11 @@ fn set_tag_rules(rules: HashMap<String, String>) {
 fn get_resource() -> Resource {
 	static RESOURCE: OnceLock<Resource> = OnceLock::new();
 	RESOURCE
-		.get_or_init(|| Resource::builder().with_service_name("agentgateway").build())
+		.get_or_init(|| {
+			Resource::builder()
+				.with_service_name("agentgateway")
+				.build()
+		})
 		.clone()
 }
 

@@ -6,7 +6,10 @@ pub mod agentgateway {
 		#[allow(clippy::all)]
 		pub mod common {
 			tonic::include_proto!("agentgateway.dev.common");
-			include!(concat!(env!("OUT_DIR"), "/agentgateway.dev.common.serde.rs"));
+			include!(concat!(
+				env!("OUT_DIR"),
+				"/agentgateway.dev.common.serde.rs"
+			));
 		}
 
 		#[allow(clippy::all)]
