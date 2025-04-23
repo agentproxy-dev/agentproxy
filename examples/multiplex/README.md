@@ -1,11 +1,11 @@
-## Basic Example
+## Multiplex Example
 
 This example shows how to use the agentgateway to proxy requests to the `everything` tool.
 
 ### Running the example
 
 ```bash
-cargo run -- -f examples/basic/config.json
+cargo run -- -f examples/multiplex/config.json
 ```
 
 Let's look at the config to understand what's going on. First off we have a listener, which tells the gateway how to listen for incoming requests/connections. In this case we're using the `sse` listener, which is a simple HTTP listener that listens on port 3000.
