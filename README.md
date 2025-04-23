@@ -46,10 +46,10 @@ cargo build
 
 Local config file
 ```bash
-cargo run -- -f examples/config/static.json
+cargo run -- -f examples/basic/config.json
 ```
 
 Remote config file
 ```bash
-cargo run -- -f https://raw.githubusercontent.com/agentproxy-dev/agentproxy/main/examples/config/static.json
+cargo run -- -f https://raw.githubusercontent.com/agentproxy-dev/agentproxy/main/examples/basic/config.json
 ```
