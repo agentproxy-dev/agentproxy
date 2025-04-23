@@ -44,6 +44,9 @@ pub struct Listener {
 
 impl Listener {
 	pub async fn from_xds(value: XdsListener) -> Result<Self, anyhow::Error> {
+		if value.name.is_empty() {
+			anyhow::bail!("listener name must be non-empty");
+		}
 		Ok(
 			match (
 				value.listener,

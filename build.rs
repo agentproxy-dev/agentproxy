@@ -86,6 +86,7 @@ fn main() -> Result<(), anyhow::Error> {
 	pbjson_build::Builder::new()
 		.register_descriptors(&descriptor_set)?
 		.preserve_proto_field_names()
+		.emit_fields()
 		.build(&[
 			".agentproxy.dev.a2a.target",
 			".agentproxy.dev.mcp.target",

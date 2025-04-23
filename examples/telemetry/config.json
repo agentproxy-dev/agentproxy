@@ -2,6 +2,8 @@
   "type": "static",
   "listeners": [
     {
+      "name": "sse",
+      "protocol": "MCP",
       "sse": {
         "address": "[::]",
         "port": 3000,
