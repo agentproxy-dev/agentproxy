@@ -54,7 +54,7 @@ To run this yourself, follow the [sample documentation](https://github.com/googl
 To test this, we can run the sample [`a2a` CLI](https://github.com/google/A2A/tree/main/samples/python/hosts/cli)
 
 ```bash
-uv run hosts/cli --agent http://localhost:3000/google_adk
+uv run hosts/cli --agent http://localhost:3000/google-adk
 ```
 
 From here, you can send requests through the CLI and view them being proxied.
