@@ -176,7 +176,7 @@ async fn sse_handler(
 	State(app): State<App>,
 	ConnectInfo(connection): ConnectInfo<proxyprotocol::Address>,
 	_claims: Option<rbac::Claims>, // We want to validate, but no RBAC
-) -> Sse<impl Stream<Item = Result<Event, io::Error>>> {
+) -> Result<Sse<impl Stream<Item = Result<Event, io::Error>>>, StatusCode> {
 	// it's 4KB
 
 	let session = session_id();
@@ -202,7 +202,7 @@ async fn sse_handler(
 			let listener = state
 				.listeners
 				.get(&app.listener_name)
-				.expect("listener not found, this should never happen");
+				.ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
 			match &listener.spec {
 				inbound::ListenerType::Sse(s) => s.policies().clone(),
 				_ => rbac::RuleSets::default(),
@@ -262,5 +262,5 @@ async fn sse_handler(
 			Err(e) => Err(io::Error::new(io::ErrorKind::InvalidData, e)),
 		}
 	}));
-	Sse::new(stream)
+	Ok(Sse::new(stream))
 }
