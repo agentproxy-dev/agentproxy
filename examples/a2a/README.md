@@ -13,6 +13,7 @@ Let's look at the config to understand what's going on. First off we have a list
 ```json
   "listeners": [
     {
+      "name": "google-adk",
       "protocol": "A2A",
       "sse": {
         "address": "0.0.0.0",
