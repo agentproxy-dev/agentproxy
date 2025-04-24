@@ -31,7 +31,7 @@ export function WizardProvider({ children }: { children: ReactNode }) {
   // Effect to handle manual wizard restart through storage events
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === "agentproxy.setupCompleted" && e.newValue === "false") {
+      if (e.key === "agentgateway.setupCompleted" && e.newValue === "false") {
         showSetupWizard();
       }
     };
@@ -53,17 +53,17 @@ export function WizardProvider({ children }: { children: ReactNode }) {
   };
 
   const handleWizardComplete = () => {
-    localStorage.setItem("agentproxy.setupCompleted", "true");
+    localStorage.setItem("agentgateway.setupCompleted", "true");
     hideSetupWizard();
   };
 
   const handleWizardSkip = () => {
-    localStorage.setItem("agentproxy.setupCompleted", "true");
+    localStorage.setItem("agentgateway.setupCompleted", "true");
     hideSetupWizard();
   };
 
   const checkAndShowWizardIfNeeded = async () => {
-    const setupCompleted = localStorage.getItem("agentproxy.setupCompleted");
+    const setupCompleted = localStorage.getItem("agentgateway.setupCompleted");
     const isEmpty = await isConfigurationEmpty();
 
     if (isEmpty && (setupCompleted === null || setupCompleted === "false")) {
@@ -76,7 +76,7 @@ export function WizardProvider({ children }: { children: ReactNode }) {
       setIsRestartingWizard(true);
       setIsLoading(true);
       await deleteEverything();
-      localStorage.setItem("agentproxy.setupCompleted", "false");
+      localStorage.setItem("agentgateway.setupCompleted", "false");
       showSetupWizard();
     } catch (error) {
       console.error("Error restarting wizard:", error);

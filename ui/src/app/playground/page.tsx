@@ -226,10 +226,9 @@ export default function PlaygroundPage() {
       if (protocol === ListenerProtocol.MCP || !protocol) {
         setConnectionState((prev) => ({ ...prev, connectionType: "mcp" }));
         const connectUrl = `${httpProtocol}://localhost:${port}/sse`;
-        console.log(`Connecting to MCP endpoint: ${connectUrl}`);
 
         const client = new McpClient(
-          { name: "mcp-playground", version: "1.0.0" },
+          { name: "agentgateway-dashboard", version: "0.1.0" },
           { capabilities: {} }
         );
 
@@ -249,11 +248,9 @@ export default function PlaygroundPage() {
         const listToolsRequest: McpClientRequest = { method: "tools/list", params: {} };
         const toolsResponse = await client.request(listToolsRequest, McpListToolsResultSchema);
         setMcpState((prev) => ({ ...prev, tools: toolsResponse.tools }));
-        console.log("MCP Tools:", toolsResponse.tools);
       } else if (protocol === ListenerProtocol.A2A) {
         setConnectionState((prev) => ({ ...prev, connectionType: "a2a" }));
         const baseUrl = `${httpProtocol}://localhost:${port}/${a2aState.selectedTarget}`;
-        console.log(`Connecting to A2A endpoint: ${baseUrl}`);
 
         const client = new A2AClient(baseUrl, headers);
         setA2aState((prev) => ({ ...prev, client }));
@@ -265,8 +262,6 @@ export default function PlaygroundPage() {
         setUiState((prev) => ({ ...prev, isLoadingCapabilities: true }));
         const agentCard = await client.agentCard();
         setA2aState((prev) => ({ ...prev, skills: agentCard.skills || [] }));
-        console.log("A2A Agent Card:", agentCard);
-        console.log("A2A Skills:", agentCard.skills);
         toast.success(`Connected to A2A Agent: ${agentCard.name}`);
       } else {
         toast.error("Unknown listener protocol.");
@@ -299,11 +294,9 @@ export default function PlaygroundPage() {
   };
 
   const disconnect = async () => {
-    console.log("Disconnecting...");
     if (connectionState.connectionType === "mcp" && mcpState.client) {
       try {
         await mcpState.client.close();
-        console.log("MCP client closed.");
       } catch (e) {
         console.error("Error closing MCP client:", e);
       }

@@ -24,23 +24,28 @@ export function WelcomeStep({ onNext, onSkip }: WelcomeStepProps) {
         </div>
         <CardTitle className="text-center">Welcome to agentgateway</CardTitle>
         <CardDescription className="text-center">
-          Let&apos;s get your proxy server up and running in just a few steps
+          Let&apos;s get your gateway up and running in just a few steps
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-2">
           <h3 className="font-medium">What is Agentgateway?</h3>
           <p className="text-sm text-muted-foreground">
-            Agentgateway is a powerful tool that helps you manage and secure your server connections.
-            It allows you to configure listeners, set up target servers, and implement security
-            policies.
+            <a
+              href="https://agentgateway.dev"
+              className="text-accent-foreground hover:text-accent/90 hover:underline"
+            >
+              Agentgateway
+            </a>{" "}
+            is an open source tool that helps you to connect, secure, and observe agent-to-agent and
+            agent-to-tool communication across any agent framework and environment.
           </p>
         </div>
         <div className="space-y-2">
           <h3 className="font-medium">What you&apos;ll configure:</h3>
           <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
-            <li>Listener settings for your proxy server</li>
-            <li>Target servers that your proxy will forward requests to</li>
+            <li>A2A or MCP listener settings for your gateway</li>
+            <li>Target servers that your gateway will forward requests to</li>
           </ul>
         </div>
       </CardContent>

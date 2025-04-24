@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { Listener } from "@/lib/types";
-import { Label } from "@/components/ui/label";
 import { fetchListeners } from "@/lib/api";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
@@ -18,14 +18,12 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 interface ListenerSelectProps {
-  // undefined: all, string[]: specific (can be empty)
   selectedListeners: string[] | undefined;
   onListenersChange: (listeners: string[] | undefined) => void;
 }
 
 export function ListenerSelect({ selectedListeners, onListenersChange }: ListenerSelectProps) {
   const [allAvailableListeners, setAllAvailableListeners] = useState<Listener[]>([]);
-  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [openCombobox, setOpenCombobox] = useState(false);
 
@@ -40,7 +38,6 @@ export function ListenerSelect({ selectedListeners, onListenersChange }: Listene
     const loadListeners = async () => {
       try {
         setLoading(true);
-        setError(null);
         const fetchedListeners = await fetchListeners();
         setAllAvailableListeners(fetchedListeners);
 
@@ -59,7 +56,9 @@ export function ListenerSelect({ selectedListeners, onListenersChange }: Listene
         }
       } catch (err) {
         console.error("Error fetching listeners:", err);
-        setError("Failed to load available listeners. Please ensure the proxy server is running.");
+        toast.error(
+          "Failed to load available listeners. Please ensure the proxy server is running."
+        );
         onListenersChange([]);
       } finally {
         setLoading(false);
@@ -94,7 +93,7 @@ export function ListenerSelect({ selectedListeners, onListenersChange }: Listene
   };
 
   const getButtonLabel = () => {
-    if (isAllSelected) return "All Listeners";
+    if (isAllSelected) return <span className="text-sm">All Listeners</span>;
     if (isSpecificSelected) {
       if (specificSelectedListeners.length === 0) {
         return <span className="text-muted-foreground">No Specific Listeners</span>;
@@ -106,7 +105,7 @@ export function ListenerSelect({ selectedListeners, onListenersChange }: Listene
             <Badge
               variant="secondary"
               key={listenerName}
-              className="mr-1 mb-1"
+              className="mr-1"
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -132,21 +131,12 @@ export function ListenerSelect({ selectedListeners, onListenersChange }: Listene
     return <div className="text-sm text-muted-foreground">Loading listeners...</div>;
   }
 
-  if (error) {
-    return (
-      <Alert variant="destructive">
-        <AlertDescription>{error}</AlertDescription>
-      </Alert>
-    );
-  }
-
-  if (allAvailableListeners.length === 0 && !loading && !error) {
+  if (allAvailableListeners.length === 0 && !loading) {
     if (!isSpecificSelected || specificSelectedListeners.length > 0) {
       onListenersChange([]);
     }
     return (
       <div className="space-y-2">
-        <Label>Attach Target To Listeners</Label>
         <Alert variant="default">
           <AlertDescription>
             No listeners are available. Target cannot attach to any listeners.
@@ -158,21 +148,16 @@ export function ListenerSelect({ selectedListeners, onListenersChange }: Listene
 
   return (
     <div className="space-y-2">
-      <Label>Attach Target To Listeners</Label>
       <Popover open={openCombobox} onOpenChange={setOpenCombobox}>
         <PopoverTrigger asChild>
           <Button
             variant="outline"
             role="combobox"
             aria-expanded={openCombobox}
-            className="w-full justify-between h-auto min-h-[2.5rem]" // Allow button to grow
-            disabled={allAvailableListeners.length === 0} // Disable if no listeners fetched
+            className="w-full justify-between h-auto min-h-[2.5rem] hover:bg-primary/5"
+            disabled={allAvailableListeners.length === 0}
           >
-            <div className="flex-1 text-left">
-              {" "}
-              {/* Ensure label aligns left */}
-              {getButtonLabel()}
-            </div>
+            <div className="flex-1 text-left">{getButtonLabel()}</div>
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
@@ -183,7 +168,12 @@ export function ListenerSelect({ selectedListeners, onListenersChange }: Listene
               <CommandEmpty>No listener found.</CommandEmpty>
               <CommandGroup>
                 {/* Option for ALL listeners */}
-                <CommandItem key="--all--" value="--all--" onSelect={() => handleSelect("all")}>
+                <CommandItem
+                  key="--all--"
+                  value="--all--"
+                  className=""
+                  onSelect={() => handleSelect("all")}
+                >
                   <Check
                     className={cn("mr-2 h-4 w-4", isAllSelected ? "opacity-100" : "opacity-0")}
                   />

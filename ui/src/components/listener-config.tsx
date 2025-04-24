@@ -1,20 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { toast } from "sonner";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Listener, ListenerProtocol } from "@/lib/types";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import {
-  AlertCircle,
-  Trash2,
-  Shield,
-  Lock,
-  Key,
-  Settings2,
-  MoreVertical,
-  Loader2,
-} from "lucide-react";
+import { Trash2, Shield, Lock, Key, Settings2, MoreVertical, Loader2 } from "lucide-react";
 import { addListener, deleteListener, fetchListenerTargets } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import {
@@ -70,6 +61,12 @@ interface DeleteDialogState {
   listenerIndex: number;
 }
 
+interface DeleteConfigDialogState {
+  isOpen: boolean;
+  listenerIndex: number;
+  configType: "jwt" | "tls" | "rbac" | null;
+}
+
 interface ListenerWithTargets extends Listener {
   targetCount?: number;
 }
@@ -81,9 +78,8 @@ export function ListenerConfig({
   // Get listeners from context, remove local state fetch
   const { listeners: contextListeners, refreshListeners } = useServer();
   const [listenersWithTargets, setListenersWithTargets] = useState<ListenerWithTargets[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [isLoadingCounts, setIsLoadingCounts] = useState(true); // Renamed isLoading for clarity
-  const [isSubmitting, setIsSubmitting] = useState(false); // State for add/update/delete operations
+  const [isLoadingCounts, setIsLoadingCounts] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [configDialog, setConfigDialog] = useState<ConfigDialogState>({
     type: null,
     isOpen: false,
@@ -101,6 +97,11 @@ export function ListenerConfig({
     isOpen: false,
     listenerIndex: -1,
   });
+  const [deleteConfigDialog, setDeleteConfigDialog] = useState<DeleteConfigDialogState>({
+    isOpen: false,
+    listenerIndex: -1,
+    configType: null,
+  });
 
   // Fetch target counts when context listeners change
   useEffect(() => {
@@ -112,7 +113,6 @@ export function ListenerConfig({
       }
 
       setIsLoadingCounts(true);
-      setError(null);
       try {
         const listenersWithFetchedTargets = await Promise.all(
           contextListeners.map(async (listener) => {
@@ -135,7 +135,7 @@ export function ListenerConfig({
         setListenersWithTargets(listenersWithFetchedTargets);
       } catch (err) {
         console.error("Error fetching target counts:", err);
-        setError(err instanceof Error ? err.message : "Failed to fetch target counts");
+        toast.error(err instanceof Error ? err.message : "Failed to fetch target counts");
         setListenersWithTargets(contextListeners.map((l) => ({ ...l, targetCount: undefined })));
       } finally {
         setIsLoadingCounts(false);
@@ -148,7 +148,6 @@ export function ListenerConfig({
   const handleAddListener = async () => {
     // Use submitting state
     setIsSubmitting(true);
-    setError(null);
 
     try {
       const listenerToAdd: Listener = {
@@ -177,7 +176,7 @@ export function ListenerConfig({
       setIsAddingListener(false);
     } catch (err) {
       console.error("Error adding listener:", err);
-      setError(err instanceof Error ? err.message : "Failed to add listener");
+      toast.error(err instanceof Error ? err.message : "Failed to add listener");
     } finally {
       setIsSubmitting(false);
     }
@@ -185,7 +184,6 @@ export function ListenerConfig({
 
   const handleUpdateListener = async (updatedListener: Listener) => {
     setIsSubmitting(true);
-    setError(null);
 
     // Make sure the updatedListener only includes the fields from the Listener type
     const updatedListenerOnly: Listener = {
@@ -209,9 +207,72 @@ export function ListenerConfig({
       });
     } catch (err) {
       console.error("Error updating listener:", err);
-      setError(err instanceof Error ? err.message : "Failed to update listener");
+      toast.error(err instanceof Error ? err.message : "Failed to update listener");
     } finally {
       // Use submitting state
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteConfiguration = async () => {
+    if (deleteConfigDialog.listenerIndex === -1 || !deleteConfigDialog.configType) return;
+
+    setIsSubmitting(true);
+
+    try {
+      const listenerIndex = deleteConfigDialog.listenerIndex;
+      const configType = deleteConfigDialog.configType;
+      const listenerToUpdate = listenersWithTargets[listenerIndex];
+
+      let updatedListener: Listener;
+
+      switch (configType) {
+        case "jwt":
+          updatedListener = {
+            ...listenerToUpdate,
+            sse: {
+              ...listenerToUpdate.sse,
+              authn: undefined,
+              rbac: undefined, // Also remove RBAC when removing JWT auth
+            },
+          };
+          break;
+        case "tls":
+          updatedListener = {
+            ...listenerToUpdate,
+            sse: {
+              ...listenerToUpdate.sse,
+              tls: undefined,
+            },
+          };
+          break;
+        case "rbac":
+          updatedListener = {
+            ...listenerToUpdate,
+            sse: {
+              ...listenerToUpdate.sse,
+              rbac: undefined,
+            },
+          };
+          break;
+        default:
+          throw new Error("Invalid configuration type for deletion.");
+      }
+
+      await handleUpdateListener(updatedListener); // Reuse existing update logic
+
+      // Close the confirmation dialog
+      setDeleteConfigDialog({ isOpen: false, listenerIndex: -1, configType: null });
+    } catch (err) {
+      console.error(`Error deleting ${deleteConfigDialog.configType} configuration:`, err);
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : `Failed to delete ${deleteConfigDialog.configType} configuration`
+      );
+      // Keep dialog open on error? Or close? Closing for now.
+      setDeleteConfigDialog({ isOpen: false, listenerIndex: -1, configType: null });
+    } finally {
       setIsSubmitting(false);
     }
   };
@@ -219,7 +280,6 @@ export function ListenerConfig({
   const handleDeleteListener = async (index: number) => {
     // Use submitting state
     setIsSubmitting(true);
-    setError(null);
 
     try {
       // Get listener from the state that includes target counts, but use index safely
@@ -245,7 +305,7 @@ export function ListenerConfig({
       setDeleteDialog({ isOpen: false, listenerIndex: -1 });
     } catch (err) {
       console.error("Error deleting listener:", err);
-      setError(err instanceof Error ? err.message : "Failed to delete listener");
+      toast.error(err instanceof Error ? err.message : "Failed to delete listener");
     } finally {
       setIsSubmitting(false);
     }
@@ -253,13 +313,6 @@ export function ListenerConfig({
 
   return (
     <div>
-      {error && (
-        <Alert variant="destructive" className="mb-6">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
-
       {isLoadingCounts ? (
         <div className="flex items-center justify-center py-8">
           <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
@@ -322,7 +375,7 @@ export function ListenerConfig({
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon">
+                                <Button variant="ghost" size="icon" className="hover:bg-primary/20">
                                   <MoreVertical className="h-4 w-4" />
                                 </Button>
                               </DropdownMenuTrigger>
@@ -350,15 +403,11 @@ export function ListenerConfig({
                             <DropdownMenuItem
                               className="text-destructive"
                               onClick={() => {
-                                const updatedListener = {
-                                  ...listener,
-                                  sse: {
-                                    ...listener.sse,
-                                    authn: undefined,
-                                    rbac: undefined, // Remove RBAC when removing auth
-                                  },
-                                };
-                                handleUpdateListener(updatedListener);
+                                setDeleteConfigDialog({
+                                  isOpen: true,
+                                  listenerIndex: index,
+                                  configType: "jwt",
+                                });
                               }}
                             >
                               <Trash2 className="h-4 w-4 mr-2" />
@@ -383,7 +432,7 @@ export function ListenerConfig({
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon">
+                                <Button variant="ghost" size="icon" className="hover:bg-primary/20">
                                   <MoreVertical className="h-4 w-4" />
                                 </Button>
                               </DropdownMenuTrigger>
@@ -411,14 +460,11 @@ export function ListenerConfig({
                             <DropdownMenuItem
                               className="text-destructive"
                               onClick={() => {
-                                const updatedListener = {
-                                  ...listener,
-                                  sse: {
-                                    ...listener.sse,
-                                    tls: undefined,
-                                  },
-                                };
-                                handleUpdateListener(updatedListener);
+                                setDeleteConfigDialog({
+                                  isOpen: true,
+                                  listenerIndex: index,
+                                  configType: "tls",
+                                });
                               }}
                             >
                               <Trash2 className="h-4 w-4 mr-2" />
@@ -483,14 +529,11 @@ export function ListenerConfig({
                             <DropdownMenuItem
                               className="text-destructive"
                               onClick={() => {
-                                const updatedListener = {
-                                  ...listener,
-                                  sse: {
-                                    ...listener.sse,
-                                    rbac: undefined,
-                                  },
-                                };
-                                handleUpdateListener(updatedListener);
+                                setDeleteConfigDialog({
+                                  isOpen: true,
+                                  listenerIndex: index,
+                                  configType: "rbac",
+                                });
                               }}
                             >
                               <Trash2 className="h-4 w-4 mr-2" />
@@ -574,8 +617,7 @@ export function ListenerConfig({
                 placeholder="0.0.0.0"
               />
               <p className="text-xs text-muted-foreground">
-                The IP address the listener will bind to. 0.0.0.0 means it will listen on all
-                interfaces.
+                The IP address the listener will bind to.
               </p>
             </div>
             <div className="space-y-2">
@@ -659,7 +701,49 @@ export function ListenerConfig({
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation Dialog */}
+      {/* Delete Configuration Confirmation Dialog */}
+      <Dialog
+        open={deleteConfigDialog.isOpen}
+        onOpenChange={(open) =>
+          !open && setDeleteConfigDialog({ ...deleteConfigDialog, isOpen: false })
+        }
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Delete {deleteConfigDialog.configType?.toUpperCase()} Configuration
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete the{" "}
+              {deleteConfigDialog.configType === "jwt"
+                ? "JWT authentication and associated RBAC policies"
+                : `${deleteConfigDialog.configType?.toUpperCase()} configuration`}{" "}
+              for this listener? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() =>
+                setDeleteConfigDialog({ isOpen: false, listenerIndex: -1, configType: null })
+              }
+              disabled={isSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteConfiguration}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Delete Configuration
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Listener Confirmation Dialog */}
       <Dialog
         open={deleteDialog.isOpen}
         onOpenChange={(open) => !open && setDeleteDialog({ ...deleteDialog, isOpen: false })}

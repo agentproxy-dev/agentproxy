@@ -17,7 +17,7 @@ export default function ListenersPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Listeners</h1>
           <p className="text-muted-foreground mt-1">
-            Configure and manage SSE listeners for your proxy server
+            Configure and manage listeners for your gateway
           </p>
         </div>
         <Button onClick={() => setIsAddingListener(true)}>

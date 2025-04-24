@@ -1,10 +1,9 @@
 import { useState, useEffect, forwardRef, useImperativeHandle } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Target, TargetWithType, A2aTarget, BackendTls } from "@/lib/types";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertCircle } from "lucide-react";
 
 interface DirectA2aTarget extends Omit<TargetWithType, "a2a">, A2aTarget {
   type: "a2a";
@@ -22,10 +21,8 @@ interface A2ATargetFormProps {
 export const A2ATargetForm = forwardRef<{ submitForm: () => Promise<void> }, A2ATargetFormProps>(
   ({ targetName, onSubmit, isLoading, existingTarget, hideSubmitButton = false }, ref) => {
     const [a2aUrl, setA2aUrl] = useState("");
-    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-      console.log("existingTarget", existingTarget);
       if (existingTarget?.type === "a2a") {
         const a2aData = existingTarget as DirectA2aTarget;
         const { host, port, path, tls } = a2aData;
@@ -47,10 +44,11 @@ export const A2ATargetForm = forwardRef<{ submitForm: () => Promise<void> }, A2A
     }, [existingTarget]);
 
     const handleSubmit = async () => {
-      setError(null);
+      let isValidationError = false;
       try {
         if (!a2aUrl.trim()) {
-          setError("URL is required for A2A targets");
+          toast.error("URL is required for A2A targets");
+          isValidationError = true;
           return;
         }
 
@@ -58,12 +56,14 @@ export const A2ATargetForm = forwardRef<{ submitForm: () => Promise<void> }, A2A
         try {
           parsedUrl = new URL(a2aUrl);
         } catch {
-          setError("Invalid URL format. Please include protocol (e.g., http:// or https://).");
+          toast.error("Invalid URL format. Please include protocol (e.g., http:// or https://).");
+          isValidationError = true;
           return;
         }
 
         if (!parsedUrl.hostname) {
-          setError("URL must include a valid hostname.");
+          toast.error("URL must include a valid hostname.");
+          isValidationError = true;
           return;
         }
 
@@ -75,7 +75,8 @@ export const A2ATargetForm = forwardRef<{ submitForm: () => Promise<void> }, A2A
         } else if (parsedUrl.protocol === "http:" || parsedUrl.protocol === "https:") {
           finalPortNumber = parsedUrl.protocol === "https:" ? 443 : 80;
         } else {
-          setError(`Port is required for protocol \"${parsedUrl.protocol}\" or use http/https.`);
+          toast.error(`Port is required for protocol \"${parsedUrl.protocol}\" or use http/https.`);
+          isValidationError = true;
           return;
         }
 
@@ -83,7 +84,7 @@ export const A2ATargetForm = forwardRef<{ submitForm: () => Promise<void> }, A2A
           name: targetName,
           a2a: {
             host: parsedUrl.hostname,
-            port: finalPortNumber, // Use the calculated final port number
+            port: finalPortNumber,
             path: parsedUrl.pathname || "/",
           },
         };
@@ -91,9 +92,10 @@ export const A2ATargetForm = forwardRef<{ submitForm: () => Promise<void> }, A2A
         await onSubmit(target as TargetWithType);
       } catch (err) {
         console.error("Error processing A2A target:", err);
-        setError(err instanceof Error ? err.message : "An unexpected error occurred.");
-        // Re-throw only if it's not a validation error we already handled
-        if (!(err instanceof Error && error)) {
+        if (!isValidationError) {
+          toast.error(err instanceof Error ? err.message : "An unexpected error occurred.");
+        }
+        if (!isValidationError) {
           throw err;
         }
       }
@@ -112,12 +114,6 @@ export const A2ATargetForm = forwardRef<{ submitForm: () => Promise<void> }, A2A
         }}
         className="space-y-4"
       >
-        {error && (
-          <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
         <div className="space-y-2">
           <Label htmlFor="a2aUrl">
             Target URL <span className="text-red-500">*</span>

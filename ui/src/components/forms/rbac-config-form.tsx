@@ -1,17 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, MouseEvent } from "react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Listener, Rule, ResourceType, Matcher } from "@/lib/types";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Command,
   CommandEmpty,
@@ -24,6 +17,12 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Trash2, Plus, ChevronsUpDown, Check } from "lucide-react";
 import { fetchMcpTargets, fetchA2aTargets } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 
 interface RBACConfigFormProps {
   listener: Listener | null;
@@ -48,6 +47,9 @@ export function RBACConfigForm({ listener, onSave, onCancel }: RBACConfigFormPro
   const [loadingTargets, setLoadingTargets] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [popoverOpenStates, setPopoverOpenStates] = useState<boolean[]>([]);
+  const [activeAccordionValue, setActiveAccordionValue] = useState<string>(
+    rules.length > 0 ? `rule-${rules.length - 1}` : ""
+  );
 
   useEffect(() => {
     const loadTargets = async () => {
@@ -73,28 +75,45 @@ export function RBACConfigForm({ listener, onSave, onCancel }: RBACConfigFormPro
     setPopoverOpenStates(Array(rules.length).fill(false));
   }, [rules.length]);
 
+  useEffect(() => {
+    const activeIndex = parseInt(activeAccordionValue.split("-")[1], 10);
+    if (isNaN(activeIndex) || activeIndex >= rules.length) {
+      setActiveAccordionValue(rules.length > 0 ? `rule-${rules.length - 1}` : "");
+    }
+    setPopoverOpenStates((prev) => {
+      const newStates = Array(rules.length).fill(false);
+      prev
+        .slice(0, Math.min(prev.length, rules.length))
+        .forEach((state, i) => (newStates[i] = state));
+      return newStates;
+    });
+  }, [rules.length, activeAccordionValue]);
+
   const setPopoverOpen = (index: number, open: boolean) => {
     setPopoverOpenStates((prev) => prev.map((state, i) => (i === index ? open : state)));
   };
 
   const handleAddRule = () => {
-    setRules([
-      ...rules,
-      {
-        key: "",
-        value: "",
-        resource: {
-          type: "TOOL",
-          target: "",
-          id: "",
-        },
-        matcher: "EQUALS" as Matcher,
+    const newRuleIndex = rules.length;
+    const newRule: Rule = {
+      key: "",
+      value: "",
+      resource: {
+        type: "TOOL",
+        target: "",
+        id: "",
       },
-    ]);
+      matcher: "EQUALS" as Matcher,
+    };
+    setRules([...rules, newRule]);
+    setActiveAccordionValue(`rule-${newRuleIndex}`);
+    setPopoverOpenStates([...popoverOpenStates, false]);
   };
 
-  const handleRemoveRule = (index: number) => {
+  const handleRemoveRule = (index: number, event: MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
     setRules(rules.filter((_, i) => i !== index));
+    setPopoverOpenStates(popoverOpenStates.filter((_, i) => i !== index));
   };
 
   const handleUpdateRule = (index: number, updates: Partial<Rule>) => {
@@ -112,7 +131,14 @@ export function RBACConfigForm({ listener, onSave, onCancel }: RBACConfigFormPro
           {
             name: "default",
             namespace: "default",
-            rules,
+            rules: rules.map((rule) => ({
+              ...rule,
+              resource: {
+                ...rule.resource,
+                type: "TOOL" as ResourceType,
+              },
+              matcher: "EQUALS" as Matcher,
+            })),
           },
         ],
       },
@@ -123,162 +149,163 @@ export function RBACConfigForm({ listener, onSave, onCancel }: RBACConfigFormPro
 
   return (
     <div className="space-y-4 py-4">
-      <div className="space-y-4">
-        {rules.map((rule, index) => (
-          <div key={index} className="space-y-4 p-4 border rounded-lg">
-            <div className="flex justify-between items-center">
-              <h4 className="text-sm font-medium">Rule {index + 1}</h4>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => handleRemoveRule(index)}
-                className="text-destructive hover:text-destructive"
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor={`rule-key-${index}`}>Claim Key</Label>
-              <Input
-                id={`rule-key-${index}`}
-                value={rule.key}
-                onChange={(e) => handleUpdateRule(index, { key: e.target.value })}
-                placeholder="e.g., role"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor={`rule-value-${index}`}>Claim Value</Label>
-              <Input
-                id={`rule-value-${index}`}
-                value={rule.value}
-                onChange={(e) => handleUpdateRule(index, { value: e.target.value })}
-                placeholder="e.g., admin"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Resource Type</Label>
-              <Select
-                value={rule.resource.type.toString()}
-                onValueChange={(value) =>
-                  handleUpdateRule(index, {
-                    resource: {
-                      ...rule.resource,
-                      type: value as ResourceType,
-                    },
-                  })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={"TOOL"}>Tool</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor={`resource-id-${index}`}>Resource ID</Label>
-              <Input
-                id={`resource-id-${index}`}
-                value={rule.resource.id}
-                placeholder="e.g., echo-tool"
-                onChange={(e) =>
-                  handleUpdateRule(index, {
-                    resource: { ...rule.resource, id: e.target.value },
-                  })
-                }
-              />
-            </div>
-
-            <div className="space-y-1">
-              <Label htmlFor={`resource-target-${index}`}>Resource Target</Label>
-              <Popover
-                open={popoverOpenStates[index]}
-                onOpenChange={(open) => setPopoverOpen(index, open)}
-              >
-                <PopoverTrigger asChild>
+      <div className="max-h-[400px] overflow-y-auto pr-2 space-y-2">
+        <Accordion
+          type="single"
+          collapsible
+          value={activeAccordionValue}
+          onValueChange={setActiveAccordionValue}
+          className="w-full"
+        >
+          {rules.map((rule, index) => (
+            <AccordionItem key={index} value={`rule-${index}`}>
+              <AccordionTrigger className="hover:no-underline">
+                <div className="flex justify-between items-center w-full pr-4">
+                  <h4 className="text-sm font-medium text-left">Rule {index + 1}</h4>
                   <Button
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={popoverOpenStates[index]}
-                    className="w-full justify-between font-normal"
-                    disabled={loadingTargets}
+                    variant="ghost"
+                    size="icon"
+                    onClick={(e) => handleRemoveRule(index, e)}
+                    className="text-destructive hover:text-destructive hover:bg-transparent p-1 h-auto w-auto"
                   >
-                    {rule.resource.target ||
-                      (loadingTargets ? "Loading..." : "Select or type target...")}
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    <Trash2 className="h-4 w-4" />
                   </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
-                  <Command shouldFilter={false}>
-                    <CommandInput
-                      placeholder="Search target or type name..."
-                      value={rule.resource.target}
-                      onValueChange={(search) => {
-                        handleUpdateRule(index, { resource: { ...rule.resource, target: search } });
-                      }}
-                    />
-                    <CommandList>
-                      <CommandEmpty>
-                        {loadingTargets ? "Loading..." : fetchError || "No target found."}
-                      </CommandEmpty>
-                      <CommandGroup heading="Suggestions">
-                        {allTargetNames
-                          .filter((name) =>
-                            name.toLowerCase().includes(rule.resource.target?.toLowerCase() ?? "")
-                          )
-                          .map((name) => (
-                            <CommandItem
-                              key={name}
-                              value={name}
-                              onSelect={(currentValue) => {
-                                handleUpdateRule(index, {
-                                  resource: { ...rule.resource, target: currentValue },
-                                });
-                                setPopoverOpen(index, false);
-                              }}
-                            >
-                              <Check
-                                className={cn(
-                                  "mr-2 h-4 w-4",
-                                  rule.resource.target === name ? "opacity-100" : "opacity-0"
-                                )}
-                              />
-                              {name}
-                            </CommandItem>
-                          ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
-              {fetchError && <p className="text-xs text-destructive mt-1">{fetchError}</p>}
-            </div>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="space-y-4 p-1 pt-2">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor={`rule-key-${index}`}>Claim Key</Label>
+                      <Input
+                        id={`rule-key-${index}`}
+                        value={rule.key}
+                        onChange={(e) => handleUpdateRule(index, { key: e.target.value })}
+                        placeholder="e.g., role"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor={`rule-value-${index}`}>Claim Value</Label>
+                      <Input
+                        id={`rule-value-${index}`}
+                        value={rule.value}
+                        onChange={(e) => handleUpdateRule(index, { value: e.target.value })}
+                        placeholder="e.g., admin"
+                      />
+                    </div>
+                  </div>
 
-            <div className="space-y-2">
-              <Label>Matcher</Label>
-              <Select
-                value={rule.matcher}
-                onValueChange={(value: Matcher) =>
-                  handleUpdateRule(index, {
-                    matcher: value,
-                  })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="EQUALS">Equals</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        ))}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Resource Type</Label>
+                      <Input
+                        value="Tool"
+                        readOnly
+                        disabled
+                        className="bg-muted text-muted-foreground"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Matcher</Label>
+                      <Input
+                        value="Equals"
+                        readOnly
+                        disabled
+                        className="bg-muted text-muted-foreground"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <Label htmlFor={`resource-target-${index}`}>Resource Target</Label>
+                      <Popover
+                        open={popoverOpenStates[index] ?? false}
+                        onOpenChange={(open) => setPopoverOpen(index, open)}
+                      >
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            role="combobox"
+                            aria-expanded={popoverOpenStates[index] ?? false}
+                            className="w-full justify-between font-normal hover:bg-transparent"
+                            disabled={loadingTargets}
+                          >
+                            {rule.resource.target ||
+                              (loadingTargets ? "Loading..." : "Select or type target...")}
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                          <Command shouldFilter={false}>
+                            <CommandInput
+                              placeholder="Search target or type name..."
+                              value={rule.resource.target}
+                              onValueChange={(search) => {
+                                handleUpdateRule(index, {
+                                  resource: { ...rule.resource, target: search },
+                                });
+                              }}
+                            />
+                            <CommandList>
+                              <CommandEmpty>
+                                {loadingTargets ? "Loading..." : fetchError || "No target found."}
+                              </CommandEmpty>
+                              <CommandGroup heading="Suggestions">
+                                {allTargetNames
+                                  .filter((name) =>
+                                    name
+                                      .toLowerCase()
+                                      .includes(rule.resource.target?.toLowerCase() ?? "")
+                                  )
+                                  .map((name) => (
+                                    <CommandItem
+                                      key={name}
+                                      value={name}
+                                      onSelect={(currentValue) => {
+                                        handleUpdateRule(index, {
+                                          resource: { ...rule.resource, target: currentValue },
+                                        });
+                                        setPopoverOpen(index, false);
+                                      }}
+                                    >
+                                      <Check
+                                        className={cn(
+                                          "mr-2 h-4 w-4",
+                                          rule.resource.target === name
+                                            ? "opacity-100"
+                                            : "opacity-0"
+                                        )}
+                                      />
+                                      {name}
+                                    </CommandItem>
+                                  ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+                      {fetchError && <p className="text-xs text-destructive mt-1">{fetchError}</p>}
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor={`resource-id-${index}`}>Resource ID</Label>
+                      <Input
+                        id={`resource-id-${index}`}
+                        value={rule.resource.id}
+                        placeholder="e.g., echo-tool"
+                        onChange={(e) =>
+                          handleUpdateRule(index, {
+                            resource: { ...rule.resource, id: e.target.value },
+                          })
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          ))}
+        </Accordion>
       </div>
 
       <Button variant="outline" className="w-full" onClick={handleAddRule}>

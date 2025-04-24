@@ -9,13 +9,16 @@ export async function updateTarget(target: Target): Promise<void> {
   try {
     // Check if it's an mcp or a2a target
     if (target.sse || target.stdio || target.openapi) {
+      // remove the type from the target for MCP endpoint
+      const mcpTarget = { ...target, type: undefined };
       const response = await fetch(`${API_URL}/targets/mcp`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(target),
+        body: JSON.stringify(mcpTarget),
       });
+
       if (!response.ok) {
         throw new Error(`Failed to update target: ${response.status} ${response.statusText}`);
       }
@@ -25,6 +28,7 @@ export async function updateTarget(target: Target): Promise<void> {
         name: target.name,
         listeners: target.listeners,
         ...target.a2a,
+        type: undefined,
       };
 
       const response = await fetch(`${API_URL}/targets/a2a`, {
@@ -322,8 +326,6 @@ export async function createListener(listener: Listener): Promise<void> {
  */
 export async function addListener(listener: Listener): Promise<void> {
   try {
-    console.log("listener", listener);
-
     // Convert protocol string to number for the backend
     let protocolNumber: number;
     switch (listener.protocol) {
@@ -352,8 +354,6 @@ export async function addListener(listener: Listener): Promise<void> {
       },
       body: JSON.stringify(payload), // Use the payload with numeric protocol
     });
-
-    console.log("response", response);
 
     if (!response.ok) {
       throw new Error(`Failed to add listener: ${response.status} ${response.statusText}`);
@@ -386,7 +386,7 @@ export async function deleteListener(listener: Listener): Promise<void> {
 }
 
 /**
- * Deletes all targets and listeners from the agentproxy server
+ * Deletes all targets and listeners from the agentgateway server
  */
 export async function deleteEverything(): Promise<void> {
   const mcpTargets = await fetchMcpTargets();

@@ -2,7 +2,7 @@
 
 import { useServer } from "@/lib/server-context";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertCircle, ExternalLink, ChevronDown, ChevronUp } from "lucide-react";
+import { AlertCircle, ChevronDown, ChevronUp } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -12,8 +12,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
 import { Listener, RuleSet, Rule } from "@/lib/types";
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -87,7 +85,6 @@ export default function PoliciesPage() {
                       <TableHead>Policy Name</TableHead>
                       <TableHead>Rules</TableHead>
                       <TableHead>Applied To</TableHead>
-                      <TableHead className="text-right">Configure</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -118,23 +115,6 @@ export default function PoliciesPage() {
                               </Badge>
                             ))}
                           </div>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {policy.listeners.map((listener, idx) =>
-                            listener.name ? (
-                              <Link
-                                key={idx}
-                                href={`/listeners/${listener.name}`}
-                                className="inline-block"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <Button variant="ghost" size="sm">
-                                  <ExternalLink className="h-4 w-4 mr-2" />
-                                  Configure
-                                </Button>
-                              </Link>
-                            ) : null
-                          )}
                         </TableCell>
                       </TableRow>
                     ))}

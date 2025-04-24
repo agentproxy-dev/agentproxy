@@ -97,22 +97,22 @@ export const StdioTargetForm = forwardRef<
           id="args"
           value={args}
           onChange={(e) => setArgs(e.target.value)}
-          placeholder="e.g., --port 3000"
+          placeholder="e.g., @modelcontextprotocol/server-everything"
         />
       </div>
 
       <Collapsible open={showStdioAdvancedSettings} onOpenChange={setShowStdioAdvancedSettings}>
         <CollapsibleTrigger asChild>
-          <Button variant="ghost" className="flex items-center p-0 h-auto">
+          <Label className="flex items-center p-0 h-auto cursor-pointer hover:text-muted-foreground">
             {showStdioAdvancedSettings ? (
               <ChevronUp className="h-4 w-4 mr-1" />
             ) : (
               <ChevronDown className="h-4 w-4 mr-1" />
             )}
             Advanced Settings
-          </Button>
+          </Label>
         </CollapsibleTrigger>
-        <CollapsibleContent className="space-y-4 pt-2">
+        <CollapsibleContent className="space-y-4 pt-4">
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>Environment Variables</Label>

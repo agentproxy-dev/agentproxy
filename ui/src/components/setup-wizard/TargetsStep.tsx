@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -12,7 +13,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AgentgatewayLogo } from "@/components/agentgateway-logo";
 import { ArrowLeft, ArrowRight, Globe, Server, Terminal, Trash2 } from "lucide-react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { TooltipProvider, Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Config, ListenerProtocol, Target, TargetType, TargetWithType } from "@/lib/types";
@@ -34,7 +34,6 @@ export function TargetsStep({ onNext, onPrevious, config, onConfigChange }: Targ
 
   const [targetName, setTargetName] = useState("");
   const [isAddingTarget, setIsAddingTarget] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const mcpFormRef = useRef<{ submitForm: () => Promise<void> } | null>(null);
   const a2aFormRef = useRef<{ submitForm: () => Promise<void> } | null>(null);
 
@@ -57,18 +56,15 @@ export function TargetsStep({ onNext, onPrevious, config, onConfigChange }: Targ
 
   const handleCreateTarget = async (targetData: any) => {
     setIsAddingTarget(true);
-    setError(null);
 
     if (!listenerName) {
-      setError("Configuration Error: Listener name not found.");
       setIsAddingTarget(false);
-      return;
+      throw new Error("Configuration Error: Listener name not found.");
     }
 
     if (!targetName.trim()) {
-      setError("Target Name is required.");
       setIsAddingTarget(false);
-      return;
+      throw new Error("Target Name is required.");
     }
 
     try {
@@ -106,8 +102,7 @@ export function TargetsStep({ onNext, onPrevious, config, onConfigChange }: Targ
     } catch (err) {
       console.error("Error creating target:", err);
       const message = err instanceof Error ? err.message : "Failed to create target";
-      setError(message);
-      throw new Error(message);
+      toast.error(message);
     } finally {
       setIsAddingTarget(false);
     }
@@ -129,36 +124,30 @@ export function TargetsStep({ onNext, onPrevious, config, onConfigChange }: Targ
   };
 
   const handleNext = async () => {
-    setError(null);
-    let currentError = null;
-
-    try {
-      let formSubmitPromise: Promise<void> | null = null;
-
-      if (targetName.trim()) {
+    if (targetName.trim()) {
+      try {
+        let formSubmitPromise: Promise<void> | null = null;
         if (listenerProtocol === ListenerProtocol.MCP && mcpFormRef.current) {
           formSubmitPromise = mcpFormRef.current.submitForm();
         } else if (listenerProtocol === ListenerProtocol.A2A && a2aFormRef.current) {
           formSubmitPromise = a2aFormRef.current.submitForm();
         }
-      }
 
-      if (formSubmitPromise) {
-        await formSubmitPromise;
-      }
+        if (formSubmitPromise) {
+          await formSubmitPromise;
+        }
 
-      if (config.targets.length === 0 && !targetName.trim()) {
-        console.log("No targets configured, proceeding...");
-      }
-
-      if (!error) {
         onNext();
+      } catch (err) {
+        console.error("Validation or submission error:", err);
+        const message = err instanceof Error ? err.message : "Failed to save the current target.";
+        toast.error(message);
       }
-    } catch (err) {
-      console.error("Error during submitForm() call in handleNext:", err);
-      if (!error) {
-        currentError = err instanceof Error ? err.message : "Failed to save the current target.";
-        setError(currentError);
+    } else {
+      if (config.targets.length > 0) {
+        onNext();
+      } else {
+        toast.error("Please add at least one target or fill in the details for a new target.");
       }
     }
   };
@@ -186,7 +175,6 @@ export function TargetsStep({ onNext, onPrevious, config, onConfigChange }: Targ
                 value={targetName}
                 onChange={(e) => {
                   setTargetName(e.target.value);
-                  setError(null);
                 }}
                 required
               />
@@ -214,12 +202,6 @@ export function TargetsStep({ onNext, onPrevious, config, onConfigChange }: Targ
               />
             )}
           </div>
-
-          {error && (
-            <Alert variant="destructive">
-              <AlertDescription>{error || "An unspecified error occurred."}</AlertDescription>
-            </Alert>
-          )}
 
           {config.targets.length > 0 && (
             <div className="space-y-2">
@@ -285,7 +267,7 @@ export function TargetsStep({ onNext, onPrevious, config, onConfigChange }: Targ
         </Button>
         <Button onClick={handleNext} disabled={isAddingTarget}>
           {config.targets.length > 0 || targetName.trim()
-            ? "Next (Complete Setup)"
+            ? "Finish Setup"
             : "Skip & Complete Setup"}
           <ArrowRight className="ml-2 h-4 w-4" />
         </Button>

@@ -43,7 +43,7 @@ export default function RootLayout({
             defaultTheme="system"
             enableSystem
             disableTransitionOnChange
-            storageKey="agentproxy-theme"
+            storageKey="agentgateway-theme"
           >
             <LoadingWrapper>
               <WizardProvider>

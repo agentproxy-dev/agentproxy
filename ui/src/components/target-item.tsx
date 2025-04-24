@@ -1,13 +1,14 @@
-import { Target, TargetType, TargetWithType } from "@/lib/types";
+import { TargetType, TargetWithType } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Trash2 } from "lucide-react";
+import { Edit2, Trash2 } from "lucide-react";
 import { TooltipProvider, Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface TargetItemProps {
-  target: Target;
+  target: TargetWithType;
   index: number;
   onDelete: (index: number) => void;
+  onEdit: (target: TargetWithType) => void;
   isUpdating: boolean;
 }
 
@@ -28,7 +29,13 @@ export const getTargetType = (target: TargetWithType): TargetType => {
   }
 };
 
-export default function TargetItem({ target, index, onDelete, isUpdating }: TargetItemProps) {
+export default function TargetItem({
+  target,
+  index,
+  onDelete,
+  onEdit,
+  isUpdating,
+}: TargetItemProps) {
   const targetType = getTargetType(target as TargetWithType);
 
   return (
@@ -79,10 +86,20 @@ export default function TargetItem({ target, index, onDelete, isUpdating }: Targ
           variant="ghost"
           size="icon"
           onClick={() => onDelete(index)}
-          className="h-8 w-8"
+          className="h-8 w-8 ml-2 text-muted-foreground hover:bg-primary/20 flex-shrink-0"
           disabled={isUpdating}
         >
           <Trash2 className="h-4 w-4" />
+        </Button>
+
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => onEdit(target)}
+          className="h-8 w-8 ml-2 text-muted-foreground hover:bg-primary/20 flex-shrink-0"
+          disabled={isUpdating}
+        >
+          <Edit2 className="h-4 w-4" />
         </Button>
       </div>
     </div>

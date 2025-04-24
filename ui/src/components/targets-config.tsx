@@ -3,7 +3,7 @@
 import { useState, forwardRef, useImperativeHandle, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Loader2, Info, Edit2, AlertCircle } from "lucide-react";
+import { Loader2, Info, AlertCircle } from "lucide-react";
 import { Target, Config, TargetWithType, Listener, ListenerProtocol } from "@/lib/types";
 import {
   updateTarget,
@@ -96,12 +96,12 @@ export const TargetsConfig = forwardRef<{ openAddTargetDialog: () => void }, Tar
       }
 
       const requiredProtocol =
-        selectedTargetType.toLocaleUpperCase() === "A2A" ? ListenerProtocol.A2A : ListenerProtocol.MCP;
+        selectedTargetType.toLocaleUpperCase() === "A2A"
+          ? ListenerProtocol.A2A
+          : ListenerProtocol.MCP;
 
       const filtered = allListeners.filter((listener) => listener.protocol === requiredProtocol);
       setCompatibleListeners(filtered);
-
-      console.log("filtered", filtered);
 
       if (filtered.length === 0 && !isLoadingListeners) {
         setListenerError(`No ${requiredProtocol} listeners found. Please create one first.`);
@@ -133,7 +133,6 @@ export const TargetsConfig = forwardRef<{ openAddTargetDialog: () => void }, Tar
     };
 
     const confirmDelete = async () => {
-      console.log("confirming delete", targetToDelete);
       if (!targetToDelete) return;
       setIsSubmitting(true);
       try {
@@ -295,17 +294,9 @@ export const TargetsConfig = forwardRef<{ openAddTargetDialog: () => void }, Tar
                     target={target}
                     index={index}
                     onDelete={handleRemoveTarget}
+                    onEdit={openEditTargetDialog}
                     isUpdating={isSubmitting}
                   />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => openEditTargetDialog(target)}
-                    className="h-8 w-8 ml-2 text-muted-foreground hover:text-primary flex-shrink-0"
-                    disabled={isSubmitting}
-                  >
-                    <Edit2 className="h-4 w-4" />
-                  </Button>
                 </div>
               ))}
             </div>
@@ -321,48 +312,60 @@ export const TargetsConfig = forwardRef<{ openAddTargetDialog: () => void }, Tar
           <DialogContent className="sm:max-w-[600px]">
             <DialogHeader>
               <DialogTitle>{editingTarget ? "Edit Target" : "Add New Target"}</DialogTitle>
-              <DialogDescription>
-                Configure the details for your target server. Choose MCP or A2A.
-              </DialogDescription>
+              <DialogDescription>Configure the details for your target server.</DialogDescription>
             </DialogHeader>
 
             <div className="grid gap-4 py-4">
-              <div className="space-y-2">
-                <Label>Target Type *</Label>
-                <RadioGroup
-                  value={selectedTargetType ?? ""}
-                  onValueChange={(value) => setSelectedTargetType(value as SelectableTargetType)}
-                  className="grid grid-cols-2 gap-4"
-                  disabled={!!editingTarget || isLoadingListeners}
-                >
-                  <Label
-                    htmlFor="mcp-target-type"
-                    className={cn(
-                      "flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent/20 hover:text-accent-foreground",
-                      selectedTargetType === "mcp" && "border-primary"
-                    )}
+              {!editingTarget ? (
+                <div className="space-y-2">
+                  <Label>Pick a target</Label>
+                  <RadioGroup
+                    value={selectedTargetType ?? ""}
+                    onValueChange={(value) => setSelectedTargetType(value as SelectableTargetType)}
+                    className="grid grid-cols-2 gap-4"
+                    disabled={isLoadingListeners}
                   >
-                    <RadioGroupItem value="mcp" id="mcp-target-type" className="sr-only" />
-                    MCP Target
-                    <span className="block text-xs font-normal text-muted-foreground mt-1 text-center">
-                      For SSE, Stdio, OpenAPI backends
-                    </span>
-                  </Label>
-                  <Label
-                    htmlFor="a2a-target-type"
-                    className={cn(
-                      "flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent/20 hover:text-accent-foreground",
-                      selectedTargetType === "a2a" && "border-primary"
-                    )}
-                  >
-                    <RadioGroupItem value="a2a" id="a2a-target-type" className="sr-only" />
-                    A2A Target
-                    <span className="block text-xs font-normal text-muted-foreground mt-1 text-center">
-                      For Agent-to-Agent protocol
-                    </span>
-                  </Label>
-                </RadioGroup>
-              </div>
+                    <Label
+                      htmlFor="mcp-target-type"
+                      className={cn(
+                        "flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent/20 hover:text-accent-foreground dark:hover:bg-accent/20 dark:hover:text-white",
+                        selectedTargetType === "mcp" && "border-primary"
+                      )}
+                    >
+                      <RadioGroupItem value="mcp" id="mcp-target-type" className="sr-only" />
+                      MCP Target
+                      <span className="block text-xs font-normal text-muted-foreground mt-1 text-center">
+                        For SSE, Stdio, OpenAPI backends
+                      </span>
+                    </Label>
+                    <Label
+                      htmlFor="a2a-target-type"
+                      className={cn(
+                        "flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent/20 hover:text-accent-foreground dark:hover:bg-accent/20 dark:hover:text-white",
+                        selectedTargetType === "a2a" && "border-primary"
+                      )}
+                    >
+                      <RadioGroupItem value="a2a" id="a2a-target-type" className="sr-only" />
+                      A2A Target
+                      <span className="block text-xs font-normal text-muted-foreground mt-1 text-center">
+                        For Agent-to-Agent protocol
+                      </span>
+                    </Label>
+                  </RadioGroup>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <Label>Target Type</Label>
+                  <Input
+                    value={selectedTargetType?.toUpperCase()}
+                    disabled
+                    className="font-medium"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    The target type cannot be changed after creation.
+                  </p>
+                </div>
+              )}
 
               {isLoadingListeners && selectedTargetType && (
                 <div className="flex items-center text-sm text-muted-foreground">
@@ -385,9 +388,6 @@ export const TargetsConfig = forwardRef<{ openAddTargetDialog: () => void }, Tar
                         selectedListeners={selectedListeners}
                         onListenersChange={setSelectedListeners}
                       />
-                      <p className="text-xs text-muted-foreground">
-                        Select the listener(s) that can route requests to this target.
-                      </p>
                       {listenerError && !noListenersFound && (
                         <p className="text-xs text-destructive">{listenerError}</p>
                       )}
@@ -412,7 +412,7 @@ export const TargetsConfig = forwardRef<{ openAddTargetDialog: () => void }, Tar
                   />
                   {targetNameError && <p className="text-xs text-destructive">{targetNameError}</p>}
                   <p className="text-xs text-muted-foreground">
-                    A unique identifier for this target.
+                    A unique identifier for this target. Cannot be changed after creation.
                   </p>
                 </div>
               )}

@@ -25,7 +25,7 @@ export function ResponseDisplay({
         <CardTitle>Response</CardTitle>
       </CardHeader>
       <CardContent>
-        <pre className="bg-secondary p-4 rounded-lg overflow-auto max-h-[500px]">
+        <pre className="bg-muted p-4 rounded-lg overflow-auto max-h-[500px]">
           {JSON.stringify(responseData, null, 2)}
         </pre>
       </CardContent>

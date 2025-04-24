@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -12,7 +13,6 @@ import { AgentgatewayLogo } from "@/components/agentgateway-logo";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Config, Listener, ListenerProtocol } from "@/lib/types";
 import { createListener } from "@/lib/api";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -27,13 +27,26 @@ interface ListenerStepProps {
 export function ListenerStep({ onNext, onPrevious, config, onConfigChange }: ListenerStepProps) {
   const [listenerAddress, setListenerAddress] = useState("0.0.0.0");
   const [listenerPort, setListenerPort] = useState("5555");
-  const [selectedProtocol, setSelectedProtocol] = useState<ListenerProtocol>(ListenerProtocol.A2A);
+  const [selectedProtocol, setSelectedProtocol] = useState<ListenerProtocol>(ListenerProtocol.MCP);
   const [isUpdatingListener, setIsUpdatingListener] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const updateListenerConfig = async () => {
+    if (!listenerAddress.trim()) {
+      toast.error("Listener address is required.");
+      return;
+    }
+    if (!listenerPort.trim()) {
+      toast.error("Listener port is required.");
+      return;
+    }
+
+    const portNumber = parseInt(listenerPort, 10);
+    if (isNaN(portNumber) || portNumber <= 0 || portNumber > 65535) {
+      toast.error("Invalid port number. Must be between 1 and 65535.");
+      return;
+    }
+
     setIsUpdatingListener(true);
-    setError(null);
 
     try {
       const newListener: Listener = {
@@ -41,7 +54,7 @@ export function ListenerStep({ onNext, onPrevious, config, onConfigChange }: Lis
         protocol: selectedProtocol,
         sse: {
           address: listenerAddress,
-          port: parseInt(listenerPort, 10),
+          port: portNumber,
           tls: undefined,
           rbac: [],
         },
@@ -59,7 +72,7 @@ export function ListenerStep({ onNext, onPrevious, config, onConfigChange }: Lis
       onNext();
     } catch (err) {
       console.error("Error updating listener configuration:", err);
-      setError(err instanceof Error ? err.message : "Failed to update listener configuration");
+      toast.error(err instanceof Error ? err.message : "Failed to update listener configuration");
     } finally {
       setIsUpdatingListener(false);
     }
@@ -91,18 +104,19 @@ export function ListenerStep({ onNext, onPrevious, config, onConfigChange }: Lis
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>Protocol</Label>
+
               <RadioGroup
                 value={selectedProtocol}
                 onValueChange={(value) => setSelectedProtocol(value as ListenerProtocol)}
                 className="flex space-x-4"
               >
                 <div className="flex items-center space-x-2">
-                  <RadioGroupItem value={ListenerProtocol.A2A} id="a2a-protocol" />
-                  <Label htmlFor="a2a-protocol">A2A (Agent2Agent)</Label>
-                </div>
-                <div className="flex items-center space-x-2">
                   <RadioGroupItem value={ListenerProtocol.MCP} id="mcp-protocol" />
                   <Label htmlFor="mcp-protocol">MCP (MCP Server / OpenAPI)</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value={ListenerProtocol.A2A} id="a2a-protocol" />
+                  <Label htmlFor="a2a-protocol">A2A (Agent2Agent)</Label>
                 </div>
               </RadioGroup>
               <p className="text-xs text-muted-foreground">
@@ -119,8 +133,7 @@ export function ListenerStep({ onNext, onPrevious, config, onConfigChange }: Lis
                 placeholder="e.g., 0.0.0.0"
               />
               <p className="text-xs text-muted-foreground">
-                The IP address the listener is bound to. 0.0.0.0 means it&apos;s listening on all
-                interfaces.
+                The IP address the listener is bound to.
               </p>
             </div>
             <div className="space-y-2">
@@ -136,12 +149,6 @@ export function ListenerStep({ onNext, onPrevious, config, onConfigChange }: Lis
                 The port number the listener is using.
               </p>
             </div>
-
-            {error && (
-              <Alert variant="destructive">
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
           </div>
         </div>
       </CardContent>

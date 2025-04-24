@@ -302,7 +302,6 @@ export class A2AClient {
       } catch {
         /* Ignore */
       }
-      console.log(`SSE stream finished for method ${expectedMethod}.`);
     }
   }
 
@@ -321,7 +320,6 @@ export class A2AClient {
         }
       });
 
-      console.log(`Fetching agent card from ${cardUrl}`);
       const response = await fetch(cardUrl, {
         method: "GET",
         headers: requestHeaders, // Use Headers object
