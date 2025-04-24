@@ -1,28 +1,29 @@
 {
-  "type": "static",
-  "tracing": {
-    "tracer": {
-      "otlp": {
-        "endpoint": "http://localhost:4317"
-      }
-    }
-  },
-  "listeners": [
-    {
-      "protocol": "A2A",
-      "sse": {
-        "address": "[::]",
-        "port": 3000
-      }
-    }
-  ],
-  "targets": {
-    "a2a": [
-      {
-        "name": "google-adk",
-        "host": "127.0.0.1",
-        "port": "10002"
-      }
-    ]
-  }
+     "type": "static",
+     "tracing": {
+       "tracer": {
+         "otlp": {
+           "endpoint": "http://localhost:4317"
+         }
+       }
+     },
+     "listeners": [
+       {
+         "name": "google-adk",
+         "protocol": "A2A",
+         "sse": {
+           "address": "[::]",
+           "port": 3000
+         }
+       }
+     ],
+     "targets": {
+       "a2a": [
+         {
+           "name": "google-adk",
+           "host": "127.0.0.1",
+           "port": "10002"
+         }
+       ]
+   } 
 }
