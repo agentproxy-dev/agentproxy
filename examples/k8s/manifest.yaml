@@ -63,7 +63,7 @@ spec:
     spec:
       containers:
         - name: everything
-          image: ghcr.io/agentgateway/agentgateway:latest-ext
+          image: ghcr.io/agentgateway/agentgateway:0.4.21-ext
           args:
             - -f
             - /etc/agentgateway/config.json
@@ -100,6 +100,8 @@ data:
       "type": "static",
       "listeners": [
         {
+          "name": "sse",
+          "protocol": "MCP",        
           "sse": {
             "address": "[::]",
             "port": 3000
