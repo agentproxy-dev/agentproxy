@@ -616,19 +616,35 @@ impl ListenerManager {
 			let child_token = ct.child_token();
 			let mut retries = 0;
 			let max_retries = 5;
-      let mut backoff = tokio::time::Duration::from_millis(5);
+			let mut backoff = tokio::time::Duration::from_millis(5);
 			loop {
-				match listener_clone.bind(state_clone.clone(), metrics_clone.clone(), child_token.clone()).await {
+				match listener_clone
+					.bind(
+						state_clone.clone(),
+						metrics_clone.clone(),
+						child_token.clone(),
+					)
+					.await
+				{
 					Ok(bound) => break bound,
 					Err(e) => {
 						if retries >= max_retries {
-							return Err(anyhow::anyhow!("Failed to bind listener after {} attempts: {:?}", max_retries, e));
+							return Err(anyhow::anyhow!(
+								"Failed to bind listener after {} attempts: {:?}",
+								max_retries,
+								e
+							));
 						}
 						retries += 1;
-						tracing::warn!("Failed to bind listener (attempt {}/{}): {:?}", retries, max_retries, e);
+						tracing::warn!(
+							"Failed to bind listener (attempt {}/{}): {:?}",
+							retries,
+							max_retries,
+							e
+						);
 						tokio::time::sleep(backoff).await;
 						backoff *= 2;
-					}
+					},
 				}
 			}
 		};
