@@ -2,7 +2,7 @@
 
 This example shows how to deploy the agentgateway in a Kubernetes cluster with a static config.
 
-### Running the Agent Gateway
+### Running the Agent Gateway and example
 
 
 First let's apply our config to the cluster.
@@ -10,14 +10,7 @@ First let's apply our config to the cluster.
 kubectl create -n agentgateway configmap agentgateway-config --from-file=config.json=examples/k8s/config.json
 ```
 
-Now we can deploy the Agent Gateway .
-```bash
-kubectl apply -n agentgateway -f examples/k8s/manifest.yaml
-```
-
-
-### Deploying the example
-
+Now we can deploy the Agent Gateway and sample.
 ```bash
 kubectl apply -n agentgateway -f examples/k8s/manifest.yaml
 ```
