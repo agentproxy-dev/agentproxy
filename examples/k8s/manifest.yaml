@@ -63,7 +63,7 @@ spec:
     spec:
       containers:
         - name: everything
-          image: ghcr.io/agentgateway/agentgateway:0.4.21-ext
+          image: ghcr.io/agentgateway/agentgateway:latest-ext
           args:
             - -f
             - /etc/agentgateway/config.json
