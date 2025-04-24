@@ -614,10 +614,23 @@ impl ListenerManager {
 
 			// Spawn the task with the cloned listener and other cloned Arcs
 			let child_token = ct.child_token();
-			listener_clone
-				.bind(state_clone, metrics_clone, child_token)
-				.await
-				.map_err(|e| anyhow::anyhow!("Failed to bind listener: {:?}", e))?
+			let mut retries = 0;
+			let max_retries = 5;
+      let mut backoff = tokio::time::Duration::from_millis(5);
+			loop {
+				match listener_clone.bind(state_clone.clone(), metrics_clone.clone(), child_token.clone()).await {
+					Ok(bound) => break bound,
+					Err(e) => {
+						if retries >= max_retries {
+							return Err(anyhow::anyhow!("Failed to bind listener after {} attempts: {:?}", max_retries, e));
+						}
+						retries += 1;
+						tracing::warn!("Failed to bind listener (attempt {}/{}): {:?}", retries, max_retries, e);
+						tokio::time::sleep(backoff).await;
+						backoff *= 2;
+					}
+				}
+			}
 		};
 
 		// Now use the owned listener_clone for spawning
