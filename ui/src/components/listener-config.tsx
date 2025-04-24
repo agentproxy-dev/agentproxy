@@ -567,8 +567,8 @@ export function ListenerConfig({
           <DialogHeader>
             <DialogTitle>Add New Listener</DialogTitle>
             <DialogDescription>
-              Configure a new SSE listener for the proxy server. Additional features can be
-              configured after creation.
+              Configure a new SSE listener for the gateway. Additional features can be configured
+              after creation.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">

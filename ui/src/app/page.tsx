@@ -131,7 +131,7 @@ export default function Home() {
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Overview</h1>
             <p className="text-muted-foreground mt-1">
-              Monitor your proxy server&apos;s configuration and status
+              Monitor your gateway&apos;s configuration and status
             </p>
           </div>
         </div>

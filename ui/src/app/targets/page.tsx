@@ -23,7 +23,7 @@ export default function TargetsPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Targets</h1>
           <p className="text-muted-foreground mt-1">
-            Configure and manage targets for your proxy server
+            Configure and manage targets for your gateway
           </p>
         </div>
         <Button onClick={handleAddTarget}>

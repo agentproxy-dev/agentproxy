@@ -66,8 +66,8 @@
     "tsconfig.json"
   ],
   "keywords": [
-    "mcp",
-    "proxy",
+    "agentgateway",
+    "gateway",
     "ui",
     "nextjs"
   ],

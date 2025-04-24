@@ -161,7 +161,7 @@ export function TargetsStep({ onNext, onPrevious, config, onConfigChange }: Targ
         <CardTitle className="text-center">Configure Targets</CardTitle>
         <CardDescription className="text-center">
           Add the {listenerProtocol === ListenerProtocol.A2A ? "A2A" : "MCP"} target(s) that your
-          proxy will forward requests to.
+          gateway will forward requests to.
         </CardDescription>
       </CardHeader>
       <CardContent>

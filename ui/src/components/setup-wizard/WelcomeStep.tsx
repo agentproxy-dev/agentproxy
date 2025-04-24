@@ -29,7 +29,7 @@ export function WelcomeStep({ onNext, onSkip }: WelcomeStepProps) {
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-2">
-          <h3 className="font-medium">What is Agentgateway?</h3>
+          <h3 className="font-medium">What is Agent Gateway?</h3>
           <p className="text-sm text-muted-foreground">
             <a
               href="https://agentgateway.dev"

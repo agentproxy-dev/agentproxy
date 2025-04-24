@@ -57,7 +57,7 @@ export function ListenerSelect({ selectedListeners, onListenersChange }: Listene
       } catch (err) {
         console.error("Error fetching listeners:", err);
         toast.error(
-          "Failed to load available listeners. Please ensure the proxy server is running."
+          "Failed to load available listeners. Please ensure the agentgateway is running."
         );
         onListenersChange([]);
       } finally {
