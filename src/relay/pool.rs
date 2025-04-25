@@ -346,7 +346,7 @@ async fn get_default_headers(
 			let backend_auth = auth_config.build(&rq_ctx.identity).await?;
 			let token = backend_auth.get_token().await?;
 			let mut upstream_headers = HeaderMap::new();
-			let auth_value = HeaderValue::from_str(token.as_str())?;
+			let auth_value = HeaderValue::from_str(&format!("Bearer {}", token))?;
 			upstream_headers.insert(AUTHORIZATION, auth_value);
 			Ok(upstream_headers)
 		},

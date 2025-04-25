@@ -1,0 +1,109 @@
+{
+  "type": "static",
+  "listeners": [
+    {
+      "name": "sse",
+      "protocol": "MCP",
+      "sse": {
+        "address": "[::]",
+        "port": 3000,
+        "authn": {
+          "jwt": {
+            "issuer": [
+              "me"
+            ],
+            "audience": [
+              "me.com"
+            ],
+            "local_jwks": {
+              "file_path": "manifests/jwt/pub-key"
+            }
+          }
+        },
+        "rbac": [
+          {
+            "name": "default",
+            "rules": [
+              {
+                "key": "sub",
+                "value": "me",
+                "resource": {
+                  "type": "TOOL",
+                  "id": "everything_echo"
+                },
+                "matcher": "EQUALS"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "sse-backend",
+      "protocol": "MCP",
+      "sse": {
+        "address": "[::]",
+        "port": 3001,
+        "authn": {
+          "jwt": {
+            "issuer": [
+              "me"
+            ],
+            "audience": [
+              "me.com"
+            ],
+            "local_jwks": {
+              "file_path": "manifests/jwt/pub-key"
+            }
+          }
+        },
+        "rbac": [
+          {
+            "name": "default",
+            "rules": [
+              {
+                "key": "sub",
+                "value": "me",
+                "resource": {
+                  "type": "TOOL",
+                  "id": "echo"
+                },
+                "matcher": "EQUALS"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "targets": {
+    "mcp": [
+      {
+        "listeners": [
+          "sse-backend"
+        ],
+        "name": "everything",
+        "stdio": {
+          "cmd": "npx",
+          "args": [
+            "@modelcontextprotocol/server-everything"
+          ]
+        }
+      },
+      {
+        "listeners": [
+          "sse"
+        ],
+        "name": "sse",
+        "sse": {
+          "host": "localhost",
+          "port": 3001,
+          "path": "/sse",
+          "auth": {
+            "passthrough": {}
+          }
+        }
+      }
+    ]
+  }
+}

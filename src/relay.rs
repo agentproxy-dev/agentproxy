@@ -19,6 +19,7 @@ use rmcp::{
 	service::RequestContext,
 };
 use std::borrow::Cow;
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::process::Command;
@@ -60,6 +61,7 @@ pub struct Relay {
 	pool: Arc<RwLock<pool::ConnectionPool>>,
 	metrics: Arc<metrics::Metrics>,
 	policies: rbac::RuleSets,
+  initialized: Arc<RwLock<BTreeSet<String>>>,
 }
 
 impl Relay {
@@ -76,6 +78,7 @@ impl Relay {
 			))),
 			metrics,
 			policies,
+			initialized: Arc::new(RwLock::new(BTreeSet::new())),
 		}
 	}
 }
@@ -124,13 +127,40 @@ impl ServerHandler for Relay {
         }
 	}
 
+  async fn initialize(
+          &self,
+          request: InitializeRequestParam,
+          context: RequestContext<RoleServer>,
+	) -> Result<InitializeResult, McpError> {
+		let rq_ctx = context
+			.extensions
+			.get::<RqCtx>()
+			.unwrap_or(&DEFAULT_RQ_CTX);
+    let mut initialized = self.initialized.write().await;
+
+    
+    // List servers and initialize the ones that are not initialized
+		let mut pool = self.pool.write().await;
+		let connections = pool
+			.list(rq_ctx, &context.peer)
+			.await
+			.map_err(|e| McpError::internal_error(format!("Failed to list connections: {}", e), None))?;
+    for (name, upstream) in connections {
+      if !initialized.contains(&name) {
+        upstream.initialize(request.clone()).await?;
+        initialized.insert(name.clone());
+      }
+    }
+		Ok(InitializeResult::default())
+	}
+
 	#[instrument(level = "debug", skip_all)]
 	async fn list_resources(
 		&self,
 		request: Option<PaginatedRequestParam>,
-		_context: RequestContext<RoleServer>,
+		context: RequestContext<RoleServer>,
 	) -> std::result::Result<ListResourcesResult, McpError> {
-		let rq_ctx = _context
+		let rq_ctx = context
 			.extensions
 			.get::<RqCtx>()
 			.unwrap_or(&DEFAULT_RQ_CTX);
@@ -140,7 +170,7 @@ impl ServerHandler for Relay {
 			.start_with_context(tracer, &rq_ctx.context);
 		let mut pool = self.pool.write().await;
 		let connections = pool
-			.list(rq_ctx, &_context.peer)
+			.list(rq_ctx, &context.peer)
 			.await
 			.map_err(|e| McpError::internal_error(format!("Failed to list connections: {}", e), None))?;
 		let all = connections.into_iter().map(|(_name, svc)| {

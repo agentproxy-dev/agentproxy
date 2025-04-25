@@ -65,6 +65,29 @@ pub(crate) enum UpstreamTarget {
 }
 
 impl UpstreamTarget {
+
+  pub(crate) async fn initialize(
+    &self,
+    request: InitializeRequestParam,
+  ) -> Result<InitializeResult, UpstreamError> {
+    match self {
+      UpstreamTarget::Mcp(m) => {
+        let result = m.send_request(ClientRequest::InitializeRequest(InitializeRequest {
+          method: Default::default(),
+          params: request,
+          extensions: rmcp::model::Extensions::new(),
+        })).await?;
+        match result {
+          ServerResult::InitializeResult(result) => Ok(result),
+          _ => Err(UpstreamError::ServiceError(
+            rmcp::ServiceError::UnexpectedResponse,
+          )),
+        }
+      },
+      UpstreamTarget::OpenAPI(_) => Ok(InitializeResult::default()),
+    }
+  }
+
 	pub(crate) async fn list_tools(
 		&self,
 		request: Option<PaginatedRequestParam>,
