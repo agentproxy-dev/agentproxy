@@ -61,7 +61,7 @@ pub struct Relay {
 	pool: Arc<RwLock<pool::ConnectionPool>>,
 	metrics: Arc<metrics::Metrics>,
 	policies: rbac::RuleSets,
-  initialized: Arc<RwLock<BTreeSet<String>>>,
+	initialized: Arc<RwLock<BTreeSet<String>>>,
 }
 
 impl Relay {
@@ -127,30 +127,26 @@ impl ServerHandler for Relay {
         }
 	}
 
-  async fn initialize(
-          &self,
-          request: InitializeRequestParam,
-          context: RequestContext<RoleServer>,
+	async fn initialize(
+		&self,
+		request: InitializeRequestParam,
+		context: RequestContext<RoleServer>,
 	) -> Result<InitializeResult, McpError> {
-		let rq_ctx = context
-			.extensions
-			.get::<RqCtx>()
-			.unwrap_or(&DEFAULT_RQ_CTX);
-    let mut initialized = self.initialized.write().await;
+		let rq_ctx = context.extensions.get::<RqCtx>().unwrap_or(&DEFAULT_RQ_CTX);
+		let mut initialized = self.initialized.write().await;
 
-    
-    // List servers and initialize the ones that are not initialized
+		// List servers and initialize the ones that are not initialized
 		let mut pool = self.pool.write().await;
 		let connections = pool
 			.list(rq_ctx, &context.peer)
 			.await
 			.map_err(|e| McpError::internal_error(format!("Failed to list connections: {}", e), None))?;
-    for (name, upstream) in connections {
-      if !initialized.contains(&name) {
-        upstream.initialize(request.clone()).await?;
-        initialized.insert(name.clone());
-      }
-    }
+		for (name, upstream) in connections {
+			if !initialized.contains(&name) {
+				upstream.initialize(request.clone()).await?;
+				initialized.insert(name.clone());
+			}
+		}
 		Ok(InitializeResult::default())
 	}
 
@@ -160,10 +156,7 @@ impl ServerHandler for Relay {
 		request: Option<PaginatedRequestParam>,
 		context: RequestContext<RoleServer>,
 	) -> std::result::Result<ListResourcesResult, McpError> {
-		let rq_ctx = context
-			.extensions
-			.get::<RqCtx>()
-			.unwrap_or(&DEFAULT_RQ_CTX);
+		let rq_ctx = context.extensions.get::<RqCtx>().unwrap_or(&DEFAULT_RQ_CTX);
 		let tracer = trcng::get_tracer();
 		let _span = trcng::start_span("list_resources", &rq_ctx.identity)
 			.with_kind(SpanKind::Server)
