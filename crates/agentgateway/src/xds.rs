@@ -450,19 +450,16 @@ impl ListenerStore {
 
 	pub async fn insert(&mut self, listener: XdsListener) -> anyhow::Result<()> {
 		let listener_name = listener.name.clone();
-		self
-			.by_name_protos
-			.insert(listener_name.clone(), listener.clone());
-		let xds_listener = inbound::Listener::from_xds(listener).await?;
-		if self.by_name.iter().any(|(_, listener)| {
+		let new_listener = inbound::Listener::from_xds(listener.clone()).await?;
+		if self.by_name.iter().any(|(_, existing)| {
 			// Return true if the incoming listener binds to the same address as an existing listener.
 			// Unless the names are the same, in which case we return false, because we will update the existing listener.
-			match (&listener.spec, &xds_listener.spec) {
+			match (&existing.spec, &new_listener.spec) {
 				(inbound::ListenerType::Sse(l), inbound::ListenerType::Sse(r)) => {
-					l.addr == r.addr && listener.name != listener_name
+					l.addr == r.addr && existing.name != listener_name
 				},
 				(inbound::ListenerType::A2a(l), inbound::ListenerType::A2a(r)) => {
-					l.addr == r.addr && listener.name != listener_name
+					l.addr == r.addr && existing.name != listener_name
 				},
 				_ => false,
 			}
@@ -472,7 +469,8 @@ impl ListenerStore {
 				listener_name
 			));
 		}
-		match self.by_name.insert(listener_name.clone(), xds_listener) {
+		self.by_name_protos.insert(listener_name.clone(), listener);
+		match self.by_name.insert(listener_name.clone(), new_listener) {
 			Some(_) => {
 				self
 					.update_tx
