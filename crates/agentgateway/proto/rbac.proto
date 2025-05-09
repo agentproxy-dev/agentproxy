@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package agentgateway.dev.rbac;
 
+option go_package = "github.com/agentgateway/agentgateway/go/api;api";
+
 // A rule that defines a resource type and a key-value pair 
 //that can be used to match against a resource.
 message Rule {
