@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package agentgateway.dev.mcp.target;
 
+option go_package = "github.com/agentgateway/agentgateway/go/api/mcp;mcp";
+
 import "common.proto";
 import "google/protobuf/empty.proto";
 

@@ -4,6 +4,8 @@ import "google/protobuf/duration.proto";
 import "google/protobuf/empty.proto";
 package agentgateway.dev.common;
 
+option go_package = "github.com/agentgateway/agentgateway/go/api;api";
+
 message LocalDataSource {
   oneof source {
     string file_path = 1;

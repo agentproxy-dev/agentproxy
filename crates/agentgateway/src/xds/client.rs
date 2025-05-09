@@ -291,7 +291,7 @@ impl Config {
 		let node_name = node_name.as_deref().unwrap_or(EMPTY_STR);
 
 		let role = format!(
-			"mcp-kgateway-kube-gateway-api~{ns}~{name}",
+			"agentgateway-api~{ns}~{name}",
 			ns = ns,
 			name = gw_name
 		);

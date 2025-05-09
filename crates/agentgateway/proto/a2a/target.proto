@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package agentgateway.dev.a2a.target;
 
+option go_package = "github.com/agentgateway/agentgateway/go/api/a2a;a2a";
+
 import "common.proto";
 
 message Target {
