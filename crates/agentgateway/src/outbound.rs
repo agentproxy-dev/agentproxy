@@ -74,7 +74,7 @@ impl TryFrom<XdsFilter> for Filter {
 			XdsFitlerMatcher::Prefix => FilterMatcher::Prefix(value.r#match.clone()),
 			XdsFitlerMatcher::Suffix => FilterMatcher::Suffix(value.r#match.clone()),
 			XdsFitlerMatcher::Contains => FilterMatcher::Contains(value.r#match.clone()),
-			XdsFitlerMatcher::Regex => FilterMatcher::Regex(Regex::new(&value.r#match).unwrap()),
+			XdsFitlerMatcher::Regex => FilterMatcher::Regex(Regex::new(&value.r#match)?),
 		};
 		Ok(Filter::new(matcher, value.r#type))
 	}
