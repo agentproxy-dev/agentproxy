@@ -216,7 +216,7 @@ async fn sse_handler(
 				app.listener_name.clone(),
 			);
 			let stream = ReceiverStream::new(from_client_rx);
-			let sink = PollSender::new(to_client_tx).sink_map_err(std::io::Error::other);
+			let sink = PollSender::new(to_client_tx.clone()).sink_map_err(std::io::Error::other);
 			let result = serve_server_with_ct(relay.clone(), (sink, stream), app.ct.child_token())
 				.await
 				.inspect_err(|e| {
@@ -244,6 +244,9 @@ async fn sse_handler(
 						tracing::info!("cancelled");
 						result.unwrap().cancel().await.unwrap();
 						break;
+					}
+					_ = to_client_tx.closed() =>{
+						tracing::info!("client disconnected");
 					}
 				};
 			}
