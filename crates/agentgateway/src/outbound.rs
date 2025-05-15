@@ -2,10 +2,12 @@ use crate::proto;
 use crate::proto::agentgateway::dev::a2a::target::Target as XdsA2aTarget;
 use crate::proto::agentgateway::dev::common::BackendAuth as XdsAuth;
 use crate::proto::agentgateway::dev::common::BackendTls as XdsTls;
-use crate::proto::agentgateway::dev::mcp::target::Target as McpXdsTarget;
-use crate::proto::agentgateway::dev::mcp::target::target::OpenApiTarget as XdsOpenAPITarget;
-use crate::proto::agentgateway::dev::mcp::target::target::SseTarget as XdsSseTarget;
-use crate::proto::agentgateway::dev::mcp::target::target::Target as XdsTarget;
+use crate::proto::agentgateway::dev::mcp::target::{
+	Target as McpXdsTarget, target::Filter as XdsFilter, target::OpenApiTarget as XdsOpenAPITarget,
+	target::SseTarget as XdsSseTarget, target::Target as XdsTarget,
+	target::filter::Matcher as XdsFitlerMatcher,
+};
+use crate::relay::{Filter, FilterMatcher};
 use openapiv3::OpenAPI;
 use rmcp::model::Tool;
 use serde::Serialize;
@@ -28,6 +30,8 @@ pub struct Target<T> {
 	pub name: String,
 	#[serde(skip_serializing_if = "Vec::is_empty")]
 	pub listeners: Vec<String>,
+	#[serde(skip_serializing_if = "Vec::is_empty")]
+	pub filters: Vec<Filter>,
 	pub spec: T,
 }
 
@@ -51,8 +55,28 @@ impl TryFrom<McpXdsTarget> for Target<McpTargetSpec> {
 		Ok(Target {
 			name: value.name,
 			listeners: value.listeners,
+			filters: value
+				.filters
+				.into_iter()
+				.map(|f| f.try_into())
+				.collect::<Result<Vec<_>, _>>()?,
 			spec: target.try_into()?,
 		})
+	}
+}
+
+impl TryFrom<XdsFilter> for Filter {
+	type Error = anyhow::Error;
+
+	fn try_from(value: XdsFilter) -> Result<Self, Self::Error> {
+		let matcher = match XdsFitlerMatcher::try_from(value.matcher)? {
+			XdsFitlerMatcher::Equals => FilterMatcher::Equals(value.r#match.clone()),
+			XdsFitlerMatcher::Prefix => FilterMatcher::Prefix(value.r#match.clone()),
+			XdsFitlerMatcher::Suffix => FilterMatcher::Suffix(value.r#match.clone()),
+			XdsFitlerMatcher::Contains => FilterMatcher::Contains(value.r#match.clone()),
+			XdsFitlerMatcher::Regex => FilterMatcher::Regex(Regex::new(&value.r#match).unwrap()),
+		};
+		Ok(Filter::new(matcher, value.r#type))
 	}
 }
 
@@ -105,6 +129,7 @@ impl TryFrom<XdsA2aTarget> for Target<A2aTargetSpec> {
 		Ok(Target {
 			name: value.name,
 			listeners: value.listeners,
+			filters: vec![], // TODO: Add filters
 			spec: A2aTargetSpec::Sse(SseTargetSpec {
 				host: value.host,
 				port: value.port,

@@ -18,6 +18,33 @@ message Target {
     StdioTarget stdio = 5;
   }
 
+  message Filter {
+    enum Matcher {
+      EQUALS = 0;
+      PREFIX = 1;
+      SUFFIX = 2;
+      CONTAINS = 3;
+      REGEX = 4;
+    }
+
+    string match = 1;
+    
+    Matcher matcher = 2;
+    // The type of the resource that the filter applies to.
+    // For MCP, the supported types are:
+    // - tool
+    // - prompt
+    // - resource
+    // If empty, it will match any type.
+    string type = 3;
+  }
+
+  // The filters which are applied to the target.
+  // If empty, all resources will be allowed.
+  // All filters will be ORed together.
+  // If any filter matches, then the resource will not be filtered.
+  repeated Filter filters = 6;
+
 
   message SseTarget {
     // The host of the target.

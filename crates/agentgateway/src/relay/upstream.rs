@@ -1,5 +1,5 @@
 use super::*;
-
+use serde::Serialize;
 pub(crate) enum UpstreamError {
 	ServiceError(rmcp::ServiceError),
 	OpenAPIError(anyhow::Error),
@@ -57,9 +57,53 @@ impl From<UpstreamError> for ErrorData {
 	}
 }
 
+#[derive(Clone, Serialize, Debug)]
+pub enum FilterMatcher {
+	Equals(String),
+	Prefix(String),
+	Suffix(String),
+	Contains(String),
+	#[serde(skip_serializing)] // TODO: serialize regex
+	Regex(regex::Regex),
+}
+
+impl FilterMatcher {
+	pub fn matches(&self, value: &str) -> bool {
+		match self {
+			FilterMatcher::Equals(m) => value == m,
+			FilterMatcher::Prefix(m) => value.starts_with(m),
+			FilterMatcher::Suffix(m) => value.ends_with(m),
+			FilterMatcher::Contains(m) => value.contains(m),
+			FilterMatcher::Regex(m) => m.is_match(value),
+		}
+	}
+}
+
+#[derive(Clone, Serialize, Debug)]
+pub struct Filter {
+	matcher: FilterMatcher,
+	resource_type: String,
+}
+
+impl Filter {
+	pub fn matches(&self, value: &str) -> bool {
+		self.matcher.matches(value)
+	}
+
+	pub fn new(matcher: FilterMatcher, resource_type: String) -> Self {
+		Self {
+			matcher,
+			resource_type,
+		}
+	}
+}
+
 // UpstreamTarget defines a source for MCP information.
-#[derive(Debug)]
-pub(crate) enum UpstreamTarget {
+pub(crate) struct UpstreamTarget {
+	pub(crate) filters: Vec<Filter>,
+	pub(crate) spec: UpstreamTargetSpec,
+}
+pub(crate) enum UpstreamTargetSpec {
 	Mcp(RunningService<RoleClient, crate::relay::pool::PeerClientHandler>),
 	OpenAPI(openapi::Handler),
 }
@@ -69,8 +113,8 @@ impl UpstreamTarget {
 		&self,
 		request: InitializeRequestParam,
 	) -> Result<InitializeResult, UpstreamError> {
-		match self {
-			UpstreamTarget::Mcp(m) => {
+		match &self.spec {
+			UpstreamTargetSpec::Mcp(m) => {
 				let result = m
 					.send_request(ClientRequest::InitializeRequest(InitializeRequest {
 						method: Default::default(),
@@ -85,7 +129,7 @@ impl UpstreamTarget {
 					)),
 				}
 			},
-			UpstreamTarget::OpenAPI(_) => Ok(InitializeResult::default()),
+			UpstreamTargetSpec::OpenAPI(_) => Ok(InitializeResult::default()),
 		}
 	}
 
@@ -94,8 +138,8 @@ impl UpstreamTarget {
 		request: Option<PaginatedRequestParam>,
 		rq_ctx: &RqCtx,
 	) -> Result<ListToolsResult, UpstreamError> {
-		match self {
-			UpstreamTarget::Mcp(m) => {
+		match &self.spec {
+			UpstreamTargetSpec::Mcp(m) => {
 				let mut extensions = rmcp::model::Extensions::new();
 				extensions.insert(rq_ctx.clone());
 				let result = m
@@ -106,13 +150,33 @@ impl UpstreamTarget {
 					}))
 					.await?;
 				match result {
-					ServerResult::ListToolsResult(result) => Ok(result),
+					ServerResult::ListToolsResult(result) => Ok({
+						// TODO: filter tools
+						let relevant_filters = self
+							.filters
+							.iter()
+							.filter(|filter| filter.resource_type == "tool")
+							.collect::<Vec<_>>();
+						ListToolsResult {
+							next_cursor: result.next_cursor,
+							tools: result
+								.tools
+								.into_iter()
+								.filter(|tool| {
+									relevant_filters.is_empty()
+										|| relevant_filters
+											.iter()
+											.any(|filter| filter.matches(&tool.name))
+								})
+								.collect::<Vec<_>>(),
+						}
+					}),
 					_ => Err(UpstreamError::ServiceError(
 						rmcp::ServiceError::UnexpectedResponse,
 					)),
 				}
 			},
-			UpstreamTarget::OpenAPI(m) => Ok(ListToolsResult {
+			UpstreamTargetSpec::OpenAPI(m) => Ok(ListToolsResult {
 				next_cursor: None,
 				tools: m.tools(),
 			}),
@@ -124,8 +188,8 @@ impl UpstreamTarget {
 		request: GetPromptRequestParam,
 		rq_ctx: &RqCtx,
 	) -> Result<GetPromptResult, UpstreamError> {
-		match self {
-			UpstreamTarget::Mcp(m) => {
+		match &self.spec {
+			UpstreamTargetSpec::Mcp(m) => {
 				let mut extensions = rmcp::model::Extensions::new();
 				extensions.insert(rq_ctx.clone());
 				let result = m
@@ -142,7 +206,7 @@ impl UpstreamTarget {
 					)),
 				}
 			},
-			UpstreamTarget::OpenAPI(_) => Ok(GetPromptResult {
+			UpstreamTargetSpec::OpenAPI(_) => Ok(GetPromptResult {
 				description: None,
 				messages: vec![],
 			}),
@@ -154,8 +218,8 @@ impl UpstreamTarget {
 		request: Option<PaginatedRequestParam>,
 		rq_ctx: &RqCtx,
 	) -> Result<ListPromptsResult, UpstreamError> {
-		match self {
-			UpstreamTarget::Mcp(m) => {
+		match &self.spec {
+			UpstreamTargetSpec::Mcp(m) => {
 				let mut extensions = rmcp::model::Extensions::new();
 				extensions.insert(rq_ctx.clone());
 				let result = m
@@ -166,13 +230,33 @@ impl UpstreamTarget {
 					}))
 					.await?;
 				match result {
-					ServerResult::ListPromptsResult(result) => Ok(result),
+					ServerResult::ListPromptsResult(result) => Ok({
+						// TODO: filter prompts
+						let relevant_filters = self
+							.filters
+							.iter()
+							.filter(|filter| filter.resource_type == "prompt")
+							.collect::<Vec<_>>();
+						ListPromptsResult {
+							next_cursor: result.next_cursor,
+							prompts: result
+								.prompts
+								.into_iter()
+								.filter(|prompt| {
+									relevant_filters.is_empty()
+										|| relevant_filters
+											.iter()
+											.any(|filter| filter.matches(&prompt.name))
+								})
+								.collect::<Vec<_>>(),
+						}
+					}),
 					_ => Err(UpstreamError::ServiceError(
 						rmcp::ServiceError::UnexpectedResponse,
 					)),
 				}
 			},
-			UpstreamTarget::OpenAPI(_) => Ok(ListPromptsResult {
+			UpstreamTargetSpec::OpenAPI(_) => Ok(ListPromptsResult {
 				next_cursor: None,
 				prompts: vec![],
 			}),
@@ -184,8 +268,8 @@ impl UpstreamTarget {
 		request: Option<PaginatedRequestParam>,
 		rq_ctx: &RqCtx,
 	) -> Result<ListResourcesResult, UpstreamError> {
-		match self {
-			UpstreamTarget::Mcp(m) => {
+		match &self.spec {
+			UpstreamTargetSpec::Mcp(m) => {
 				let mut extensions = rmcp::model::Extensions::new();
 				extensions.insert(rq_ctx.clone());
 				let result = m
@@ -196,13 +280,33 @@ impl UpstreamTarget {
 					}))
 					.await?;
 				match result {
-					ServerResult::ListResourcesResult(result) => Ok(result),
+					ServerResult::ListResourcesResult(result) => Ok({
+						// TODO: filter resources
+						let relevant_filters = self
+							.filters
+							.iter()
+							.filter(|filter| filter.resource_type == "resource")
+							.collect::<Vec<_>>();
+						ListResourcesResult {
+							next_cursor: result.next_cursor,
+							resources: result
+								.resources
+								.into_iter()
+								.filter(|resource| {
+									relevant_filters.is_empty()
+										|| relevant_filters
+											.iter()
+											.any(|filter| filter.matches(&resource.name))
+								})
+								.collect::<Vec<_>>(),
+						}
+					}),
 					_ => Err(UpstreamError::ServiceError(
 						rmcp::ServiceError::UnexpectedResponse,
 					)),
 				}
 			},
-			UpstreamTarget::OpenAPI(_) => Ok(ListResourcesResult {
+			UpstreamTargetSpec::OpenAPI(_) => Ok(ListResourcesResult {
 				next_cursor: None,
 				resources: vec![],
 			}),
@@ -214,8 +318,8 @@ impl UpstreamTarget {
 		request: Option<PaginatedRequestParam>,
 		rq_ctx: &RqCtx,
 	) -> Result<ListResourceTemplatesResult, UpstreamError> {
-		match self {
-			UpstreamTarget::Mcp(m) => {
+		match &self.spec {
+			UpstreamTargetSpec::Mcp(m) => {
 				let mut extensions = rmcp::model::Extensions::new();
 				extensions.insert(rq_ctx.clone());
 				let result = m
@@ -234,7 +338,7 @@ impl UpstreamTarget {
 					)),
 				}
 			},
-			UpstreamTarget::OpenAPI(_) => Ok(ListResourceTemplatesResult {
+			UpstreamTargetSpec::OpenAPI(_) => Ok(ListResourceTemplatesResult {
 				next_cursor: None,
 				resource_templates: vec![],
 			}),
@@ -246,8 +350,8 @@ impl UpstreamTarget {
 		request: ReadResourceRequestParam,
 		rq_ctx: &RqCtx,
 	) -> Result<ReadResourceResult, UpstreamError> {
-		match self {
-			UpstreamTarget::Mcp(m) => {
+		match &self.spec {
+			UpstreamTargetSpec::Mcp(m) => {
 				let mut extensions = rmcp::model::Extensions::new();
 				extensions.insert(rq_ctx.clone());
 				let result = m
@@ -264,7 +368,7 @@ impl UpstreamTarget {
 					)),
 				}
 			},
-			UpstreamTarget::OpenAPI(_) => Ok(ReadResourceResult { contents: vec![] }),
+			UpstreamTargetSpec::OpenAPI(_) => Ok(ReadResourceResult { contents: vec![] }),
 		}
 	}
 
@@ -273,8 +377,8 @@ impl UpstreamTarget {
 		request: CallToolRequestParam,
 		rq_ctx: &RqCtx,
 	) -> Result<CallToolResult, UpstreamError> {
-		match self {
-			UpstreamTarget::Mcp(m) => {
+		match &self.spec {
+			UpstreamTargetSpec::Mcp(m) => {
 				let mut extensions = rmcp::model::Extensions::new();
 				extensions.insert(rq_ctx.clone());
 				let result = m
@@ -291,7 +395,7 @@ impl UpstreamTarget {
 					)),
 				}
 			},
-			UpstreamTarget::OpenAPI(m) => {
+			UpstreamTargetSpec::OpenAPI(m) => {
 				let res = m
 					.call_tool(request.name.as_ref(), request.arguments)
 					.await?;

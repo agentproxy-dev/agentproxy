@@ -114,7 +114,12 @@ impl ConnectionPool {
 		// 4. Collect all required connections from the pool
 		let results = targets_config
 			.into_iter()
-			.filter_map(|(name, _)| self.by_name.get(&name).map(|target| (name, target)))
+			.filter_map(|(name, _)| {
+				self
+					.by_name
+					.get(&name)
+					.map(|target: &upstream::UpstreamTarget| (name, target))
+			})
 			.collect();
 
 		Ok(results)
@@ -161,31 +166,37 @@ impl ConnectionPool {
 				let client = ReqwestSseClient::new_with_client(url.as_str(), client).await?;
 				let transport = SseTransport::start_with_client(client).await?;
 
-				upstream::UpstreamTarget::Mcp(
-					serve_client_with_ct(
-						PeerClientHandler {
-							peer: peer.clone(),
-							peer_client: None,
-						},
-						transport,
-						ct.child_token(),
-					)
-					.await?,
-				)
+				upstream::UpstreamTarget {
+					filters: target.filters.clone(),
+					spec: upstream::UpstreamTargetSpec::Mcp(
+						serve_client_with_ct(
+							PeerClientHandler {
+								peer: peer.clone(),
+								peer_client: None,
+							},
+							transport,
+							ct.child_token(),
+						)
+						.await?,
+					),
+				}
 			},
 			McpTargetSpec::Stdio { cmd, args, env: _ } => {
 				tracing::debug!("starting stdio transport for target: {}", target.name);
-				upstream::UpstreamTarget::Mcp(
-					serve_client_with_ct(
-						PeerClientHandler {
-							peer: peer.clone(),
-							peer_client: None,
-						},
-						TokioChildProcess::new(Command::new(cmd).args(args))?,
-						ct.child_token(),
-					)
-					.await?,
-				)
+				upstream::UpstreamTarget {
+					filters: target.filters.clone(),
+					spec: upstream::UpstreamTargetSpec::Mcp(
+						serve_client_with_ct(
+							PeerClientHandler {
+								peer: peer.clone(),
+								peer_client: None,
+							},
+							TokioChildProcess::new(Command::new(cmd).args(args))?,
+							ct.child_token(),
+						)
+						.await?,
+					),
+				}
 			},
 			McpTargetSpec::OpenAPI(open_api) => {
 				tracing::debug!("starting OpenAPI transport for target: {}", target.name);
@@ -201,14 +212,17 @@ impl ConnectionPool {
 					);
 				}
 				let client = builder.default_headers(headers).build()?;
-				upstream::UpstreamTarget::OpenAPI(openapi::Handler {
-					host: open_api.host.clone(),
-					client,
-					tools: open_api.tools.clone(),
-					scheme: scheme.to_string(),
-					prefix: open_api.prefix.clone(),
-					port: open_api.port,
-				})
+				upstream::UpstreamTarget {
+					filters: target.filters.clone(),
+					spec: upstream::UpstreamTargetSpec::OpenAPI(openapi::Handler {
+						host: open_api.host.clone(),
+						client,
+						tools: open_api.tools.clone(),
+						scheme: scheme.to_string(),
+						prefix: open_api.prefix.clone(),
+						port: open_api.port,
+					}),
+				}
 			},
 		};
 		self.by_name.insert(target.name.clone(), transport);

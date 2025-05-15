@@ -29,6 +29,8 @@ pub mod metrics;
 mod pool;
 mod upstream;
 
+pub use crate::relay::upstream::{Filter, FilterMatcher};
+
 lazy_static::lazy_static! {
 	static ref DEFAULT_RQ_CTX: RqCtx = RqCtx::default();
 }
@@ -89,8 +91,8 @@ impl Relay {
 		let mut pool = self.pool.write().await;
 		match pool.remove(name).await {
 			Some(target) => {
-				match target {
-					upstream::UpstreamTarget::Mcp(m) => {
+				match target.spec {
+					upstream::UpstreamTargetSpec::Mcp(m) => {
 						m.cancel().await?;
 					},
 					_ => {
