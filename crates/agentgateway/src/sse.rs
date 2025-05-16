@@ -28,7 +28,6 @@ use rmcp::model::GetExtensions;
 use rmcp::service::serve_server_with_ct;
 use serde_json::json;
 use std::collections::HashMap;
-use std::intrinsics::breakpoint;
 use std::sync::Arc;
 use tokio::io::{self};
 use tokio::sync::RwLock;
