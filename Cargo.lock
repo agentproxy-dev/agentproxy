@@ -3195,6 +3195,7 @@ name = "rmcp"
 version = "0.1.5"
 source = "git+https://github.com/EItanya/rust-sdk?rev=958f42096005898b5db46ec118f5f467e3019717#958f42096005898b5db46ec118f5f467e3019717"
 dependencies = [
+ "axum",
  "base64 0.21.7",
  "chrono",
  "futures",
@@ -3208,9 +3209,11 @@ dependencies = [
  "sse-stream",
  "thiserror 2.0.12",
  "tokio",
+ "tokio-stream",
  "tokio-util",
  "tracing",
  "url",
+ "uuid",
 ]
 
 [[package]]
@@ -4316,6 +4319,9 @@ name = "uuid"
 version = "1.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "458f7a779bf54acc9f347480ac654f68407d3aab21269a6e3c9f922acd9e2da9"
+dependencies = [
+ "getrandom 0.3.2",
+]
 
 [[package]]
 name = "valuable"
