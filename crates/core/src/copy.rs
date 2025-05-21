@@ -163,14 +163,62 @@ const RESIZE_THRESHOLD_LARGE: u64 = 128 * 1024;
 // After 10Mb of data we will trigger a resize from LARGE to JUMBO
 const RESIZE_THRESHOLD_JUMBO: u64 = 10 * 1024 * 1024;
 
-pub struct ConnectionResult {}
+// ConnectionResult is a struct that contains the result of a connection.
+// It is used to store the number of bytes sent and received.
+// It is thread-safe.
+pub struct ConnectionResult {
+	recv_bytes: std::sync::atomic::AtomicU64,
+	send_bytes: std::sync::atomic::AtomicU64,
+}
+
+impl Default for ConnectionResult {
+	fn default() -> Self {
+		Self::new()
+	}
+}
 
 impl ConnectionResult {
-	pub fn increment_recv(&self, _: u64) {
-		todo!()
+	pub fn new() -> Self {
+		Self {
+			recv_bytes: std::sync::atomic::AtomicU64::new(0),
+			send_bytes: std::sync::atomic::AtomicU64::new(0),
+		}
 	}
-	pub fn increment_send(&self, _: u64) {
-		todo!()
+
+	pub fn increment_recv(&self, bytes: u64) {
+		let current = self.recv_bytes.load(std::sync::atomic::Ordering::Relaxed);
+		if current.checked_add(bytes).is_none() {
+			tracing::warn!("recv_bytes counter overflow detected, resetting to 0");
+			self
+				.recv_bytes
+				.store(0, std::sync::atomic::Ordering::Relaxed);
+		} else {
+			self
+				.recv_bytes
+				.fetch_add(bytes, std::sync::atomic::Ordering::Relaxed);
+		}
+	}
+
+	pub fn increment_send(&self, bytes: u64) {
+		let current = self.send_bytes.load(std::sync::atomic::Ordering::Relaxed);
+		if current.checked_add(bytes).is_none() {
+			tracing::warn!("send_bytes counter overflow detected, resetting to 0");
+			self
+				.send_bytes
+				.store(0, std::sync::atomic::Ordering::Relaxed);
+		} else {
+			self
+				.send_bytes
+				.fetch_add(bytes, std::sync::atomic::Ordering::Relaxed);
+		}
+	}
+
+	pub fn get_recv_bytes(&self) -> u64 {
+		self.recv_bytes.load(std::sync::atomic::Ordering::Relaxed)
+	}
+
+	pub fn get_send_bytes(&self) -> u64 {
+		self.send_bytes.load(std::sync::atomic::Ordering::Relaxed)
 	}
 }
 
