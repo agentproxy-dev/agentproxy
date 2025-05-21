@@ -111,7 +111,7 @@ impl ServerHandler for Relay {
 	#[instrument(level = "debug", skip_all)]
 	fn get_info(&self) -> ServerInfo {
 		ServerInfo {
-            protocol_version: ProtocolVersion::V_2024_11_05,
+            protocol_version: ProtocolVersion::V_2025_03_26,
             capabilities: ServerCapabilities {
                 completions: None,
                 experimental: None,
@@ -122,7 +122,7 @@ impl ServerHandler for Relay {
             },
             server_info: Implementation::from_build_env(),
             instructions: Some(
-                "This server provides a counter tool that can increment and decrement values. The counter starts at 0 and can be modified using the 'increment' and 'decrement' tools. Use 'get_value' to check the current count.".to_string(),
+                "This server is a gateway to a set of mcp servers. It is responsible for routing requests to the correct server and aggregating the results.".to_string(),
             ),
         }
 	}
