@@ -35,3 +35,30 @@
 # Getting Started 
 
 To get started with agentgateway, please check out the [Getting Started Guide](https://agentgateway.dev/docs/quickstart ).
+
+## Build from Source
+
+Requirements:
+- Rust 1.86+
+- npm 10+
+
+Build the agentgateway UI:
+
+```bash
+cd ui
+npm install
+npm run build
+```
+
+Build the agentgateway binary:
+
+```bash
+make build
+```
+
+Run the agentgateway binary:
+
+```bash
+./target/release/agentgateway
+```
+Open your browser and navigate to `http://localhost:19000/ui` to see the agentgateway UI.
