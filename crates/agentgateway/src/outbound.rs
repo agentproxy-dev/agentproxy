@@ -8,9 +8,11 @@ use crate::proto::agentgateway::dev::mcp::target::{
 	target::filter::Matcher as XdsFitlerMatcher,
 };
 use crate::relay::{Filter, FilterMatcher};
-use openapiv3::OpenAPI;
-use rmcp::model::Tool;
+use crate::proto::agentgateway::dev::mcp::target::openapi_target::SchemaSource as ProtoSchemaSource;
+use rmcp::model::Tool; // This was present in the original, but not explicitly in the new struct. Keeping if other parts of the file use it.
 use serde::Serialize;
+// openapiv3::OpenAPI is no longer needed in this file directly by OpenAPITarget struct or its TryFrom.
+// It will be used by the load_openapi_schema function in openapi.rs
 use std::collections::HashMap;
 pub mod backend;
 pub mod openapi;
@@ -200,10 +202,9 @@ impl TryFrom<XdsSseTarget> for SseTargetSpec {
 #[derive(Clone, Serialize, Debug)]
 pub struct OpenAPITarget {
 	pub host: String,
-	pub prefix: String,
 	pub port: u32,
-	#[serde(skip_serializing_if = "Vec::is_empty")]
-	pub tools: Vec<(Tool, openapi::UpstreamOpenAPICall)>,
+	#[serde(skip_serializing)] 
+	pub schema_source: Option<ProtoSchemaSource>,
 	#[serde(skip_serializing_if = "HashMap::is_empty")]
 	pub headers: HashMap<String, String>,
 	#[serde(skip_serializing_if = "Option::is_none")]
@@ -216,32 +217,33 @@ impl TryFrom<XdsOpenAPITarget> for OpenAPITarget {
 	type Error = openapi::ParseError;
 
 	fn try_from(value: XdsOpenAPITarget) -> Result<Self, Self::Error> {
-		let schema = value.schema.ok_or(openapi::ParseError::MissingSchema)?;
-		let schema_bytes =
-			proto::resolve_local_data_source(&schema.source.ok_or(openapi::ParseError::MissingFields)?)?;
-		let schema: OpenAPI =
-			serde_json::from_slice(&schema_bytes).map_err(openapi::ParseError::SerdeError)?;
-		let tools = openapi::parse_openapi_schema(&schema)?;
-		let prefix = openapi::get_server_prefix(&schema)?;
-		let headers = proto::resolve_header_map(&value.headers)?;
+		// Schema loading and parsing logic is removed.
+		// Tools and prefix are no longer derived here.
+
+		let resolved_headers = proto::resolve_header_map(&value.headers)
+            .map_err(|e| openapi::ParseError::InformationRequired(format!("Header resolution error: {}", e)) )?; // Added error mapping
+
+		let backend_auth_converted = match value.auth {
+			Some(auth) => auth.try_into().map_err(|e: anyhow::Error| {
+				openapi::ParseError::InformationRequired(format!("Auth conversion error: {}", e))
+			})?,
+			None => None,
+		};
+
+		let tls_converted = match value.tls {
+			Some(tls) => Some(TlsConfig::try_from(tls).map_err(|e: anyhow::Error| {
+				openapi::ParseError::InformationRequired(format!("TLS conversion error: {}", e))
+			})?),
+			None => None,
+		};
+
 		Ok(OpenAPITarget {
 			host: value.host.clone(),
-			prefix,
 			port: value.port,
-			tools,
-			headers,
-			backend_auth: match value.auth {
-				Some(auth) => auth
-					.try_into()
-					.map_err(|_| openapi::ParseError::MissingSchema)?,
-				None => None,
-			},
-			tls: match value.tls {
-				Some(tls) => {
-					Some(TlsConfig::try_from(tls).map_err(|_| openapi::ParseError::MissingSchema)?)
-				},
-				None => None,
-			},
+			schema_source: value.schema_source.clone(), // Store the oneof directly
+			headers: resolved_headers,
+			backend_auth: backend_auth_converted,
+			tls: tls_converted,
 		})
 	}
 }
