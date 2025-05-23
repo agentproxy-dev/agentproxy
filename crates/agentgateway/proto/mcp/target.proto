@@ -77,8 +77,13 @@ message Target {
     string host = 1;
     // The port of the target.
     uint32 port = 2;
-    // The schema of the target.
-    agentgateway.dev.common.LocalDataSource schema = 3;
+
+    oneof schema_source {
+      // The local schema of the target.
+      agentgateway.dev.common.LocalDataSource local_schema = 3;
+      // The remote schema of the target.
+      agentgateway.dev.common.RemoteDataSource remote_schema = 7;
+    }
 
     agentgateway.dev.common.BackendAuth auth = 4;
 
