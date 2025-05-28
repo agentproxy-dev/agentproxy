@@ -110,7 +110,10 @@ impl Metrics {
 		};
 		for (k, v) in tags {
 			let v = if let Some((_, lookup)) = v.split_once("@") {
-				identity.get_claim(lookup).unwrap_or("unknown").to_string()
+				identity
+					.get_claim(lookup, ".")
+					.unwrap_or("unknown")
+					.to_string()
 			} else {
 				// Insert directly
 				v.to_string()

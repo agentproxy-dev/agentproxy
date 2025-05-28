@@ -54,7 +54,8 @@ impl RuleSet {
 		}
 
 		self.rules.iter().any(|rule| {
-			rule.resource.matches(resource) && claims.matches(&rule.key, &rule.value, &rule.matcher)
+			rule.resource.matches(resource)
+				&& claims.matches(&rule.key, &rule.key_delimiter, &rule.matcher)
 		})
 	}
 }
@@ -84,7 +85,7 @@ impl RuleSet {
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct Rule {
 	key: String,
-	value: String,
+	key_delimiter: String,
 	matcher: Matcher,
 	resource: ResourceType,
 }
@@ -92,11 +93,11 @@ pub struct Rule {
 impl TryFrom<&XdsRule> for Rule {
 	type Error = anyhow::Error;
 	fn try_from(value: &XdsRule) -> Result<Self, Self::Error> {
-		let matcher = Matcher::from(&value.matcher.try_into()?);
+		let matcher = Matcher::new(&value.matcher.try_into()?, &value.value);
 		let resource = value.resource.as_ref().unwrap().try_into()?;
 		Ok(Rule {
 			key: value.key.clone(),
-			value: value.value.clone(),
+			key_delimiter: value.key_delimiter.clone(),
 			matcher,
 			resource,
 		})
@@ -189,13 +190,15 @@ impl ResourceId {
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 pub enum Matcher {
-	Equals,
+	Equals(String),
+	Contains(String),
 }
 
-impl From<&rule::Matcher> for Matcher {
-	fn from(value: &rule::Matcher) -> Self {
+impl Matcher {
+	pub fn new(value: &rule::Matcher, value_str: &str) -> Self {
 		match value {
-			rule::Matcher::Equals => Matcher::Equals,
+			rule::Matcher::Equals => Matcher::Equals(value_str.to_string()),
+			rule::Matcher::Contains => Matcher::Contains(value_str.to_string()),
 		}
 	}
 }
@@ -233,14 +236,97 @@ impl Identity {
 		}
 	}
 
-	pub fn matches(&self, key: &str, value: &str, matcher: &Matcher) -> bool {
+	// Matches the claim against the rule
+	// If the claim is not found, it returns false
+	// If the claim is found, it returns true if the claim matches the rule
+	// If the claim is found, it returns false if the claim does not match the rule
+	pub fn matches(&self, key: &str, key_delimiter: &str, matcher: &Matcher) -> bool {
 		match matcher {
-			Matcher::Equals => self.get_claim(key) == Some(value),
+			Matcher::Equals(value) => self.get_claim(key, key_delimiter) == Some(value),
+			Matcher::Contains(value) => {
+				// First try to get as string
+				if let Some(claim_str) = self.get_claim(key, key_delimiter) {
+					return claim_str.contains(value);
+				}
+
+				// If not a string, try to get as raw value and check if it's an array
+				if let Some(Value::Array(arr)) = self.get_claim_value(key, key_delimiter) {
+					// Check if any array element contains the value
+					return arr.iter().any(|item| {
+						if let Some(item_str) = item.as_str() {
+							item_str == value || item_str.contains(value)
+						} else {
+							false
+						}
+					});
+				}
+
+				false
+			},
 		}
 	}
-	pub fn get_claim(&self, key: &str) -> Option<&str> {
+
+	// Attempts to get the claim from the claims map
+	// The key should be split by the key_delimiter and then the map should be searched recursively
+	// If the key is not found, it returns None
+	// If the key is found, it returns the value
+	pub fn get_claim(&self, key: &str, key_delimiter: &str) -> Option<&str> {
 		match &self.claims {
-			Some(claims) => claims.inner.get(key).and_then(|v| v.as_str()),
+			Some(claims) => {
+				// Split the key by the delimiter to handle nested lookups
+				let keys = key.split(key_delimiter).collect::<Vec<&str>>();
+
+				// Start with the root claims map
+				let mut current_value = &claims.inner;
+
+				// Navigate through each key level
+				let num_keys = keys.len();
+				for (index, key_part) in keys.into_iter().enumerate() {
+					// Get the value at this level
+					let value = current_value.get(key_part)?;
+
+					// If this is the last key part, return the string value
+					if index == num_keys - 1 {
+						return value.as_str();
+					}
+
+					// Otherwise, try to navigate deeper if it's an object
+					current_value = value.as_object()?;
+				}
+
+				None
+			},
+			None => None,
+		}
+	}
+
+	// Get the raw JSON value for a claim (used for array handling)
+	pub fn get_claim_value(&self, key: &str, key_delimiter: &str) -> Option<&Value> {
+		match &self.claims {
+			Some(claims) => {
+				// Split the key by the delimiter to handle nested lookups
+				let keys = key.split(key_delimiter).collect::<Vec<&str>>();
+
+				// Start with the root claims map
+				let mut current_value = &claims.inner;
+
+				// Navigate through each key level
+				let num_keys = keys.len();
+				for (index, key_part) in keys.into_iter().enumerate() {
+					// Get the value at this level
+					let value = current_value.get(key_part)?;
+
+					// If this is the last key part, return the raw value
+					if index == num_keys - 1 {
+						return Some(value);
+					}
+
+					// Otherwise, try to navigate deeper if it's an object
+					current_value = value.as_object()?;
+				}
+
+				None
+			},
 			None => None,
 		}
 	}
@@ -253,8 +339,8 @@ mod tests {
 	fn test_rbac_reject_exact_match() {
 		let rules = vec![Rule {
 			key: "user".to_string(),
-			value: "admin".to_string(),
-			matcher: Matcher::Equals,
+			key_delimiter: ".".to_string(),
+			matcher: Matcher::Equals("admin".to_string()),
 			resource: ResourceType::Tool(ResourceId::new(
 				"server".to_string(),
 				"increment".to_string(),
@@ -280,8 +366,8 @@ mod tests {
 	fn test_rbac_check_exact_match() {
 		let rules = vec![Rule {
 			key: "sub".to_string(),
-			value: "1234567890".to_string(),
-			matcher: Matcher::Equals,
+			key_delimiter: ".".to_string(),
+			matcher: Matcher::Equals("1234567890".to_string()),
 			resource: ResourceType::Tool(ResourceId::new(
 				"server".to_string(),
 				"increment".to_string(),
@@ -341,5 +427,93 @@ mod tests {
 				other_rule
 			);
 		}
+	}
+
+	#[test]
+	fn test_rbac_check_contains_match() {
+		let rules = vec![Rule {
+			key: "groups".to_string(),
+			key_delimiter: ".".to_string(),
+			matcher: Matcher::Contains("admin".to_string()),
+			resource: ResourceType::Tool(ResourceId::new(
+				"server".to_string(),
+				"increment".to_string(),
+			)),
+		}];
+		let rbac = RuleSet::new("test".to_string(), "test".to_string(), rules);
+		let mut headers = Map::new();
+		headers.insert(
+			"groups".to_string(),
+			"user,admin,developer".to_string().into(),
+		);
+		let id = Identity::new(
+			Some(Claims::new(headers, SecretString::new("".into()))),
+			None,
+		);
+		assert!(rbac.validate(
+			&ResourceType::Tool(ResourceId::new(
+				"server".to_string(),
+				"increment".to_string()
+			)),
+			&id
+		));
+	}
+
+	#[test]
+	fn test_rbac_check_nested_key_match() {
+		let rules = vec![Rule {
+			key: "user.role".to_string(),
+			key_delimiter: ".".to_string(),
+			matcher: Matcher::Equals("admin".to_string()),
+			resource: ResourceType::Tool(ResourceId::new(
+				"server".to_string(),
+				"increment".to_string(),
+			)),
+		}];
+		let rbac = RuleSet::new("test".to_string(), "test".to_string(), rules);
+		let mut headers = Map::new();
+		let mut user_obj = Map::new();
+		user_obj.insert("role".to_string(), "admin".into());
+		headers.insert("user".to_string(), user_obj.into());
+		let id = Identity::new(
+			Some(Claims::new(headers, SecretString::new("".into()))),
+			None,
+		);
+		assert!(rbac.validate(
+			&ResourceType::Tool(ResourceId::new(
+				"server".to_string(),
+				"increment".to_string()
+			)),
+			&id
+		));
+	}
+
+	#[test]
+	fn test_rbac_check_array_contains_match() {
+		let rules = vec![Rule {
+			key: "roles".to_string(),
+			key_delimiter: ".".to_string(),
+			matcher: Matcher::Contains("admin".to_string()),
+			resource: ResourceType::Tool(ResourceId::new(
+				"server".to_string(),
+				"increment".to_string(),
+			)),
+		}];
+		let rbac = RuleSet::new("test".to_string(), "test".to_string(), rules);
+		let mut headers = Map::new();
+		// Create an array of roles
+		let roles: Vec<Value> = vec!["user".into(), "admin".into(), "developer".into()];
+		headers.insert("roles".to_string(), roles.into());
+		let id = Identity::new(
+			Some(Claims::new(headers, SecretString::new("".into()))),
+			None,
+		);
+		assert!(rbac.validate(
+			&ResourceType::Tool(ResourceId::new(
+				"server".to_string(),
+				"increment".to_string()
+			)),
+			&id
+		));
 	}
 }

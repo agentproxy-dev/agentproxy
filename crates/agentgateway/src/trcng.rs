@@ -44,7 +44,10 @@ pub fn start_span_with_attributes(
 	if let Some(tag_rules) = get_tag_rules() {
 		for (k, v) in tag_rules {
 			let v = if let Some((_, lookup)) = v.split_once("@") {
-				context.get_claim(lookup).unwrap_or("unknown").to_string()
+				context
+					.get_claim(lookup, ".")
+					.unwrap_or("unknown")
+					.to_string()
 			} else {
 				// Insert directly
 				v

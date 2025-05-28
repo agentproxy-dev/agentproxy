@@ -13,6 +13,10 @@ message Rule {
   enum Matcher {
     // The value must be equal to the value in the claims.
     EQUALS = 0;
+
+    // The value must be contained in the value in the claims.
+    // This will only work for string/array values.
+    CONTAINS = 1;
   }
 
   message Resource {
@@ -41,8 +45,11 @@ message Rule {
   // The key to use when finding the value in the claims.
   string key = 1;
 
+  // The delimiter to use when splitting the key into multiple parts. Default is ".".
+  string key_delimiter = 2;
+
   // The value to use when matching the value in the claims.
-  string value = 2;
+  string value = 3;
 
   // The resource ID to use when matching the resource.
   Resource resource = 4;
