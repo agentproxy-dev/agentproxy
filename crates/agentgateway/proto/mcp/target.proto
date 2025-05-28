@@ -80,7 +80,7 @@ message Target {
 
     oneof schema_source {
       // The local schema of the target.
-      agentgateway.dev.common.LocalDataSource local_schema = 3;
+      agentgateway.dev.common.LocalDataSource schema = 3;
       // The remote schema of the target.
       agentgateway.dev.common.RemoteDataSource remote_schema = 7;
     }

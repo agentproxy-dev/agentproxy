@@ -66,7 +66,12 @@ fn duration_from_pb(duration: Option<pbjson_types::Duration>, default: Duration)
 
 impl JwksRemoteSource {
 	fn from_xds(remote: &common::RemoteDataSource) -> Result<Self, JwkError> {
-		let url = format!("{}:{}/{}", remote.url, remote.port, remote.path);
+		let scheme = match remote.port {
+			443 => "https",
+			80 => "http",
+			_ => return Err(JwkError::InvalidConfig("invalid port".to_string())),
+		};
+		let url = format!("{}://{}/{}", scheme, remote.host, remote.path);
 		let client = reqwest::ClientBuilder::new()
 			.timeout(duration_from_pb(
 				remote.initial_timeout,

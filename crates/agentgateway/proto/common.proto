@@ -14,7 +14,7 @@ message LocalDataSource {
 }
 
 message RemoteDataSource {
-  string url = 1;
+  string host = 1;
   uint32 port = 2;
   string path = 3;
   repeated Header headers = 4;

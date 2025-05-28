@@ -17,8 +17,10 @@
         "openapi": {
           "host": "petstore3.swagger.io",
           "port": 443,
-          "schema": {
-            "file_path": "examples/openapi/openapi.json"
+          "remote_schema": {
+            "host": "petstore3.swagger.io",
+            "port": 443,
+            "path": "api/v3/openapi.json"
           }
         }
       }

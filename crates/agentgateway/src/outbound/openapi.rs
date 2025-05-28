@@ -73,13 +73,13 @@ pub async fn load_openapi_schema(target_config: &OpenApiTarget) -> Result<OpenAP
 	match &target_config.schema_source {
 		Some(schema_source) => match schema_source {
 			SchemaSource::RemoteSchema(remote_source) => {
-				let url_string = &remote_source.url;
-				if url_string.is_empty() {
-					return Err(ParseError::InvalidUrl(
-						url::ParseError::RelativeUrlWithoutBase,
-					));
-				}
-				let url = Url::parse(url_string).map_err(ParseError::InvalidUrl)?;
+        let scheme = match remote_source.port {
+          443 => "https",
+          80 => "http",
+          _ => return Err(ParseError::InvalidUrl(url::ParseError::InvalidPort)),
+        };
+				let url_string = format!("{}://{}/{}", scheme, remote_source.host, remote_source.path);
+				let url = Url::parse(&url_string).map_err(ParseError::InvalidUrl)?;
 				tracing::info!("Loading OpenAPI schema from remote URL: {}", url);
 
 				let client = reqwest::Client::new();
@@ -143,7 +143,7 @@ pub async fn load_openapi_schema(target_config: &OpenApiTarget) -> Result<OpenAP
 				})?;
 				Ok(openapi_doc)
 			},
-			SchemaSource::LocalSchema(local_source) => match &local_source.source {
+			SchemaSource::Schema(schema_source) => match &schema_source.source {
 				Some(LocalSourceProto::FilePath(path)) => {
 					if path.is_empty() {
 						return Err(ParseError::LocalPathMissing);
@@ -790,8 +790,6 @@ impl Handler {
 		if let Some(body_val) = body_value {
 			request_builder = request_builder.json(&body_val);
 		}
-
-		tracing::info!("Sending request: {:?}", request_builder);
 
 		// --- Send Request & Get Response ---
 		let response = request_builder.send().await?;
