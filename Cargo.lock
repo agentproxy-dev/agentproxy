@@ -243,6 +243,7 @@ dependencies = [
  "tower-serve-static",
  "tracing",
  "tracing-subscriber",
+ "url",
  "wiremock",
 ]
 

@@ -6,10 +6,10 @@ use crate::proto::agentgateway::dev::mcp::target::{
 	Target as McpXdsTarget, target::Filter as XdsFilter, target::OpenApiTarget as XdsOpenAPITarget,
 	target::SseTarget as XdsSseTarget, target::Target as XdsTarget,
 	target::filter::Matcher as XdsFitlerMatcher,
+	target::open_api_target::SchemaSource as ProtoSchemaSource,
 };
 use crate::relay::{Filter, FilterMatcher};
-use crate::proto::agentgateway::dev::mcp::target::openapi_target::SchemaSource as ProtoSchemaSource;
-use rmcp::model::Tool; // This was present in the original, but not explicitly in the new struct. Keeping if other parts of the file use it.
+
 use serde::Serialize;
 // openapiv3::OpenAPI is no longer needed in this file directly by OpenAPITarget struct or its TryFrom.
 // It will be used by the load_openapi_schema function in openapi.rs
@@ -203,7 +203,7 @@ impl TryFrom<XdsSseTarget> for SseTargetSpec {
 pub struct OpenAPITarget {
 	pub host: String,
 	pub port: u32,
-	#[serde(skip_serializing)] 
+	#[serde(skip_serializing)]
 	pub schema_source: Option<ProtoSchemaSource>,
 	#[serde(skip_serializing_if = "HashMap::is_empty")]
 	pub headers: HashMap<String, String>,
@@ -220,11 +220,12 @@ impl TryFrom<XdsOpenAPITarget> for OpenAPITarget {
 		// Schema loading and parsing logic is removed.
 		// Tools and prefix are no longer derived here.
 
-		let resolved_headers = proto::resolve_header_map(&value.headers)
-            .map_err(|e| openapi::ParseError::InformationRequired(format!("Header resolution error: {}", e)) )?; // Added error mapping
+		let resolved_headers = proto::resolve_header_map(&value.headers).map_err(|e| {
+			openapi::ParseError::InformationRequired(format!("Header resolution error: {}", e))
+		})?; // Added error mapping
 
 		let backend_auth_converted = match value.auth {
-			Some(auth) => auth.try_into().map_err(|e: anyhow::Error| {
+			Some(auth) => auth.try_into().map_err(|e| {
 				openapi::ParseError::InformationRequired(format!("Auth conversion error: {}", e))
 			})?,
 			None => None,

@@ -1,6 +1,6 @@
 use crate::outbound;
 // Import for the protobuf type Target_OpenAPITarget
-use crate::proto::agentgateway::dev::mcp::target::Target_OpenAPITarget as ProtoXdsOpenApiTarget;
+use crate::proto::agentgateway::dev::mcp::target::target::OpenApiTarget as ProtoXdsOpenApiTarget;
 
 use super::*;
 use futures::{FutureExt, StreamExt, future::BoxFuture, stream::BoxStream};
@@ -200,39 +200,72 @@ impl ConnectionPool {
 					),
 				}
 			},
-			McpTargetSpec::OpenAPI(openapi_target_spec_from_outbound) => { // Renamed for clarity
+			McpTargetSpec::OpenAPI(openapi_target_spec_from_outbound) => {
+				// Renamed for clarity
 				tracing::debug!("starting OpenAPI transport for target: {}", target.name);
 
 				// 1. Retrieve schema_source
-				let current_schema_source_proto = openapi_target_spec_from_outbound.schema_source.clone()
-					.ok_or_else(|| anyhow::anyhow!("OpenAPI target {} is missing schema_source definition", target.name))?;
+				let current_schema_source_proto = openapi_target_spec_from_outbound
+					.schema_source
+					.clone()
+					.ok_or_else(|| {
+					anyhow::anyhow!(
+						"OpenAPI target {} is missing schema_source definition",
+						target.name
+					)
+				})?;
 
 				// 2. Prepare for load_openapi_schema
 				let proto_target_for_loading = ProtoXdsOpenApiTarget {
 					host: openapi_target_spec_from_outbound.host.clone(),
 					port: openapi_target_spec_from_outbound.port,
 					schema_source: Some(current_schema_source_proto),
-					auth: None, // Not needed for schema loading
-					tls: None,  // Not needed for schema loading
+					auth: None,      // Not needed for schema loading
+					tls: None,       // Not needed for schema loading
 					headers: vec![], // Not needed for schema loading
 				};
 
 				// 3. Call load_openapi_schema
-				let loaded_openapi_doc = crate::outbound::openapi::load_openapi_schema(&proto_target_for_loading)
-					.await
-					.map_err(|e| anyhow::anyhow!("Failed to load OpenAPI schema for target {}: {}", target.name, e))?;
+				let loaded_openapi_doc =
+					crate::outbound::openapi::load_openapi_schema(&proto_target_for_loading)
+						.await
+						.map_err(|e| {
+							anyhow::anyhow!(
+								"Failed to load OpenAPI schema for target {}: {}",
+								target.name,
+								e
+							)
+						})?;
 
 				// 4. Parse Tools and Prefix
-				let tools = crate::outbound::openapi::parse_openapi_schema(&loaded_openapi_doc)
-					.map_err(|e| anyhow::anyhow!("Failed to parse tools from OpenAPI schema for target {}: {}", target.name, e))?;
-				let prefix = crate::outbound::openapi::get_server_prefix(&loaded_openapi_doc)
-					.map_err(|e| anyhow::anyhow!("Failed to get server prefix from OpenAPI schema for target {}: {}", target.name, e))?;
+				let tools =
+					crate::outbound::openapi::parse_openapi_schema(&loaded_openapi_doc).map_err(|e| {
+						anyhow::anyhow!(
+							"Failed to parse tools from OpenAPI schema for target {}: {}",
+							target.name,
+							e
+						)
+					})?;
+				let prefix =
+					crate::outbound::openapi::get_server_prefix(&loaded_openapi_doc).map_err(|e| {
+						anyhow::anyhow!(
+							"Failed to get server prefix from OpenAPI schema for target {}: {}",
+							target.name,
+							e
+						)
+					})?;
 
 				// 5. Construct openapi::Handler (client setup)
 				let builder = reqwest::Client::builder();
-				let (scheme, builder) = tls_cfg(builder, &openapi_target_spec_from_outbound.tls, openapi_target_spec_from_outbound.port).await?;
+				let (scheme, builder) = tls_cfg(
+					builder,
+					&openapi_target_spec_from_outbound.tls,
+					openapi_target_spec_from_outbound.port,
+				)
+				.await?;
 
-				let mut api_headers = get_default_headers(&openapi_target_spec_from_outbound.backend_auth, rq_ctx).await?;
+				let mut api_headers =
+					get_default_headers(&openapi_target_spec_from_outbound.backend_auth, rq_ctx).await?;
 				for (key, value) in &openapi_target_spec_from_outbound.headers {
 					api_headers.insert(
 						HeaderName::from_bytes(key.as_bytes())?,
@@ -243,16 +276,14 @@ impl ConnectionPool {
 
 				upstream::UpstreamTarget {
 					filters: target.filters.clone(), // From the outer 'target' variable
-					spec: upstream::UpstreamTargetSpec::OpenAPI(
-						crate::outbound::openapi::Handler {
-							host: openapi_target_spec_from_outbound.host.clone(),
-							client: final_client,
-							tools, // From parse_openapi_schema
-							scheme: scheme.to_string(),
-							prefix, // From get_server_prefix
-							port: openapi_target_spec_from_outbound.port,
-						}
-					),
+					spec: upstream::UpstreamTargetSpec::OpenAPI(crate::outbound::openapi::Handler {
+						host: openapi_target_spec_from_outbound.host.clone(),
+						client: final_client,
+						tools, // From parse_openapi_schema
+						scheme: scheme.to_string(),
+						prefix, // From get_server_prefix
+						port: openapi_target_spec_from_outbound.port,
+					}),
 				}
 			},
 		};

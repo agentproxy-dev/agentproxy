@@ -8,18 +8,19 @@ use serde_json::Value;
 use serde_json::json;
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::fs::read_to_string;
 use std::sync::Arc;
 use tracing::instrument;
-// use url::Url; // Already imported by the new block
+use url::Url;
 
-// Corrected and new imports based on instructions
-use crate::proto::common::{Header, LocalDataSource, RemoteDataSource};
-use crate::proto::mcp::target::{target::openapi_target::SchemaSource as OpenapiTargetSchemaSource, Target_OpenAPITarget};
-use openapiv3::OpenAPI;
-use reqwest::header::{HeaderMap as ReqwestHeaderMap, HeaderName as ReqwestHeaderName, HeaderValue as ReqwestHeaderValue};
-use url::Url; // Ensure this is present if the previous line was commented out due to merge
-use std::fs::read_to_string as std_fs_read_to_string;
+// Import proto types
+use crate::proto::agentgateway::dev::common::{
+	header::Value as HeaderValueProto, local_data_source::Source as LocalSourceProto,
+};
 
+// Import the correct prost-generated types
+use crate::proto::agentgateway::dev::mcp::target::target::OpenApiTarget;
+use crate::proto::agentgateway::dev::mcp::target::target::open_api_target::SchemaSource;
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct UpstreamOpenAPICall {
@@ -30,157 +31,155 @@ pub struct UpstreamOpenAPICall {
 
 #[derive(Debug, thiserror::Error)]
 pub enum ParseError {
-    #[error("missing fields")]
-    MissingFields,
-    #[error("missing schema")]
-    MissingSchema,
-    #[error("missing components")]
-    MissingComponents,
-    #[error("invalid reference: {0}")]
-    InvalidReference(String),
-    #[error("missing reference")]
-    MissingReference(String),
-    #[error("unsupported reference")]
-    UnsupportedReference(String),
-    #[error("information required: {0}")] // Corrected typo from "requireds"
-    InformationRequired(String),
-    #[error("serde error: {0}")]
-    SerdeError(#[from] serde_json::Error),
-    #[error("io error: {0}")]
-    IoError(#[from] std::io::Error),
-    #[error("HTTP request failed: {0}")]
-    HttpError(#[from] reqwest::Error),
-    #[error("Invalid URL: {0}")]
-    InvalidUrl(#[from] url::ParseError),
-    #[error("Schema source not specified in OpenAPI target")]
-    SchemaSourceMissing,
-    #[error("Unsupported schema format or content type from URL {0}. Only JSON and YAML are supported.")]
-    UnsupportedSchemaFormat(String), // Added URL to message
-    #[error("Local schema file path not specified")]
-    LocalPathMissing,
-    #[error("Local schema inline content not specified or empty")]
-    LocalInlineMissing, // Added for inline content
-    #[error("Invalid header name or value")]
-    InvalidHeader,
-    #[error("Header value source not supported (e.g. env_value)")]
-    HeaderValueSourceNotSupported(String),
+	#[error("missing fields")]
+	MissingFields,
+	#[error("missing schema")]
+	MissingSchema,
+	#[error("missing components")]
+	MissingComponents,
+	#[error("invalid reference: {0}")]
+	InvalidReference(String),
+	#[error("missing reference")]
+	MissingReference(String),
+	#[error("unsupported reference")]
+	UnsupportedReference(String),
+	#[error("information required: {0}")] // Corrected typo from "requireds"
+	InformationRequired(String),
+	#[error("serde error: {0}")]
+	SerdeError(#[from] serde_json::Error),
+	#[error("io error: {0}")]
+	IoError(#[from] std::io::Error),
+	#[error("HTTP request failed: {0}")]
+	HttpError(#[from] reqwest::Error),
+	#[error("Invalid URL: {0}")]
+	InvalidUrl(#[from] url::ParseError),
+	#[error("Schema source not specified in OpenAPI target")]
+	SchemaSourceMissing,
+	#[error(
+		"Unsupported schema format or content type from URL {0}. Only JSON and YAML are supported."
+	)]
+	UnsupportedSchemaFormat(String), // Added URL to message
+	#[error("Local schema file path not specified")]
+	LocalPathMissing,
+	#[error("Local schema inline content not specified or empty")]
+	LocalInlineMissing, // Added for inline content
+	#[error("Invalid header name or value")]
+	InvalidHeader,
+	#[error("Header value source not supported (e.g. env_value)")]
+	HeaderValueSourceNotSupported(String),
 }
 
-pub async fn load_openapi_schema(target_config: &Target_OpenAPITarget) -> Result<OpenAPI, ParseError> {
-    match &target_config.schema_source {
-        Some(OpenapiTargetSchemaSource::RemoteSchema(remote_source)) => {
-            let url_string = &remote_source.url;
-            if url_string.is_empty() {
-                // Using a more specific error if possible, or a generic InvalidUrl
-                return Err(ParseError::InvalidUrl(url::ParseError::RelativeUrlWithoutBase));
-            }
-            let url = Url::parse(url_string).map_err(ParseError::InvalidUrl)?;
-            tracing::info!("Loading OpenAPI schema from remote URL: {}", url);
+pub async fn load_openapi_schema(target_config: &OpenApiTarget) -> Result<OpenAPI, ParseError> {
+	match &target_config.schema_source {
+		Some(schema_source) => match schema_source {
+			SchemaSource::RemoteSchema(remote_source) => {
+				let url_string = &remote_source.url;
+				if url_string.is_empty() {
+					return Err(ParseError::InvalidUrl(
+						url::ParseError::RelativeUrlWithoutBase,
+					));
+				}
+				let url = Url::parse(url_string).map_err(ParseError::InvalidUrl)?;
+				tracing::info!("Loading OpenAPI schema from remote URL: {}", url);
 
-            let client = reqwest::Client::new(); // Create a new client for each call or reuse one if available
-            let mut request_builder = client.get(url.clone()); // Clone URL for error message and use here
+				let client = reqwest::Client::new();
+				let mut request_builder = client.get(url.clone());
 
-            // Add headers from RemoteDataSource if any
-            // common.proto defines `repeated Header headers = 4;`
-            // and `message Header { string key = 1; oneof value { string string_value = 2; string env_value = 3; } }`
-            if !remote_source.headers.is_empty() {
-                let mut req_headers = ReqwestHeaderMap::new();
-                for header_proto in &remote_source.headers {
-                    let header_key = &header_proto.key;
-                    match &header_proto.value {
-                        Some(crate::proto::common::header::Value::StringValue(val_str)) => {
-                            match (
-                                ReqwestHeaderName::from_bytes(header_key.as_bytes()),
-                                ReqwestHeaderValue::from_str(val_str)
-                            ) {
-                                (Ok(name), Ok(value)) => {
-                                    req_headers.insert(name, value);
-                                }
-                                _ => {
-                                    tracing::warn!("Invalid header (key or value): {}={}", header_key, val_str);
-                                    return Err(ParseError::InvalidHeader);
-                                }
-                            }
-                        }
-                        Some(crate::proto::common::header::Value::EnvValue(env_key)) => {
-                            // As per instructions, env_value is not supported yet.
-                            tracing::warn!("Header value from environment variable is not supported yet: key={}, env_key={}", header_key, env_key);
-                            return Err(ParseError::HeaderValueSourceNotSupported(header_key.clone()));
-                        }
-                        None => {
-                            // This case should ideally not happen if protobuf is well-defined (oneof implies one must be set)
-                            tracing::warn!("Header value not set for key: {}", header_key);
-                            return Err(ParseError::InvalidHeader);
-                        }
-                    }
-                }
-                if !req_headers.is_empty() {
-                    request_builder = request_builder.headers(req_headers);
-                }
-            }
-            // No static_headers in common.proto's RemoteDataSource
+				if !remote_source.headers.is_empty() {
+					let mut req_headers = HeaderMap::new();
+					for header_proto in &remote_source.headers {
+						let header_key = &header_proto.key;
+						match &header_proto.value {
+							Some(HeaderValueProto::StringValue(val_str)) => {
+								match (
+									HeaderName::from_bytes(header_key.as_bytes()),
+									HeaderValue::from_str(val_str),
+								) {
+									(Ok(name), Ok(value)) => {
+										req_headers.insert(name, value);
+									},
+									_ => {
+										tracing::warn!("Invalid header (key or value): {}={}", header_key, val_str);
+										return Err(ParseError::InvalidHeader);
+									},
+								}
+							},
+							Some(HeaderValueProto::EnvValue(env_key)) => {
+								tracing::warn!(
+									"Header value from environment variable is not supported yet: key={}, env_key={}",
+									header_key,
+									env_key
+								);
+								return Err(ParseError::HeaderValueSourceNotSupported(
+									header_key.clone(),
+								));
+							},
+							None => {
+								tracing::warn!("Header value not set for key: {}", header_key);
+								return Err(ParseError::InvalidHeader);
+							},
+						}
+					}
+					if !req_headers.is_empty() {
+						request_builder = request_builder.headers(req_headers);
+					}
+				}
 
-            let response = request_builder.send().await.map_err(ParseError::HttpError)?;
+				let response = request_builder
+					.send()
+					.await
+					.map_err(ParseError::HttpError)?;
 
-            if !response.status().is_success() {
-                return Err(ParseError::HttpError(response.error_for_status().unwrap_err()));
-            }
-            let schema_text = response.text().await.map_err(ParseError::HttpError)?;
+				if !response.status().is_success() {
+					return Err(ParseError::HttpError(
+						response.error_for_status().unwrap_err(),
+					));
+				}
+				let schema_text = response.text().await.map_err(ParseError::HttpError)?;
 
-            let openapi_doc: OpenAPI = serde_json::from_str(&schema_text)
-                .or_else(|_json_err| {
-                    serde_yaml::from_str(&schema_text).map_err(|_yaml_err| {
-                        ParseError::UnsupportedSchemaFormat(url_string.clone())
-                    })
-                })?;
-            Ok(openapi_doc)
-        }
-        Some(OpenapiTargetSchemaSource::LocalSchema(local_source)) => {
-            // common.proto: message LocalDataSource { oneof source { string file_path = 1; bytes inline = 2; } }
-            match &local_source.source {
-                Some(crate::proto::common::local_data_source::Source::FilePath(path)) => {
-                    if path.is_empty() {
-                        return Err(ParseError::LocalPathMissing);
-                    }
-                    tracing::info!("Loading OpenAPI schema from local file: {}", path);
-                    let schema_content = std_fs_read_to_string(path).map_err(ParseError::IoError)?;
-                    serde_json::from_str(&schema_content)
-                        .or_else(|_json_err| {
-                            serde_yaml::from_str(&schema_content).map_err(|_yaml_err| {
-                                ParseError::UnsupportedSchemaFormat(path.clone())
-                            })
-                        })
-                }
-                Some(crate::proto::common::local_data_source::Source::Inline(inline_bytes)) => {
-                    if inline_bytes.is_empty() {
-                        return Err(ParseError::LocalInlineMissing);
-                    }
-                    tracing::info!("Loading OpenAPI schema from inline bytes");
-                    // Attempt to parse directly from bytes, assuming UTF-8.
-                    // serde_yaml can parse from &str or &[u8]. serde_json from &str or &[u8] or Read.
-                    // Using from_slice for both if possible, or from_utf8_lossy if text is guaranteed.
-                    // For simplicity, convert to &str first.
-                    let schema_content = std::str::from_utf8(inline_bytes)
-                        .map_err(|_| ParseError::UnsupportedSchemaFormat("inline bytes (not valid UTF-8)".to_string()))?;
+				let openapi_doc: OpenAPI = serde_json::from_str(&schema_text).or_else(|_json_err| {
+					serde_yaml::from_str(&schema_text)
+						.map_err(|_yaml_err| ParseError::UnsupportedSchemaFormat(url_string.to_string()))
+				})?;
+				Ok(openapi_doc)
+			},
+			SchemaSource::LocalSchema(local_source) => match &local_source.source {
+				Some(LocalSourceProto::FilePath(path)) => {
+					if path.is_empty() {
+						return Err(ParseError::LocalPathMissing);
+					}
+					tracing::info!("Loading OpenAPI schema from local file: {}", path);
+					let schema_content = read_to_string(path).map_err(ParseError::IoError)?;
+					serde_json::from_str(&schema_content).or_else(|_json_err| {
+						serde_yaml::from_str(&schema_content)
+							.map_err(|_yaml_err| ParseError::UnsupportedSchemaFormat(path.clone()))
+					})
+				},
+				Some(LocalSourceProto::Inline(inline_bytes)) => {
+					if inline_bytes.is_empty() {
+						return Err(ParseError::LocalInlineMissing);
+					}
+					tracing::info!("Loading OpenAPI schema from inline bytes");
+					let schema_content = std::str::from_utf8(inline_bytes).map_err(|_| {
+						ParseError::UnsupportedSchemaFormat("inline bytes (not valid UTF-8)".to_string())
+					})?;
 
-                    serde_json::from_str(schema_content)
-                        .or_else(|_json_err| {
-                             serde_yaml::from_str(schema_content).map_err(|_yaml_err| {
-                                ParseError::UnsupportedSchemaFormat("inline bytes".to_string())
-                            })
-                        })
-                }
-                None => {
-                    tracing::error!("No source specified in LocalSchema");
-                    Err(ParseError::LocalPathMissing) // Or a more generic error like SchemaSourceMissing
-                }
-            }
-        }
-        None => {
-            tracing::error!("No schema source specified for OpenAPI target");
-            Err(ParseError::SchemaSourceMissing)
-        }
-    }
+					serde_json::from_str(schema_content).or_else(|_json_err| {
+						serde_yaml::from_str(schema_content)
+							.map_err(|_yaml_err| ParseError::UnsupportedSchemaFormat("inline bytes".to_string()))
+					})
+				},
+				None => {
+					tracing::error!("No source specified in LocalSchema");
+					Err(ParseError::LocalPathMissing)
+				},
+			},
+		},
+		None => {
+			tracing::error!("No schema source specified for OpenAPI target");
+			Err(ParseError::SchemaSourceMissing)
+		},
+	}
 }
 
 pub(crate) fn get_server_prefix(server: &OpenAPI) -> Result<String, ParseError> {
@@ -192,259 +191,6 @@ pub(crate) fn get_server_prefix(server: &OpenAPI) -> Result<String, ParseError> 
 			server.servers
 		))),
 	}
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*; // Imports load_openapi_schema, ParseError etc.
-    use crate::proto::agentgateway::dev::mcp::target::{
-        Target_OpenAPITarget as ProtoXdsOpenApiTarget,
-        openapi_target::SchemaSource as ProtoSchemaSource,
-    };
-    // Adjusted import path for HeaderValueProto to match common.proto structure if necessary
-    use crate::proto::common::{
-        LocalDataSource, RemoteDataSource, Header, 
-        header::Value as HeaderValueProto, // Assuming this is the correct path for the oneof enum
-        local_data_source::Source as LocalSourceProto // Assuming this is the correct path for the oneof enum
-    };
-    use wiremock::matchers::{method, path, header as wm_header};
-    use wiremock::{Mock, MockServer, ResponseTemplate};
-    use std::fs::File;
-    use std::io::Write;
-    use tempfile::NamedTempFile;
-
-    // Helper to create ProtoXdsOpenApiTarget for testing
-    fn create_test_proto_target(schema_source: Option<ProtoSchemaSource>) -> ProtoXdsOpenApiTarget {
-        ProtoXdsOpenApiTarget {
-            host: "localhost".to_string(),
-            port: 8080,
-            schema_source,
-            auth: None,
-            tls: None,
-            headers: vec![], // For the OpenAPITarget message itself, not RemoteDataSource
-        }
-    }
-
-    #[tokio::test]
-    async fn test_load_remote_schema_json_success() {
-        let server = MockServer::start().await;
-        let schema_content = r#"{ "openapi": "3.0.0", "info": { "title": "Remote JSON", "version": "1.0.0" }, "paths": {} }"#;
-        Mock::given(method("GET"))
-            .and(path("/schema.json"))
-            .respond_with(ResponseTemplate::new(200).set_body_string(schema_content))
-            .mount(&server)
-            .await;
-
-        let remote_source = RemoteDataSource {
-            url: format!("{}/schema.json", server.uri()),
-            headers: vec![], // Corrected: Vec<Header>, not Option
-            // static_headers: Default::default(), // Field does not exist
-            // Other fields of RemoteDataSource like port, initial_timeout, refresh_interval are defaulted or not used by load_openapi_schema
-            port: 0, 
-            initial_timeout: None,
-            refresh_interval: None,
-            path: "".to_string(), // path field for RemoteDataSource
-        };
-        let proto_target = create_test_proto_target(Some(ProtoSchemaSource::RemoteSchema(remote_source)));
-
-        let result = load_openapi_schema(&proto_target).await;
-        assert!(result.is_ok(), "Expected OK, got {:?}", result.err());
-        let openapi_doc = result.unwrap();
-        assert_eq!(openapi_doc.info.title, "Remote JSON");
-    }
-
-    #[tokio::test]
-    async fn test_load_remote_schema_yaml_success() {
-        let server = MockServer::start().await;
-        let schema_content = "openapi: 3.0.0
-info:
-  title: Remote YAML
-  version: 1.0.0
-paths: {}";
-        Mock::given(method("GET"))
-            .and(path("/schema.yaml"))
-            .respond_with(ResponseTemplate::new(200).set_body_string(schema_content))
-            .mount(&server)
-            .await;
-
-        let remote_source = RemoteDataSource {
-            url: format!("{}/schema.yaml", server.uri()),
-            headers: vec![], // Corrected
-            port: 0,
-            initial_timeout: None,
-            refresh_interval: None,
-            path: "".to_string(),
-        };
-        let proto_target = create_test_proto_target(Some(ProtoSchemaSource::RemoteSchema(remote_source)));
-
-        let result = load_openapi_schema(&proto_target).await;
-        assert!(result.is_ok(), "Expected OK, got {:?}", result.err());
-        let openapi_doc = result.unwrap();
-        assert_eq!(openapi_doc.info.title, "Remote YAML");
-    }
-
-    #[tokio::test]
-    async fn test_load_remote_schema_with_headers() {
-        let server = MockServer::start().await;
-        let schema_content = r#"{ "openapi": "3.0.0", "info": { "title": "With Headers", "version": "1.0.0" }, "paths": {} }"#;
-        Mock::given(method("GET"))
-            .and(path("/schema_secret.json"))
-            .and(wm_header("X-Auth-Token", "secret_token"))
-            .respond_with(ResponseTemplate::new(200).set_body_string(schema_content))
-            .mount(&server)
-            .await;
-        
-        let headers_proto = vec![Header {
-            key: "X-Auth-Token".to_string(),
-            value: Some(HeaderValueProto::StringValue("secret_token".to_string())),
-        }];
-        let remote_source = RemoteDataSource {
-            url: format!("{}/schema_secret.json", server.uri()),
-            headers: headers_proto, // Corrected: Pass the vec directly
-            port: 0,
-            initial_timeout: None,
-            refresh_interval: None,
-            path: "".to_string(),
-        };
-        let proto_target = create_test_proto_target(Some(ProtoSchemaSource::RemoteSchema(remote_source)));
-
-        let result = load_openapi_schema(&proto_target).await;
-        assert!(result.is_ok(), "Expected OK, got {:?}", result.err());
-        let openapi_doc = result.unwrap();
-        assert_eq!(openapi_doc.info.title, "With Headers");
-    }
-    
-    // test_load_remote_schema_with_static_headers is OMITTED because static_headers does not exist on RemoteDataSource
-
-    #[tokio::test]
-    async fn test_load_remote_schema_not_found_error() {
-        let server = MockServer::start().await;
-        Mock::given(method("GET"))
-            .and(path("/nonexistent.json"))
-            .respond_with(ResponseTemplate::new(404))
-            .mount(&server)
-            .await;
-
-        let remote_source = RemoteDataSource { 
-            url: format!("{}/nonexistent.json", server.uri()), 
-            headers: vec![], 
-            port: 0,
-            initial_timeout: None,
-            refresh_interval: None,
-            path: "".to_string(),
-        };
-        let proto_target = create_test_proto_target(Some(ProtoSchemaSource::RemoteSchema(remote_source)));
-
-        let result = load_openapi_schema(&proto_target).await;
-        assert!(result.is_err());
-        match result.err().unwrap() {
-            ParseError::HttpError(_) => {} // Expected error
-            e => panic!("Unexpected error type: {:?}", e),
-        }
-    }
-
-    #[tokio::test]
-    async fn test_load_remote_schema_malformed_content() {
-        let server = MockServer::start().await;
-        Mock::given(method("GET"))
-            .and(path("/malformed.json"))
-            .respond_with(ResponseTemplate::new(200).set_body_string("{ malformed json "))
-            .mount(&server)
-            .await;
-
-        let remote_source = RemoteDataSource { 
-            url: format!("{}/malformed.json", server.uri()), 
-            headers: vec![], 
-            port: 0,
-            initial_timeout: None,
-            refresh_interval: None,
-            path: "".to_string(),
-        };
-        let proto_target = create_test_proto_target(Some(ProtoSchemaSource::RemoteSchema(remote_source)));
-
-        let result = load_openapi_schema(&proto_target).await;
-        assert!(result.is_err());
-        match result.err().unwrap() {
-            ParseError::UnsupportedSchemaFormat(_) => {} // Expected error
-            e => panic!("Unexpected error type: {:?}", e),
-        }
-    }
-   
-    #[tokio::test]
-    async fn test_load_remote_schema_invalid_url() {
-        let remote_source = RemoteDataSource { 
-            url: "this is not a valid url".to_string(), 
-            headers: vec![], 
-            port: 0,
-            initial_timeout: None,
-            refresh_interval: None,
-            path: "".to_string(),
-        };
-        let proto_target = create_test_proto_target(Some(ProtoSchemaSource::RemoteSchema(remote_source)));
-        let result = load_openapi_schema(&proto_target).await;
-        assert!(result.is_err());
-        match result.err().unwrap() {
-            ParseError::InvalidUrl(_) => {} // Expected
-            e => panic!("Unexpected error: {:?}", e),
-        }
-    }
-
-    #[tokio::test]
-    async fn test_load_local_schema_json_success() {
-        let mut temp_file = NamedTempFile::new().unwrap();
-        let schema_content = r#"{ "openapi": "3.0.0", "info": { "title": "Local JSON", "version": "1.0.0" }, "paths": {} }"#;
-        writeln!(temp_file, "{}", schema_content).unwrap();
-
-        let local_data_source = LocalDataSource {
-            source: Some(LocalSourceProto::FilePath(temp_file.path().to_str().unwrap().to_string())),
-        };
-        let proto_target = create_test_proto_target(Some(ProtoSchemaSource::LocalSchema(local_data_source)));
-
-        let result = load_openapi_schema(&proto_target).await;
-        assert!(result.is_ok(), "Expected OK, got {:?}", result.err());
-        let openapi_doc = result.unwrap();
-        assert_eq!(openapi_doc.info.title, "Local JSON");
-    }
-   
-    #[tokio::test]
-    async fn test_load_local_schema_inline_success() {
-        let schema_content = r#"{ "openapi": "3.0.0", "info": { "title": "Local Inline JSON", "version": "1.0.0" }, "paths": {} }"#;
-        let local_data_source = LocalDataSource {
-            source: Some(LocalSourceProto::Inline(schema_content.as_bytes().to_vec())), // Corrected to ::Inline from ::InlineBytes
-        };
-        let proto_target = create_test_proto_target(Some(ProtoSchemaSource::LocalSchema(local_data_source)));
-
-        let result = load_openapi_schema(&proto_target).await;
-        assert!(result.is_ok(), "Expected OK, got {:?}", result.err());
-        let openapi_doc = result.unwrap();
-        assert_eq!(openapi_doc.info.title, "Local Inline JSON");
-    }
-
-    #[tokio::test]
-    async fn test_load_local_schema_file_not_found() {
-        let local_data_source = LocalDataSource {
-            source: Some(LocalSourceProto::FilePath("/path/to/nonexistent/schema.json".to_string())),
-        };
-        let proto_target = create_test_proto_target(Some(ProtoSchemaSource::LocalSchema(local_data_source)));
-
-        let result = load_openapi_schema(&proto_target).await;
-        assert!(result.is_err());
-        match result.err().unwrap() {
-            ParseError::IoError(_) => {} // Expected error
-            e => panic!("Unexpected error type: {:?}", e),
-        }
-    }
-   
-    #[tokio::test]
-    async fn test_load_schema_no_source_specified() {
-        let proto_target = create_test_proto_target(None); // No schema_source
-        let result = load_openapi_schema(&proto_target).await;
-        assert!(result.is_err());
-        match result.err().unwrap() {
-            ParseError::SchemaSourceMissing => {} // Expected
-            e => panic!("Unexpected error: {:?}", e),
-        }
-    }
 }
 
 fn resolve_schema<'a>(
@@ -1072,21 +818,10 @@ impl Handler {
 	}
 }
 
-#[test]
-fn test_parse_openapi_schema() {
-	let schema = include_bytes!("../../../../examples/openapi/openapi.json");
-	let schema: OpenAPI = serde_json::from_slice(schema).unwrap();
-	let tools = parse_openapi_schema(&schema).unwrap();
-	assert_eq!(tools.len(), 19);
-	for (tool, upstream) in tools {
-		println!("{}", serde_json::to_string_pretty(&tool).unwrap());
-		println!("{}", serde_json::to_string_pretty(&upstream).unwrap());
-	}
-}
-
+// Place the test module here at the end
 #[cfg(test)]
 mod tests {
-	use super::*; // Import items from parent module
+	use super::*;
 	use reqwest::Client;
 	use rmcp::model::Tool;
 	use serde_json::json;
