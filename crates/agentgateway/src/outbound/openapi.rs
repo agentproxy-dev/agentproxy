@@ -73,11 +73,11 @@ pub async fn load_openapi_schema(target_config: &OpenApiTarget) -> Result<OpenAP
 	match &target_config.schema_source {
 		Some(schema_source) => match schema_source {
 			SchemaSource::RemoteSchema(remote_source) => {
-        let scheme = match remote_source.port {
-          443 => "https",
-          80 => "http",
-          _ => return Err(ParseError::InvalidUrl(url::ParseError::InvalidPort)),
-        };
+				let scheme = match remote_source.port {
+					443 => "https",
+					80 => "http",
+					_ => return Err(ParseError::InvalidUrl(url::ParseError::InvalidPort)),
+				};
 				let url_string = format!("{}://{}/{}", scheme, remote_source.host, remote_source.path);
 				let url = Url::parse(&url_string).map_err(ParseError::InvalidUrl)?;
 				tracing::info!("Loading OpenAPI schema from remote URL: {}", url);
