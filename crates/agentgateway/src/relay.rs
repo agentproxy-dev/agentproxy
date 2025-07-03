@@ -129,21 +129,23 @@ impl ServerHandler for Relay {
 
 	async fn initialize(
 		&self,
-		request: InitializeRequestParam,
+		_request: InitializeRequestParam,
 		context: RequestContext<RoleServer>,
 	) -> Result<InitializeResult, McpError> {
 		let rq_ctx = context.extensions.get::<RqCtx>().unwrap_or(&DEFAULT_RQ_CTX);
 		let mut initialized = self.initialized.write().await;
 
-		// List servers and initialize the ones that are not initialized
+		// List servers - they are now pre-initialized during connection
 		let mut pool = self.pool.write().await;
 		let connections = pool
 			.list(rq_ctx, &context.peer)
 			.await
 			.map_err(|e| McpError::internal_error(format!("Failed to list connections: {}", e), None))?;
-		for (name, upstream) in connections {
+		
+		// Mark all connections as initialized since they were initialized during connection
+		for (name, _upstream) in connections {
 			if !initialized.contains(&name) {
-				upstream.initialize(request.clone()).await?;
+				tracing::debug!("marking pre-initialized connection as ready: {}", name);
 				initialized.insert(name.clone());
 			}
 		}
