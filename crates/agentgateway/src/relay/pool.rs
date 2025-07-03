@@ -9,6 +9,7 @@ use rmcp::model::ClientJsonRpcMessage;
 use rmcp::service::{Peer, serve_client_with_ct};
 use rmcp::transport::sse::{SseClient, SseTransportError};
 use rmcp::{ClientHandler, ServiceError};
+use rmcp::model::ProtocolVersion;
 use sse_stream::{Error as SseError, Sse, SseStream};
 
 pub(crate) struct ConnectionPool {
@@ -146,6 +147,16 @@ impl ConnectionPool {
 			return Ok(());
 		}
 		tracing::trace!("connecting to target: {}", target.name);
+		
+		// Create a minimal initialize request for the connection
+		let init_request = rmcp::model::InitializeRequestParam {
+			protocol_version: ProtocolVersion::V_2025_03_26,
+			capabilities: rmcp::model::ClientCapabilities::default(),
+			client_info: rmcp::model::Implementation {
+				name: "agentgateway".to_string(),
+				version: env!("CARGO_PKG_VERSION").to_string(),
+			},
+		};
 		let transport: upstream::UpstreamTarget = match &target.spec {
 			McpTargetSpec::Sse(sse) => {
 				tracing::debug!("starting sse transport for target: {}", target.name);
@@ -167,38 +178,53 @@ impl ConnectionPool {
 				let client = builder.default_headers(upstream_headers).build()?;
 				let client = ReqwestSseClient::new_with_client(url.as_str(), client).await?;
 				let transport = SseTransport::start_with_client(client).await?;
+				let running_service = serve_client_with_ct(
+					PeerClientHandler {
+						peer: peer.clone(),
+						peer_client: None,
+					},
+					transport,
+					ct.child_token(),
+				)
+				.await?;
 
-				upstream::UpstreamTarget {
+				let upstream_target = upstream::UpstreamTarget {
 					filters: target.filters.clone(),
-					spec: upstream::UpstreamTargetSpec::Mcp(
-						serve_client_with_ct(
-							PeerClientHandler {
-								peer: peer.clone(),
-								peer_client: None,
-							},
-							transport,
-							ct.child_token(),
-						)
-						.await?,
-					),
-				}
+					spec: upstream::UpstreamTargetSpec::Mcp(running_service),
+				};
+
+				// Initialize the connection immediately after establishing it
+				tracing::debug!("initializing connection to target: {}", target.name);
+				upstream_target.initialize(init_request.clone()).await
+					.map_err(|e| anyhow::anyhow!("Failed to initialize target {}: {:?}", target.name, e))?;
+				tracing::debug!("successfully initialized connection to target: {}", target.name);
+
+				upstream_target
 			},
 			McpTargetSpec::Stdio { cmd, args, env: _ } => {
 				tracing::debug!("starting stdio transport for target: {}", target.name);
-				upstream::UpstreamTarget {
+				let running_service = serve_client_with_ct(
+					PeerClientHandler {
+						peer: peer.clone(),
+						peer_client: None,
+					},
+					TokioChildProcess::new(Command::new(cmd).args(args))?,
+					ct.child_token(),
+				)
+				.await?;
+
+				let upstream_target = upstream::UpstreamTarget {
 					filters: target.filters.clone(),
-					spec: upstream::UpstreamTargetSpec::Mcp(
-						serve_client_with_ct(
-							PeerClientHandler {
-								peer: peer.clone(),
-								peer_client: None,
-							},
-							TokioChildProcess::new(Command::new(cmd).args(args))?,
-							ct.child_token(),
-						)
-						.await?,
-					),
-				}
+					spec: upstream::UpstreamTargetSpec::Mcp(running_service),
+				};
+
+				// Initialize the connection immediately after establishing it
+				tracing::debug!("initializing stdio connection to target: {}", target.name);
+				upstream_target.initialize(init_request.clone()).await
+					.map_err(|e| anyhow::anyhow!("Failed to initialize stdio target {}: {:?}", target.name, e))?;
+				tracing::debug!("successfully initialized stdio connection to target: {}", target.name);
+
+				upstream_target
 			},
 			McpTargetSpec::OpenAPI(openapi_target_spec_from_outbound) => {
 				// Renamed for clarity
@@ -304,7 +330,7 @@ impl ConnectionPool {
 				}
 				let final_client = builder.default_headers(api_headers).build()?;
 
-				upstream::UpstreamTarget {
+				let upstream_target = upstream::UpstreamTarget {
 					filters: target.filters.clone(), // From the outer 'target' variable
 					spec: upstream::UpstreamTargetSpec::OpenAPI(crate::outbound::openapi::Handler {
 						host: final_host,
@@ -314,9 +340,19 @@ impl ConnectionPool {
 						prefix: final_prefix,
 						port: final_port,
 					}),
-				}
+				};
+
+				// Initialize the OpenAPI connection (this is a no-op but maintains consistency)
+				tracing::debug!("initializing OpenAPI connection to target: {}", target.name);
+				upstream_target.initialize(init_request.clone()).await
+					.map_err(|e| anyhow::anyhow!("Failed to initialize OpenAPI target {}: {:?}", target.name, e))?;
+				tracing::debug!("successfully initialized OpenAPI connection to target: {}", target.name);
+
+				upstream_target
 			},
 		};
+		
+		tracing::debug!("storing initialized connection for target: {}", target.name);
 		self.by_name.insert(target.name.clone(), transport);
 		Ok(())
 	}

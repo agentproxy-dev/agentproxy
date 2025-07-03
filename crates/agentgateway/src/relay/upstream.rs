@@ -1,5 +1,7 @@
 use super::*;
 use serde::Serialize;
+
+#[derive(Debug)]
 pub(crate) enum UpstreamError {
 	ServiceError(rmcp::ServiceError),
 	OpenAPIError(anyhow::Error),
@@ -115,21 +117,50 @@ impl UpstreamTarget {
 	) -> Result<InitializeResult, UpstreamError> {
 		match &self.spec {
 			UpstreamTargetSpec::Mcp(m) => {
+				tracing::debug!("sending initialize request to MCP target");
 				let result = m
 					.send_request(ClientRequest::InitializeRequest(InitializeRequest {
 						method: Default::default(),
 						params: request,
 						extensions: rmcp::model::Extensions::new(),
 					}))
-					.await?;
-				match result {
-					ServerResult::InitializeResult(result) => Ok(result),
-					_ => Err(UpstreamError::ServiceError(
-						rmcp::ServiceError::UnexpectedResponse,
-					)),
+					.await
+					.map_err(|e| {
+						tracing::warn!("MCP initialize request failed: {}", e);
+						e
+					})?;
+				
+				let init_result = match result {
+					ServerResult::InitializeResult(result) => {
+						tracing::debug!("MCP target initialization successful");
+						result
+					},
+					_ => {
+						tracing::error!("MCP target returned unexpected response to initialize request");
+						return Err(UpstreamError::ServiceError(
+							rmcp::ServiceError::UnexpectedResponse,
+						));
+					},
+				};
+
+				// Send the initialized notification to complete the handshake
+				tracing::debug!("sending initialized notification to MCP target");
+				if let Err(e) = m.send_notification(ClientNotification::InitializedNotification(InitializedNotification {
+					method: Default::default(),
+					extensions: rmcp::model::Extensions::new(),
+				})).await {
+					tracing::warn!("failed to send initialized notification: {}", e);
+					// Don't fail the connection for this, but log it
+				} else {
+					tracing::debug!("initialized notification sent successfully");
 				}
+
+				Ok(init_result)
 			},
-			UpstreamTargetSpec::OpenAPI(_) => Ok(InitializeResult::default()),
+			UpstreamTargetSpec::OpenAPI(_) => {
+				tracing::debug!("OpenAPI target initialization (no-op)");
+				Ok(InitializeResult::default())
+			},
 		}
 	}
 
