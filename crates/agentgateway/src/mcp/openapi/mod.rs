@@ -22,8 +22,12 @@ use crate::types::agent::Target;
 
 mod compatibility;
 mod adapters;
+mod specification;
+mod v3_0;
+mod v3_1;
 
 use compatibility::{CompatibleSchema, CompatibleParameter, CompatibleRequestBody, ParameterLocation, ToCompatible};
+use specification::{OpenAPISpecification, OpenAPISpecificationFactory};
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct UpstreamOpenAPICall {
@@ -101,14 +105,12 @@ pub(crate) fn get_server_prefix(server: &OpenAPI) -> Result<String, ParseError> 
 
 
 /// Main entry point for parsing OpenAPI schemas.
-/// Routes to the appropriate version-specific parser based on the OpenAPI version.
+/// Uses the specification pattern to inject the appropriate behavior based on the OpenAPI version.
 pub fn parse_openapi_schema(
 	open_api: &OpenAPI,
 ) -> Result<Vec<(Tool, UpstreamOpenAPICall)>, ParseError> {
-	match open_api {
-		OpenAPI::V3_0(spec) => parse_openapi_v3_0_schema(spec),
-		OpenAPI::V3_1(spec) => parse_openapi_v3_1_schema(spec),
-	}
+	let specification = OpenAPISpecificationFactory::create_specification(open_api);
+	specification.parse_schema()
 }
 
 /// Parse OpenAPI 3.0 schema into tools and upstream calls
@@ -508,8 +510,8 @@ fn build_schema_property_v3_0(
 }
 
 // ===== OpenAPI 3.1 specific functions =====
-// TODO: Implement OpenAPI 3.1 parsing functions when needed
-// The functions would be similar to the 3.0 versions but adapted for the openapiv3_1 crate API
+// TODO: Implement OpenAPI 3.1 parsing functions using the specification pattern
+// These will be implemented as separate behaviors that can be injected
 
 #[derive(Debug, Serialize, Deserialize)]
 struct JsonSchema {

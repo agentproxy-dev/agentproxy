@@ -8,7 +8,7 @@ use serde_json::Value;
 use super::ParseError;
 
 /// Normalized schema representation that works for both OpenAPI versions
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
 pub struct CompatibleSchema {
     /// Schema type (string, number, object, array, etc.)
     pub schema_type: Option<String>,

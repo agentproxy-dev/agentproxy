@@ -29,10 +29,26 @@ This document tracks the implementation of OpenAPI 3.1 support in agentgateway u
 - [x] Verified no regressions in existing OpenAPI 3.0 tests
 - [x] All 24 OpenAPI tests passing (including new compatibility tests)
 
-### ❌ Not Started
-- [ ] Compatibility layer implementation
-- [ ] OpenAPI 3.1 parsing functions
-- [ ] Advanced schema handling
+### ✅ Completed (Session 2) 
+- [x] **Implemented Specification Pattern with Behavior Injection**
+- [x] Created `OpenAPISpecification` trait defining parsing behavior interface
+- [x] Created `SchemaResolver` and `SchemaBuilder` traits for modular functionality
+- [x] Implemented `OpenAPI30Specification` with full 3.0 parsing logic using compatibility layer
+- [x] Implemented `OpenAPI31Specification` structure (ready for actual parsing logic)
+- [x] Created `OpenAPISpecificationFactory` for behavior injection
+- [x] Updated main parsing function to use specification pattern
+- [x] All 24 tests passing with new architecture
+- [x] Maintained backward compatibility for OpenAPI 3.0
+- [x] Clear separation of concerns between versions
+
+### 🚧 In Progress
+- [ ] **OpenAPI 3.1 Actual Parsing Implementation**
+  - The specification pattern infrastructure is complete
+  - Need to implement actual 3.1 schema conversion logic
+  - Need to handle 3.1-specific features like type arrays
+
+### ❌ Not Started  
+- [ ] Advanced schema handling for 3.1 features
 - [ ] Real-world testing with Petstore 3.1
 
 ## Architecture Design

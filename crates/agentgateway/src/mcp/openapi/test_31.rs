@@ -56,7 +56,7 @@ paths:
             Ok(_) => panic!("✗ Should not succeed in parsing 3.1 tools yet"),
             Err(e) => {
                 let error_msg = e.to_string();
-                assert!(error_msg.contains("OpenAPI 3.1 parsing is not yet fully implemented"));
+                assert!(error_msg.contains("OpenAPI 3.1 parsing is currently being implemented"));
                 assert!(error_msg.contains("specification pattern"));
                 println!("✓ Got expected helpful error message: {}", error_msg);
             }

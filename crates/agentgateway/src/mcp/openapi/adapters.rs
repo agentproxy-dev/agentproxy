@@ -286,6 +286,11 @@ impl ToCompatible<CompatibleParameter> for Parameterv3 {
     }
 }
 
+// ===== OpenAPI 3.1 Adapters =====
+// TODO: Implement OpenAPI 3.1 adapters when the openapiv3_1 crate API is better understood
+// The current openapiv3_1 crate (version 0.1.2) has a different API structure than expected
+// For now, we use the compatibility layer approach with placeholder implementations
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -307,4 +312,6 @@ mod tests {
         assert_eq!(ParameterLocation::Header.to_string(), "header");
         assert_eq!(ParameterLocation::Cookie.to_string(), "cookie");
     }
+
+    // TODO: Add OpenAPI 3.1 tests when the adapters are implemented
 }
