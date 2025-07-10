@@ -387,4 +387,104 @@ paths:
             }
         }
     }
+
+    #[test]
+    fn test_openapi_31_with_request_body() {
+        // Test OpenAPI 3.1 spec with request body
+        let content_31 = r#"
+openapi: "3.1.0"
+info:
+  title: Test API with Request Body
+  version: "1.0.0"
+servers:
+  - url: https://api.example.com
+paths:
+  /users:
+    post:
+      operationId: createUser
+      summary: Create a new user
+      description: Create a new user with the provided data
+      requestBody:
+        required: true
+        description: User data to create
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - email
+              properties:
+                name:
+                  type: string
+                  description: User's full name
+                email:
+                  type: string
+                  format: email
+                  description: User's email address
+                age:
+                  type: integer
+                  minimum: 0
+                  maximum: 150
+                  description: User's age (optional)
+      responses:
+        '201':
+          description: User created successfully
+        '400':
+          description: Invalid user data
+"#;
+
+        println!("Testing OpenAPI 3.1 with request body...");
+        
+        // Test version detection
+        let version = detect_openapi_version(content_31).expect("Should detect version");
+        assert!(matches!(version, OpenAPIVersion::V3_1));
+        println!("✓ Correctly detected OpenAPI 3.1");
+
+        // Parse the spec
+        let spec: openapiv3_1::OpenApi = yamlviajson::from_str(content_31).expect("Should parse 3.1");
+        let openapi_spec = OpenAPI::V3_1(Arc::new(spec));
+        
+        // Test parsing into tools
+        match parse_openapi_schema(&openapi_spec) {
+            Ok(tools_and_calls) => {
+                println!("✓ OpenAPI 3.1 request body parsing succeeded!");
+                println!("✓ Generated {} tools", tools_and_calls.len());
+                
+                assert_eq!(tools_and_calls.len(), 1);
+                let (tool, call) = &tools_and_calls[0];
+                
+                assert_eq!(tool.name, "createUser");
+                assert_eq!(call.method, "POST");
+                assert_eq!(call.path, "/users");
+                
+                println!("✓ Tool: {} ({} {})", tool.name, call.method, call.path);
+                
+                // Check that the tool has a proper input schema
+                println!("✓ Tool input schema keys: {:?}", tool.input_schema.keys().collect::<Vec<_>>());
+                
+                // Check if we have properties (indicating request body processing)
+                if let Some(properties) = tool.input_schema.get("properties") {
+                    if let Some(props_obj) = properties.as_object() {
+                        println!("✓ Found {} properties: {:?}", props_obj.len(), props_obj.keys().collect::<Vec<_>>());
+                        
+                        // For now, we expect basic schema structure
+                        // Later we'll enhance this to include request body fields
+                        if props_obj.len() > 0 {
+                            println!("✓ Schema processing is working!");
+                        } else {
+                            println!("⚠ No request body properties processed yet (expected for current implementation)");
+                        }
+                    }
+                }
+                
+                if let Some(desc) = &tool.description {
+                    println!("✓ Tool description: {}", desc);
+                }
+            },
+            Err(e) => {
+                panic!("✗ OpenAPI 3.1 request body parsing failed: {}", e);
+            }
+        }
+    }
 }

@@ -56,6 +56,27 @@ impl OpenAPI31Specification {
             }
         }
         
+        // Process request body if present
+        if let Some(request_body) = &operation.request_body {
+            match self.process_request_body_v3_1(request_body)? {
+                Some((body_properties, body_required)) => {
+                    // Merge request body properties into the main properties
+                    for (key, value) in body_properties {
+                        properties.insert(key, value);
+                    }
+                    // Add required fields from request body
+                    for req_field in body_required {
+                        if !required.contains(&req_field) {
+                            required.push(req_field);
+                        }
+                    }
+                },
+                None => {
+                    // Skip request body we can't process yet
+                }
+            }
+        }
+        
         // Create the input schema
         let mut input_schema = serde_json::Map::new();
         input_schema.insert("type".to_string(), json!("object"));
@@ -143,6 +164,80 @@ impl OpenAPI31Specification {
         }
         
         Ok(Some((name, param_schema, required)))
+    }
+    
+    /// Process an OpenAPI 3.1 request body and convert it to JSON schema properties
+    fn process_request_body_v3_1(
+        &self,
+        request_body: &openapiv3_1::request_body::RequestBody,
+    ) -> Result<Option<(serde_json::Map<String, Value>, Vec<String>)>, ParseError> {
+        // Convert the request body to JSON to examine its structure
+        let request_body_json = serde_json::to_value(request_body)
+            .map_err(|e| ParseError::SerdeError(e))?;
+        
+        // Try to extract content
+        if let Some(content) = request_body_json.get("content") {
+            // Look for application/json content type
+            if let Some(json_content) = content.get("application/json") {
+                if let Some(schema) = json_content.get("schema") {
+                    return self.process_schema_v3_1(schema);
+                }
+            }
+            
+            // If no application/json, try the first available content type
+            if let Some(content_obj) = content.as_object() {
+                for (content_type, content_data) in content_obj {
+                    if let Some(schema) = content_data.get("schema") {
+                        println!("Processing request body with content type: {}", content_type);
+                        return self.process_schema_v3_1(schema);
+                    }
+                }
+            }
+        }
+        
+        Ok(None)
+    }
+    
+    /// Process an OpenAPI 3.1 schema and convert it to properties and required fields
+    fn process_schema_v3_1(
+        &self,
+        schema: &Value,
+    ) -> Result<Option<(serde_json::Map<String, Value>, Vec<String>)>, ParseError> {
+        let mut properties = serde_json::Map::new();
+        let mut required = Vec::new();
+        
+        // Check if this is an object schema
+        if let Some(schema_type) = schema.get("type") {
+            if schema_type.as_str() == Some("object") {
+                // Extract properties
+                if let Some(props) = schema.get("properties") {
+                    if let Some(props_obj) = props.as_object() {
+                        for (prop_name, prop_schema) in props_obj {
+                            properties.insert(prop_name.clone(), prop_schema.clone());
+                        }
+                    }
+                }
+                
+                // Extract required fields
+                if let Some(req_array) = schema.get("required") {
+                    if let Some(req_vec) = req_array.as_array() {
+                        for req_item in req_vec {
+                            if let Some(req_str) = req_item.as_str() {
+                                required.push(req_str.to_string());
+                            }
+                        }
+                    }
+                }
+                
+                return Ok(Some((properties, required)));
+            }
+        }
+        
+        // If not an object schema, treat the whole thing as a single property
+        // This handles cases where the request body is a simple type
+        properties.insert("body".to_string(), schema.clone());
+        
+        Ok(Some((properties, required)))
     }
     
     // TODO: Implement reference resolution methods when we implement the actual 3.1 parsing logic
