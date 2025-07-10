@@ -287,9 +287,10 @@ impl ToCompatible<CompatibleParameter> for Parameterv3 {
 }
 
 // ===== OpenAPI 3.1 Adapters =====
-// TODO: Implement OpenAPI 3.1 adapters when the openapiv3_1 crate API is better understood
-// The current openapiv3_1 crate (version 0.1.2) has a different API structure than expected
-// For now, we use the compatibility layer approach with placeholder implementations
+// TODO: Implement OpenAPI 3.1 adapters based on the actual openapiv3_1 crate API
+// The openapiv3_1 crate has a different structure than expected, so we need to 
+// study the actual API and implement the adapters accordingly.
+// For now, we'll focus on getting the specification pattern working correctly.
 
 #[cfg(test)]
 mod tests {

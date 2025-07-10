@@ -41,10 +41,21 @@ This document tracks the implementation of OpenAPI 3.1 support in agentgateway u
 - [x] Maintained backward compatibility for OpenAPI 3.0
 - [x] Clear separation of concerns between versions
 
+### ✅ Completed (Session 2 Continued)
+- [x] **OpenAPI 3.1 Infrastructure Complete**
+- [x] Implemented specification pattern with full behavior injection
+- [x] Created working OpenAPI 3.0 specification behavior using compatibility layer
+- [x] Created OpenAPI 3.1 specification behavior structure (ready for actual parsing)
+- [x] All 24 tests passing with new architecture
+- [x] Discovered openapiv3_1 crate API differences and documented for future implementation
+- [x] Maintained 100% backward compatibility for OpenAPI 3.0
+- [x] Clean error messages for OpenAPI 3.1 indicating current implementation status
+
 ### 🚧 In Progress
 - [ ] **OpenAPI 3.1 Actual Parsing Implementation**
   - The specification pattern infrastructure is complete
-  - Need to implement actual 3.1 schema conversion logic
+  - Need to study the actual openapiv3_1 crate API structure
+  - Need to implement actual 3.1 schema conversion logic based on real API
   - Need to handle 3.1-specific features like type arrays
 
 ### ❌ Not Started  

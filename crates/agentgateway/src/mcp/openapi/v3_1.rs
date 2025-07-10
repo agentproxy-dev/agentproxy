@@ -8,7 +8,7 @@ use serde_json::{Value, json};
 use openapiv3_1::OpenApi as OpenAPIv3_1;
 
 use super::{ParseError, UpstreamOpenAPICall, BODY_NAME, ParameterType};
-use super::compatibility::{CompatibleSchema, CompatibleParameter, CompatibleRequestBody, ParameterLocation};
+use super::compatibility::{CompatibleSchema, CompatibleParameter, CompatibleRequestBody, ParameterLocation, ToCompatible};
 use super::specification::{OpenAPISpecification, SchemaResolver, SchemaBuilder, CommonBehavior};
 
 /// OpenAPI 3.1 specification behavior
@@ -20,17 +20,21 @@ impl OpenAPI31Specification {
     pub fn new(spec: Arc<OpenAPIv3_1>) -> Self {
         Self { spec }
     }
+    
+    // TODO: Implement reference resolution methods when we implement the actual 3.1 parsing logic
+    // These methods will need to be implemented based on the actual openapiv3_1 crate API structure
 }
 
 impl OpenAPISpecification for OpenAPI31Specification {
     fn parse_schema(&self) -> Result<Vec<(Tool, UpstreamOpenAPICall)>, ParseError> {
-        // For now, return a helpful error message indicating that 3.1 support is in progress
-        // This is where we would implement the actual 3.1 parsing logic using the compatibility layer
+        // Return a helpful error message indicating that 3.1 support is in progress
+        // The specification pattern infrastructure is now complete, but we need to 
+        // implement the actual 3.1 parsing logic based on the openapiv3_1 crate API
         Err(ParseError::InformationRequired(
             "OpenAPI 3.1 parsing is currently being implemented using the specification pattern. \
             The compatibility layer and behavior injection system is now in place. \
-            The next step is to implement the actual 3.1 parsing logic that converts 3.1 schemas \
-            to the compatible format and then uses the common parsing logic. \
+            The openapiv3_1 crate has a different API structure than initially expected, \
+            so the actual parsing logic needs to be implemented based on the real API. \
             Please use OpenAPI 3.0 specifications for now.".to_string()
         ))
     }
