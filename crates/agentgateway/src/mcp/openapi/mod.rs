@@ -20,6 +20,11 @@ use crate::client;
 use crate::store::BackendPolicies;
 use crate::types::agent::Target;
 
+mod compatibility;
+mod adapters;
+
+use compatibility::{CompatibleSchema, CompatibleParameter, CompatibleRequestBody, ParameterLocation, ToCompatible};
+
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct UpstreamOpenAPICall {
 	pub method: String, /* TODO: Switch to Method, but will require getting rid of Serialize/Deserialize */
