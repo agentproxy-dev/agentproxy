@@ -21,22 +21,128 @@ impl OpenAPI31Specification {
         Self { spec }
     }
     
+    /// Create a tool from an OpenAPI 3.1 operation
+    fn create_tool_from_operation(
+        &self,
+        operation_id: &str,
+        method: &str,
+        path: &str,
+        operation: &openapiv3_1::path::Operation,
+    ) -> Result<(Tool, UpstreamOpenAPICall), ParseError> {
+        // For now, create a simple tool with minimal schema
+        // This is a basic implementation that will be enhanced as we learn more about the API
+        
+        let description = operation.summary
+            .as_ref()
+            .or(operation.description.as_ref())
+            .unwrap_or(&format!("{} {}", method, path))
+            .clone();
+        
+        // Create a basic JSON schema for the tool
+        // For now, we'll create a simple schema that accepts any parameters
+        let input_schema = json!({
+            "type": "object",
+            "properties": {},
+            "required": []
+        });
+        
+        // Convert to JsonObject (Map<String, Value>)
+        let input_schema_object = input_schema.as_object()
+            .ok_or(ParseError::UnsupportedReference("Failed to create schema object".to_string()))?
+            .clone();
+        
+        let tool = Tool {
+            annotations: None,
+            name: Cow::Owned(operation_id.to_string()),
+            description: Some(Cow::Owned(description)),
+            input_schema: Arc::new(input_schema_object),
+        };
+        
+        let upstream = UpstreamOpenAPICall {
+            method: method.to_string(),
+            path: path.to_string(),
+        };
+        
+        Ok((tool, upstream))
+    }
+    
     // TODO: Implement reference resolution methods when we implement the actual 3.1 parsing logic
     // These methods will need to be implemented based on the actual openapiv3_1 crate API structure
 }
 
 impl OpenAPISpecification for OpenAPI31Specification {
     fn parse_schema(&self) -> Result<Vec<(Tool, UpstreamOpenAPICall)>, ParseError> {
-        // Return a helpful error message indicating that 3.1 support is in progress
-        // The specification pattern infrastructure is now complete, but we need to 
-        // implement the actual 3.1 parsing logic based on the openapiv3_1 crate API
-        Err(ParseError::InformationRequired(
-            "OpenAPI 3.1 parsing is currently being implemented using the specification pattern. \
-            The compatibility layer and behavior injection system is now in place. \
-            The openapiv3_1 crate has a different API structure than initially expected, \
-            so the actual parsing logic needs to be implemented based on the real API. \
-            Please use OpenAPI 3.0 specifications for now.".to_string()
-        ))
+        let mut tools = Vec::new();
+        
+        // Iterate through paths
+        for (path, path_item) in &self.spec.paths.paths {
+            // Handle GET operations
+            if let Some(operation) = &path_item.get {
+                if let Some(operation_id) = &operation.operation_id {
+                    let tool = self.create_tool_from_operation(
+                        operation_id,
+                        "GET",
+                        path,
+                        operation,
+                    )?;
+                    tools.push(tool);
+                }
+            }
+            
+            // Handle POST operations
+            if let Some(operation) = &path_item.post {
+                if let Some(operation_id) = &operation.operation_id {
+                    let tool = self.create_tool_from_operation(
+                        operation_id,
+                        "POST",
+                        path,
+                        operation,
+                    )?;
+                    tools.push(tool);
+                }
+            }
+            
+            // Handle PUT operations
+            if let Some(operation) = &path_item.put {
+                if let Some(operation_id) = &operation.operation_id {
+                    let tool = self.create_tool_from_operation(
+                        operation_id,
+                        "PUT",
+                        path,
+                        operation,
+                    )?;
+                    tools.push(tool);
+                }
+            }
+            
+            // Handle DELETE operations
+            if let Some(operation) = &path_item.delete {
+                if let Some(operation_id) = &operation.operation_id {
+                    let tool = self.create_tool_from_operation(
+                        operation_id,
+                        "DELETE",
+                        path,
+                        operation,
+                    )?;
+                    tools.push(tool);
+                }
+            }
+            
+            // Handle PATCH operations
+            if let Some(operation) = &path_item.patch {
+                if let Some(operation_id) = &operation.operation_id {
+                    let tool = self.create_tool_from_operation(
+                        operation_id,
+                        "PATCH",
+                        path,
+                        operation,
+                    )?;
+                    tools.push(tool);
+                }
+            }
+        }
+        
+        Ok(tools)
     }
 
     fn get_server_prefix(&self) -> Result<String, ParseError> {
