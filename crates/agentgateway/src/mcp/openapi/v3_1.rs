@@ -246,7 +246,67 @@ impl OpenAPI31Specification {
             normalized["items"] = self.normalize_schema_v3_1(items)?;
         }
         
+        // Handle JSON Schema Draft 2020-12 composition keywords
+        if let Some(any_of) = schema.get("anyOf") {
+            normalized["anyOf"] = self.normalize_schema_composition(any_of, "anyOf")?;
+        }
+        
+        if let Some(one_of) = schema.get("oneOf") {
+            normalized["oneOf"] = self.normalize_schema_composition(one_of, "oneOf")?;
+        }
+        
+        if let Some(all_of) = schema.get("allOf") {
+            normalized["allOf"] = self.normalize_schema_composition(all_of, "allOf")?;
+        }
+        
+        // Handle additional Draft 2020-12 validation keywords
+        if let Some(pattern) = schema.get("pattern") {
+            normalized["pattern"] = pattern.clone();
+        }
+        
+        if let Some(min_length) = schema.get("minLength") {
+            normalized["minLength"] = min_length.clone();
+        }
+        
+        if let Some(max_length) = schema.get("maxLength") {
+            normalized["maxLength"] = max_length.clone();
+        }
+        
+        if let Some(min_items) = schema.get("minItems") {
+            normalized["minItems"] = min_items.clone();
+        }
+        
+        if let Some(max_items) = schema.get("maxItems") {
+            normalized["maxItems"] = max_items.clone();
+        }
+        
+        if let Some(unique_items) = schema.get("uniqueItems") {
+            normalized["uniqueItems"] = unique_items.clone();
+        }
+        
+        if let Some(multiple_of) = schema.get("multipleOf") {
+            normalized["multipleOf"] = multiple_of.clone();
+        }
+        
         Ok(normalized)
+    }
+    
+    /// Handle schema composition keywords (anyOf, oneOf, allOf)
+    fn normalize_schema_composition(&self, composition: &Value, composition_type: &str) -> Result<Value, ParseError> {
+        if let Some(schemas_array) = composition.as_array() {
+            let mut normalized_schemas = Vec::new();
+            
+            for schema in schemas_array {
+                let normalized_schema = self.normalize_schema_v3_1(schema)?;
+                normalized_schemas.push(normalized_schema);
+            }
+            
+            println!("✓ Normalized {} composition with {} schemas", composition_type, normalized_schemas.len());
+            Ok(json!(normalized_schemas))
+        } else {
+            // If not an array, return as-is
+            Ok(composition.clone())
+        }
     }
     
     /// Process an OpenAPI 3.1 schema and convert it to properties and required fields
