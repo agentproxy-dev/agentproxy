@@ -65,6 +65,7 @@ notify-debouncer-full.workspace = true
 num_cpus.workspace = true
 once_cell.workspace = true
 openapiv3.workspace = true
+openapiv3_1.workspace = true
 opentelemetry.workspace = true
 opentelemetry-otlp.workspace = true
 opentelemetry_sdk.workspace = true
