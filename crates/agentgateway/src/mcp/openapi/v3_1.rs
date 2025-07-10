@@ -29,33 +29,44 @@ impl OpenAPI31Specification {
         path: &str,
         operation: &openapiv3_1::path::Operation,
     ) -> Result<(Tool, UpstreamOpenAPICall), ParseError> {
-        // For now, create a simple tool with minimal schema
-        // This is a basic implementation that will be enhanced as we learn more about the API
-        
         let description = operation.summary
             .as_ref()
             .or(operation.description.as_ref())
             .unwrap_or(&format!("{} {}", method, path))
             .clone();
         
-        // Create a basic JSON schema for the tool
-        // For now, we'll create a simple schema that accepts any parameters
-        let input_schema = json!({
-            "type": "object",
-            "properties": {},
-            "required": []
-        });
+        // Process parameters to create input schema
+        let mut properties = serde_json::Map::new();
+        let mut required = Vec::new();
         
-        // Convert to JsonObject (Map<String, Value>)
-        let input_schema_object = input_schema.as_object()
-            .ok_or(ParseError::UnsupportedReference("Failed to create schema object".to_string()))?
-            .clone();
+        if let Some(parameters) = &operation.parameters {
+            for param in parameters {
+                match self.process_parameter_v3_1(param)? {
+                    Some((name, schema, is_required)) => {
+                        if is_required {
+                            required.push(name.clone());
+                        }
+                        properties.insert(name, schema);
+                    },
+                    None => {
+                        // Skip parameters we can't process yet
+                        continue;
+                    }
+                }
+            }
+        }
+        
+        // Create the input schema
+        let mut input_schema = serde_json::Map::new();
+        input_schema.insert("type".to_string(), json!("object"));
+        input_schema.insert("properties".to_string(), json!(properties));
+        input_schema.insert("required".to_string(), json!(required));
         
         let tool = Tool {
             annotations: None,
             name: Cow::Owned(operation_id.to_string()),
             description: Some(Cow::Owned(description)),
-            input_schema: Arc::new(input_schema_object),
+            input_schema: Arc::new(input_schema),
         };
         
         let upstream = UpstreamOpenAPICall {
@@ -64,6 +75,74 @@ impl OpenAPI31Specification {
         };
         
         Ok((tool, upstream))
+    }
+    
+    /// Process an OpenAPI 3.1 parameter and convert it to a JSON schema property
+    fn process_parameter_v3_1(
+        &self,
+        parameter: &openapiv3_1::path::Parameter,
+    ) -> Result<Option<(String, Value, bool)>, ParseError> {
+        // Try to extract parameter information from the openapiv3_1 parameter structure
+        // We'll use serde serialization to understand the structure
+        
+        // Convert the parameter to JSON to examine its structure
+        let param_json = serde_json::to_value(parameter)
+            .map_err(|e| ParseError::SerdeError(e))?;
+        
+        // Try to extract common fields
+        let name = param_json.get("name")
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown_param")
+            .to_string();
+        
+        let required = param_json.get("required")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        
+        let description = param_json.get("description")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        
+        // Try to extract schema information
+        let mut param_schema = json!({
+            "type": "string"  // Default to string
+        });
+        
+        if let Some(schema) = param_json.get("schema") {
+            // Try to extract type from schema
+            if let Some(schema_type) = schema.get("type") {
+                param_schema["type"] = schema_type.clone();
+            }
+            
+            // Try to extract format
+            if let Some(format) = schema.get("format") {
+                param_schema["format"] = format.clone();
+            }
+            
+            // Try to extract enum values
+            if let Some(enum_vals) = schema.get("enum") {
+                param_schema["enum"] = enum_vals.clone();
+            }
+        }
+        
+        // Add description if available
+        if let Some(desc) = description {
+            param_schema["description"] = json!(desc);
+        }
+        
+        // Try to extract parameter location for debugging
+        let location = param_json.get("in")
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown");
+        
+        // Add location info to description for debugging
+        if let Some(existing_desc) = param_schema.get("description") {
+            param_schema["description"] = json!(format!("{} (in: {})", existing_desc.as_str().unwrap_or(""), location));
+        } else {
+            param_schema["description"] = json!(format!("Parameter in: {}", location));
+        }
+        
+        Ok(Some((name, param_schema, required)))
     }
     
     // TODO: Implement reference resolution methods when we implement the actual 3.1 parsing logic
