@@ -130,20 +130,8 @@ impl OpenAPI31Specification {
         });
         
         if let Some(schema) = param_json.get("schema") {
-            // Try to extract type from schema
-            if let Some(schema_type) = schema.get("type") {
-                param_schema["type"] = schema_type.clone();
-            }
-            
-            // Try to extract format
-            if let Some(format) = schema.get("format") {
-                param_schema["format"] = format.clone();
-            }
-            
-            // Try to extract enum values
-            if let Some(enum_vals) = schema.get("enum") {
-                param_schema["enum"] = enum_vals.clone();
-            }
+            // Process the schema with type array handling
+            param_schema = self.normalize_schema_v3_1(schema)?;
         }
         
         // Add description if available
@@ -198,6 +186,69 @@ impl OpenAPI31Specification {
         Ok(None)
     }
     
+    /// Convert OpenAPI 3.1 type arrays to compatible schema format
+    /// Handles: type: ["string", "null"] -> type: "string", nullable: true
+    fn normalize_schema_v3_1(&self, schema: &Value) -> Result<Value, ParseError> {
+        let mut normalized = schema.clone();
+        
+        // Handle type arrays (key 3.1 feature)
+        if let Some(type_value) = schema.get("type") {
+            if let Some(type_array) = type_value.as_array() {
+                // Convert type array to single type + nullable
+                let mut main_type = None;
+                let mut is_nullable = false;
+                
+                for type_item in type_array {
+                    if let Some(type_str) = type_item.as_str() {
+                        if type_str == "null" {
+                            is_nullable = true;
+                        } else {
+                            main_type = Some(type_str);
+                        }
+                    }
+                }
+                
+                // Set the main type and nullable flag
+                if let Some(main_type_str) = main_type {
+                    normalized["type"] = json!(main_type_str);
+                    if is_nullable {
+                        normalized["nullable"] = json!(true);
+                    }
+                    
+                    println!("✓ Converted type array {:?} to type: '{}', nullable: {}", 
+                             type_array, main_type_str, is_nullable);
+                } else if is_nullable {
+                    // Only null type found
+                    normalized["type"] = json!("null");
+                }
+            }
+        }
+        
+        // Copy other schema properties
+        if let Some(format) = schema.get("format") {
+            normalized["format"] = format.clone();
+        }
+        
+        if let Some(enum_vals) = schema.get("enum") {
+            normalized["enum"] = enum_vals.clone();
+        }
+        
+        if let Some(minimum) = schema.get("minimum") {
+            normalized["minimum"] = minimum.clone();
+        }
+        
+        if let Some(maximum) = schema.get("maximum") {
+            normalized["maximum"] = maximum.clone();
+        }
+        
+        if let Some(items) = schema.get("items") {
+            // Recursively normalize array items
+            normalized["items"] = self.normalize_schema_v3_1(items)?;
+        }
+        
+        Ok(normalized)
+    }
+    
     /// Process an OpenAPI 3.1 schema and convert it to properties and required fields
     fn process_schema_v3_1(
         &self,
@@ -213,7 +264,9 @@ impl OpenAPI31Specification {
                 if let Some(props) = schema.get("properties") {
                     if let Some(props_obj) = props.as_object() {
                         for (prop_name, prop_schema) in props_obj {
-                            properties.insert(prop_name.clone(), prop_schema.clone());
+                            // Normalize each property schema to handle type arrays
+                            let normalized_prop = self.normalize_schema_v3_1(prop_schema)?;
+                            properties.insert(prop_name.clone(), normalized_prop);
                         }
                     }
                 }
@@ -235,7 +288,8 @@ impl OpenAPI31Specification {
         
         // If not an object schema, treat the whole thing as a single property
         // This handles cases where the request body is a simple type
-        properties.insert("body".to_string(), schema.clone());
+        let normalized_schema = self.normalize_schema_v3_1(schema)?;
+        properties.insert("body".to_string(), normalized_schema);
         
         Ok(Some((properties, required)))
     }
