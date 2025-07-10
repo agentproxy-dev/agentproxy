@@ -1,0 +1,46 @@
+openapi: "3.1.0"
+info:
+  title: Test API with Type Arrays
+  version: "1.0.0"
+servers:
+  - url: https://api.example.com
+paths:
+  /items:
+    post:
+      operationId: createItem
+      summary: Create a new item
+      description: Create a new item with nullable fields
+      requestBody:
+        required: true
+        description: Item data to create
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  description: Item name (required)
+                description:
+                  type: ["string", "null"]
+                  description: Item description (nullable)
+                category:
+                  type: ["string", "null"]
+                  enum: ["electronics", "books", "clothing", null]
+                  description: Item category (nullable with enum)
+                price:
+                  type: ["number", "null"]
+                  minimum: 0
+                  description: Item price (nullable number)
+                tags:
+                  type: ["array", "null"]
+                  items:
+                    type: string
+                  description: Item tags (nullable array)
+      responses:
+        '201':
+          description: Item created successfully
+        '400':
+          description: Invalid item data
