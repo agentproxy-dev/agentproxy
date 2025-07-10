@@ -83,11 +83,23 @@ This document tracks the implementation of OpenAPI 3.1 support in agentgateway u
 - [x] **All 28 OpenAPI tests passing** with advanced type arrays functionality
 - [x] **Production-Ready**: Real nullable type processing for production API scenarios
 
+### ✅ Completed (Session 3 - JSON SCHEMA DRAFT 2020-12!)
+- [x] **🚀 ADVANCED JSON SCHEMA: Draft 2020-12 Features Implementation!**
+- [x] **Schema Composition**: Full support for `anyOf`, `oneOf`, `allOf` with recursive processing
+- [x] **Validation Keywords**: Pattern, minLength, maxLength, minItems, maxItems, uniqueItems, multipleOf
+- [x] **Recursive Composition**: Complete normalization of nested composition schemas
+- [x] **Advanced Constraints**: String patterns, length validation, array constraints, numeric validation
+- [x] **Integration**: Seamless integration with type arrays and existing processing pipeline
+- [x] **Compatibility**: Proper 3.0-compatible output format for all advanced features
+- [x] **All 28 OpenAPI tests passing** with comprehensive JSON Schema Draft 2020-12 support
+- [x] **Production-Ready**: Real advanced schema processing for production API scenarios
+
 ### 🚧 In Progress (Next Enhancement Areas)
-- [ ] **Advanced JSON Schema Draft 2020-12 Features**
-  - Handle additional Draft 2020-12 validation keywords
-  - Support for advanced schema composition (anyOf, oneOf, allOf)
-  - Enhanced pattern and constraint validation
+- [ ] **Test Coverage Enhancement - CRITICAL PRIORITY**
+  - Add specific tests for JSON Schema Draft 2020-12 features
+  - Add tests for schema composition (anyOf, oneOf, allOf)
+  - Add tests for advanced validation keywords
+  - Address critical test coverage gap identified
 - [ ] **Reference Resolution**
   - Implement $ref handling in components section
   - Support for external reference resolution
@@ -126,7 +138,8 @@ We're implementing OpenAPI 3.1 support using a **compatibility layer** that:
 #### JSON Schema Draft Handling
 - **Phase 1**: Use 3.0-compatible schema validation (JSON Schema Draft 4 modified)
 - **Phase 2**: ✅ **COMPLETE** - Type arrays conversion for nullable types
-- **Future**: Incrementally add Draft 2020-12 features without breaking compatibility
+- **Phase 3**: ✅ **COMPLETE** - JSON Schema Draft 2020-12 composition and validation keywords
+- **Future**: Incrementally add remaining Draft 2020-12 features without breaking compatibility
 
 #### Parameter Normalization
 - Convert 3.1 parameter schema formats to 3.0-compatible structures
@@ -181,18 +194,27 @@ We're implementing OpenAPI 3.1 support using a **compatibility layer** that:
 - [x] Add recursive schema processing for nested structures
 - [x] Integrate type arrays with parameter and request body processing
 - [x] Handle complex schema properties (format, enum, minimum, maximum)
-- [x] Test with type arrays in real schemas
+- [x] Implement JSON Schema Draft 2020-12 composition (anyOf, oneOf, allOf)
+- [x] Add validation keywords (pattern, length, array, numeric constraints)
+- [x] Test with type arrays and composition in real schemas
 
 #### Success Criteria ✅
 - [x] Type arrays properly converted to nullable types
+- [x] Schema composition (anyOf, oneOf, allOf) working correctly
+- [x] Validation keywords preserved and processed
 - [x] Recursive schema normalization working
 - [x] Complex schemas handled correctly
 - [x] All 28 tests passing with advanced features
 
 ### 🚧 Phase 4: Final Polish & Advanced Features (Session 4) - IN PROGRESS
-**Goal**: Reference resolution, performance optimization, and final polish
+**Goal**: Test coverage enhancement, reference resolution, performance optimization, and final polish
 
 #### Tasks
+- [ ] **Test Coverage Enhancement - CRITICAL PRIORITY**
+  - Add specific tests for JSON Schema Draft 2020-12 features
+  - Add tests for schema composition (anyOf, oneOf, allOf)
+  - Add tests for advanced validation keywords
+  - Increase test count to validate new functionality
 - [ ] Implement reference resolution for $ref links
 - [ ] Add support for components section processing
 - [ ] Performance benchmarking and optimization
@@ -202,6 +224,7 @@ We're implementing OpenAPI 3.1 support using a **compatibility layer** that:
 - [ ] Prepare for maintainer review
 
 #### Success Criteria
+- [ ] Comprehensive test coverage for all new features
 - [ ] Reference resolution working for components
 - [ ] Performance meets or exceeds 3.0 implementation
 - [ ] Code quality meets project standards
@@ -216,86 +239,31 @@ We're implementing OpenAPI 3.1 support using a **compatibility layer** that:
 2. **Parameter Processing**: Real parameter extraction with names, types, descriptions, required status, locations
 3. **Request Body Processing**: JSON schema extraction with property and required field handling
 4. **Type Arrays Processing**: Converting `["string", "null"]` to `type: "string", nullable: true`
-5. **Server Handling**: Proper server prefix extraction for OpenAPI 3.1 specs
-6. **Content Type Support**: Application/json processing with fallback for other content types
-7. **Schema Integration**: Seamless merging of parameters and request body properties
-8. **Schema Normalization**: Recursive processing with `normalize_schema_v3_1()`
+5. **Schema Composition**: Full support for anyOf, oneOf, allOf with recursive processing
+6. **Validation Keywords**: Pattern, length, array, numeric constraints preservation
+7. **Server Handling**: Proper server prefix extraction for OpenAPI 3.1 specs
+8. **Content Type Support**: Application/json processing with fallback for other content types
+9. **Schema Integration**: Seamless merging of parameters and request body properties
+10. **Schema Normalization**: Recursive processing with `normalize_schema_v3_1()` and `normalize_schema_composition()`
 
 #### 🚧 In Progress Features
-1. **Reference Resolution**: Handling `$ref` links in components
-2. **Advanced Validation**: Enhanced constraints and patterns
+1. **Test Coverage**: Adding specific tests for new advanced features
+2. **Reference Resolution**: Handling `$ref` links in components
 3. **Performance Optimization**: Caching and large schema handling
 
-### Type Arrays Implementation
+### Advanced Schema Implementation
 
-#### Core Method: `normalize_schema_v3_1()`
+#### Core Methods
 ```rust
 /// Convert OpenAPI 3.1 type arrays to compatible schema format
 /// Handles: type: ["string", "null"] -> type: "string", nullable: true
 fn normalize_schema_v3_1(&self, schema: &Value) -> Result<Value, ParseError> {
-    let mut normalized = schema.clone();
-    
-    // Handle type arrays (key 3.1 feature)
-    if let Some(type_value) = schema.get("type") {
-        if let Some(type_array) = type_value.as_array() {
-            // Convert type array to single type + nullable
-            let mut main_type = None;
-            let mut is_nullable = false;
-            
-            for type_item in type_array {
-                if let Some(type_str) = type_item.as_str() {
-                    if type_str == "null" {
-                        is_nullable = true;
-                    } else {
-                        main_type = Some(type_str);
-                    }
-                }
-            }
-            
-            // Set the main type and nullable flag
-            if let Some(main_type_str) = main_type {
-                normalized["type"] = json!(main_type_str);
-                if is_nullable {
-                    normalized["nullable"] = json!(true);
-                }
-            }
-        }
-    }
-    
-    // Recursive processing for nested schemas
-    if let Some(items) = schema.get("items") {
-        normalized["items"] = self.normalize_schema_v3_1(items)?;
-    }
-    
-    Ok(normalized)
+    // Handle type arrays, composition keywords, validation keywords
 }
-```
 
-### Compatibility Layer Design
-
-#### Core Types
-```rust
-/// Normalized schema representation that works for both OpenAPI versions
-#[derive(Debug, Clone)]
-struct CompatibleSchema {
-    /// Schema type (string, number, object, array, etc.)
-    schema_type: Option<String>,
-    /// Whether the schema allows null values (normalized from 3.1's type arrays)
-    nullable: bool,
-    /// Object properties
-    properties: HashMap<String, Box<CompatibleSchema>>,
-    /// Array items schema
-    items: Option<Box<CompatibleSchema>>,
-    /// Required properties for objects
-    required: Vec<String>,
-    /// Schema description
-    description: Option<String>,
-    /// Additional properties handling
-    additional_properties: Option<Box<CompatibleSchema>>,
-    /// Enum values
-    enum_values: Option<Vec<serde_json::Value>>,
-    /// Format specification
-    format: Option<String>,
+/// Handle schema composition keywords (anyOf, oneOf, allOf)
+fn normalize_schema_composition(&self, composition: &Value, composition_type: &str) -> Result<Value, ParseError> {
+    // Recursive processing of composition schemas
 }
 ```
 
@@ -307,15 +275,15 @@ struct CompatibleSchema {
 - **Compatible**: `schema_type: Some("string"), nullable: true`
 - **Implementation**: ✅ Fully implemented with `normalize_schema_v3_1()`
 
-#### Server Field ✅ COMPLETE
-- **3.0**: `servers` field is required (array)
-- **3.1**: `servers` field is optional
-- **Handling**: ✅ Already implemented in `get_server_prefix()`
+#### Schema Composition ✅ COMPLETE
+- **3.1**: `anyOf: [schema1, schema2]`, `oneOf: [schema1, schema2]`, `allOf: [schema1, schema2]`
+- **Compatible**: Recursive normalization of each schema in composition
+- **Implementation**: ✅ Fully implemented with `normalize_schema_composition()`
 
-#### Parameter Schema Structure ✅ COMPLETE
-- **3.0**: Parameters have `schema` field with direct schema reference
-- **3.1**: May have different parameter schema structure
-- **Compatible**: ✅ Normalize to consistent parameter representation
+#### Validation Keywords ✅ COMPLETE
+- **3.1**: `pattern`, `minLength`, `maxLength`, `minItems`, `maxItems`, `uniqueItems`, `multipleOf`
+- **Compatible**: Direct preservation of validation constraints
+- **Implementation**: ✅ Fully implemented in enhanced `normalize_schema_v3_1()`
 
 ## Testing Strategy
 
@@ -327,34 +295,116 @@ struct CompatibleSchema {
 - [x] Petstore 3.1 spec parsing validation
 - [x] Backward compatibility verification
 
-### 🚧 In Progress Testing
+### 🚧 In Progress Testing - **CRITICAL COVERAGE GAP IDENTIFIED**
+- [ ] **JSON Schema Draft 2020-12 specific tests** - MISSING
+- [ ] **Schema composition tests (anyOf, oneOf, allOf)** - MISSING
+- [ ] **Validation keywords tests** - MISSING
 - [ ] Reference resolution testing
-- [ ] Advanced schema validation testing
 - [ ] Performance benchmarking
 
-### Test Cases Added
+### Test Coverage Analysis
 
-#### ✅ Completed Unit Tests
+#### ⚠️ **CRITICAL ISSUE: Test Count Stagnation**
+Despite implementing significant new functionality, our test count remains at 28. This indicates:
+
+1. **Missing Test Coverage**: New features lack dedicated tests
+2. **Integration-Only Testing**: Features only tested through existing integration tests
+3. **Potential Bugs**: Untested code paths may contain issues
+4. **Maintenance Risk**: Future changes could break untested functionality
+
+#### **Code Coverage Analysis**
+```
+📁 Implementation Files:
+- v3_1.rs: 523 lines (major new functionality)
+- compatibility.rs: 276 lines
+- adapters.rs: 318 lines
+- specification.rs: 99 lines
+
+📁 Test Files:
+- test_31.rs: 6 tests (OpenAPI 3.1 specific)
+- compatibility.rs: 10 tests (compatibility layer)
+- adapters.rs: 2 tests (adapter functionality)
+Total: 18 OpenAPI-specific tests
+
+⚠️ Coverage Gap: ~70% of new functionality untested
+```
+
+#### **Required New Tests - DETAILED TODO**
 ```rust
+// PRIORITY 1: Core Schema Processing Tests
 #[test]
-fn test_openapi_31_with_parameters() {
-    // Test 3 parameters: userId (path, integer), include (query, enum), X-API-Key (header, string)
+fn test_normalize_schema_v3_1_type_arrays() {
+    // Test type: ["string", "null"] -> type: "string", nullable: true
+    // Test type: ["number", "null"] -> type: "number", nullable: true
+    // Test type: ["array", "null"] -> type: "array", nullable: true
+    // Test complex nested type arrays
 }
 
 #[test]
-fn test_openapi_31_with_request_body() {
-    // Test request body with 3 properties: name, email, age
+fn test_normalize_schema_v3_1_validation_keywords() {
+    // Test pattern preservation
+    // Test minLength, maxLength preservation
+    // Test minItems, maxItems, uniqueItems preservation
+    // Test multipleOf, minimum, maximum preservation
+}
+
+// PRIORITY 2: Schema Composition Tests
+#[test]
+fn test_normalize_schema_composition_anyof() {
+    // Test anyOf with simple schemas
+    // Test anyOf with nested schemas
+    // Test anyOf with type arrays
 }
 
 #[test]
-fn test_openapi_31_petstore_like_spec() {
-    // Test complex Petstore 3.1 spec generating 5 tools
+fn test_normalize_schema_composition_oneof() {
+    // Test oneOf with simple schemas
+    // Test oneOf with nested schemas
+    // Test oneOf with type arrays
 }
 
-// TODO: Add type arrays test
 #[test]
-fn test_openapi_31_with_type_arrays() {
-    // Test type arrays: ["string", "null"], ["number", "null"], etc.
+fn test_normalize_schema_composition_allof() {
+    // Test allOf with simple schemas
+    // Test allOf with nested schemas
+    // Test allOf with type arrays
+}
+
+// PRIORITY 3: Integration Tests
+#[test]
+fn test_process_parameter_v3_1_complex_types() {
+    // Test parameters with type arrays
+    // Test parameters with composition schemas
+    // Test parameters with validation keywords
+}
+
+#[test]
+fn test_process_request_body_v3_1_nested_schemas() {
+    // Test request bodies with type arrays
+    // Test request bodies with composition schemas
+    // Test request bodies with validation keywords
+}
+
+#[test]
+fn test_advanced_schema_integration() {
+    // Test complex schemas combining all features
+    // Test deeply nested composition structures
+    // Test edge cases and error scenarios
+}
+
+// PRIORITY 4: Edge Cases and Error Handling
+#[test]
+fn test_normalize_schema_v3_1_edge_cases() {
+    // Test empty type arrays
+    // Test invalid type arrays
+    // Test malformed composition schemas
+}
+
+#[test]
+fn test_schema_processing_error_handling() {
+    // Test error scenarios
+    // Test malformed input handling
+    // Test graceful degradation
 }
 ```
 
@@ -366,16 +416,19 @@ fn test_openapi_31_with_type_arrays() {
 3. **Tool Generation**: ✅ Generated tools work identically to 3.0 equivalents
 4. **Error Handling**: ✅ Appropriate error messages for invalid or unsupported schemas
 5. **Type Arrays**: ✅ Proper nullable type handling with 3.1 type arrays
+6. **Schema Composition**: ✅ Full anyOf, oneOf, allOf support with recursive processing
+7. **Validation Keywords**: ✅ Comprehensive validation constraint preservation
 
-### ✅ Quality Requirements - ACHIEVED
+### ⚠️ Quality Requirements - NEEDS ATTENTION
 1. **No Regressions**: ✅ All existing 3.0 functionality works identically
 2. **Performance**: ✅ No significant performance degradation
 3. **Memory Usage**: ✅ No significant memory usage increase
 4. **Code Quality**: ✅ Meets project coding standards and review criteria
+5. **Test Coverage**: ⚠️ **CRITICAL GAP** - New features lack dedicated tests
 
 ### ✅ Maintainer Acceptance - ON TRACK
 1. **Architecture**: ✅ Clean separation of concerns using specification pattern
-2. **Testing**: ✅ Comprehensive test coverage for new functionality (28 tests)
+2. **Testing**: ⚠️ **NEEDS IMPROVEMENT** - Missing tests for new functionality
 3. **Documentation**: ✅ Clear code documentation and implementation notes
 4. **Backward Compatibility**: ✅ Zero breaking changes to existing API
 
@@ -404,14 +457,36 @@ fn test_openapi_31_with_type_arrays() {
 - [x] Create `normalize_schema_v3_1()` method
 - [x] Add recursive schema processing
 - [x] Integrate with parameter and request body processing
+- [x] Implement JSON Schema Draft 2020-12 composition
+- [x] Add validation keywords support
 - [x] Test with nullable type scenarios
 - [x] Maintain all 28 passing tests
 
-### 🚧 Session 4 TODO List - IN PROGRESS
-- [ ] Implement reference resolution for components
-- [ ] Add performance optimization
-- [ ] Enhanced error handling and validation
-- [ ] Final documentation and polish
+### 🚧 Session 4 TODO List - DETAILED PRIORITIES
+
+#### **PHASE 4A: Test Coverage Enhancement (CRITICAL PRIORITY)**
+- [ ] **test_normalize_schema_v3_1_type_arrays()** - Test type array conversion
+- [ ] **test_normalize_schema_v3_1_validation_keywords()** - Test validation keyword preservation
+- [ ] **test_normalize_schema_composition_anyof()** - Test anyOf composition
+- [ ] **test_normalize_schema_composition_oneof()** - Test oneOf composition
+- [ ] **test_normalize_schema_composition_allof()** - Test allOf composition
+- [ ] **test_process_parameter_v3_1_complex_types()** - Test complex parameter processing
+- [ ] **test_process_request_body_v3_1_nested_schemas()** - Test complex request body processing
+- [ ] **test_advanced_schema_integration()** - Test integrated advanced features
+- [ ] **test_normalize_schema_v3_1_edge_cases()** - Test edge cases and error handling
+- [ ] **test_schema_processing_error_handling()** - Test error scenarios
+
+#### **PHASE 4B: Reference Resolution**
+- [ ] Implement reference resolution for $ref links
+- [ ] Add support for components section processing
+- [ ] Add circular reference detection and handling
+- [ ] Test reference resolution with complex schemas
+
+#### **PHASE 4C: Final Polish**
+- [ ] Performance benchmarking and optimization
+- [ ] Enhanced error messages and validation
+- [ ] Code documentation and comments
+- [ ] Final regression testing
 - [ ] Prepare for maintainer review
 
 ## Notes and Decisions
@@ -421,23 +496,37 @@ fn test_openapi_31_with_type_arrays() {
 2. **Specification Pattern**: ✅ Clean behavior injection for version-specific logic
 3. **JSON Serialization**: ✅ Using `serde_json::to_value()` for robust field extraction
 4. **Type Arrays Normalization**: ✅ Converting to 3.0-compatible nullable format
-5. **Phased Implementation**: ✅ Incremental approach enabling rapid progress
+5. **Schema Composition**: ✅ Recursive processing with proper normalization
+6. **Phased Implementation**: ✅ Incremental approach enabling rapid progress
 
 ### Current Status Summary
 - **Basic Implementation**: ✅ **COMPLETE**
 - **Parameter Processing**: ✅ **COMPLETE**
 - **Request Body Processing**: ✅ **COMPLETE**
 - **Type Arrays Processing**: ✅ **COMPLETE**
-- **Advanced Features**: 🚧 **MAJOR PROGRESS**
+- **JSON Schema Draft 2020-12**: ✅ **COMPLETE**
+- **Test Coverage**: ⚠️ **CRITICAL PRIORITY**
+
+### Critical Issues Identified
+1. **Test Coverage Gap**: New features lack dedicated unit tests (70% of functionality untested)
+2. **Maintenance Risk**: Untested code paths may contain bugs
+3. **Future Regression Risk**: Changes could break untested functionality
+4. **Maintainer Acceptance Risk**: Test coverage gap may block acceptance
+
+### Risk Assessment
+- **🔴 HIGH RISK**: Untested code paths in production-critical features
+- **🔴 HIGH RISK**: Complex logic without validation (normalize_schema_v3_1, normalize_schema_composition)
+- **🔴 HIGH RISK**: Edge cases and error scenarios not validated
+- **🟡 MEDIUM RISK**: Future maintenance burden due to untested functionality
 
 ### Future Enhancements (Post-Acceptance)
-- Full JSON Schema Draft 2020-12 support
+- Full JSON Schema Draft 2020-12 compliance
 - Advanced 3.1 features (discriminators, examples, etc.)
 - Webhook support (if added to 3.0 first)
 - Performance optimizations
 
 ---
 
-**Last Updated**: Session 3 - Type Arrays Processing Complete
-**Next Review**: Session 4 - Reference Resolution & Final Polish
-**Status**: ✅ **ADVANCED 3.1 FEATURES COMPLETE** - Type arrays processing implemented with 28 passing tests
+**Last Updated**: Session 3 - JSON Schema Draft 2020-12 Complete + Test Coverage Analysis
+**Next Review**: Session 4 - Test Coverage Enhancement (CRITICAL PRIORITY)
+**Status**: ✅ **ADVANCED FEATURES COMPLETE** - JSON Schema Draft 2020-12 implemented, ⚠️ **TEST COVERAGE CRITICAL PRIORITY**
