@@ -23,13 +23,13 @@
     </a>
   </div>
   <div>
-    The <strong>first complete</strong> connectivity solution for Agentic AI enables both agent-to-agent and agent-to-tool communication across any environment.
+    The <strong>first complete</strong> connectivity solution for Agentic AI.
   </div>
 </div>
 
 ---
 
-Agentgateway is an open source data plane optimized for agentic AI connectivity within or across any agent framework or environment. Agentgateway provides drop-in security, observability, and governance for agent-to-agent and agent-to-tool communication and supports leading interoperable protocols, including [Agent2Agent (A2A)](https://developers.googleblog.com/en/a2a-a-new-era-of-agent-interoperability/) and [Model Context Protocol (MCP)](https://modelcontextprotocol.io/introduction).
+**Agentgateway** is an open source data plane optimized for agentic AI connectivity within or across any agent framework or environment. Agentgateway provides drop-in security, observability, and governance for agent-to-agent and agent-to-tool communication and supports leading interoperable protocols, including [Agent2Agent (A2A)](https://developers.googleblog.com/en/a2a-a-new-era-of-agent-interoperability/) and [Model Context Protocol (MCP)](https://modelcontextprotocol.io/introduction).
 
 <br> 
 <div align="center">
@@ -49,41 +49,23 @@ Agentgateway is an open source data plane optimized for agentic AI connectivity 
 
 # Getting Started 
 
-To get started with agentgateway, please check out the [Getting Started Guide](https://agentgateway.dev/docs/quickstart ).
+To get started with agentgateway, please check out the [Getting Started Guide](https://agentgateway.dev/docs/quickstart).
 
-## Build from Source
+# Documentation
 
-Requirements:
-- Rust 1.86+
-- npm 10+
-
-Build the agentgateway UI:
-
-```bash
-cd ui
-npm install
-npm run build
-```
-
-Build the agentgateway binary:
-
-```bash
-cd ..
-make build
-```
-
-If you encounter an authentication error to the schemars repo in GitHub, try set `CARGO_NET_GIT_FETCH_WITH_CLI=true` and rerun `make build`.
-
-Run the agentgateway binary:
-
-```bash
-./target/release/agentgateway
-```
-Open your browser and navigate to `http://localhost:19000/ui` to see the agentgateway UI.
+The agentgateway documentation is available at [agentgateway.dev/docs](https://agentgateway.dev/docs/). Agentgateway has a built-in UI for you to explore connecting agent-to-agent or agent-to-tool :
 
 <div align="center">
   <img alt="agentgateway UI" src="img/UI-homepage.png" width="600">
 </div>
+
+# Contributing
+
+For instructions on how to contribute to the agentgateway project, see the [CONTRIBUTION.md](CONTRIBUTION.md) file.
+
+## Roadmap
+
+`agentgateway` is currently in active development. If you want a feature missing, open an issue in our [Github repo])(https://github.com/agentgateway/agentgateway/issues).
 
 # Contributors
 
