@@ -666,7 +666,7 @@ paths:
         
         // Check second schema in anyOf
         assert_eq!(anyof_array[1]["type"], "number");
-        assert_eq!(anyof_array[1]["minimum"], 0);
+        assert_eq!(anyof_array[1]["minimum"], json!(0));
         
         // Test anyOf with type arrays
         let anyof_with_nullable = json!({
@@ -800,6 +800,354 @@ paths:
         assert_eq!(props["timestamp"]["format"], "date-time");
         
         println!("✓ allOf composition test passed!");
+    }
+
+    #[test]
+    fn test_process_parameter_v3_1_complex_types() {
+        // Test complex parameter processing with advanced 3.1 features
+        let spec = create_test_spec();
+        let openapi_31 = OpenAPI31Specification::new(Arc::new(spec));
+        
+        // Test parameter with type arrays
+        let param_with_type_array = json!({
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "description": "Filter by status",
+            "schema": {
+                "type": ["string", "null"],
+                "enum": ["active", "inactive", "pending"]
+            }
+        });
+        
+        // Convert to parameter struct for processing
+        let param: openapiv3_1::path::Parameter = serde_json::from_value(param_with_type_array)
+            .expect("Should parse parameter");
+        
+        let result = openapi_31.process_parameter_v3_1(&param).unwrap();
+        assert!(result.is_some());
+        
+        let (name, schema, required) = result.unwrap();
+        assert_eq!(name, "status");
+        assert_eq!(required, false);
+        assert_eq!(schema["type"], "string");
+        assert_eq!(schema["nullable"], true);
+        assert_eq!(schema["enum"], json!(["active", "inactive", "pending"]));
+        
+        // Test parameter with composition schema
+        let param_with_composition = json!({
+            "name": "filter",
+            "in": "query",
+            "required": true,
+            "description": "Complex filter parameter",
+            "schema": {
+                "anyOf": [
+                    {
+                        "type": "string",
+                        "pattern": "^[A-Z]+$"
+                    },
+                    {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 100
+                    }
+                ]
+            }
+        });
+        
+        let param: openapiv3_1::path::Parameter = serde_json::from_value(param_with_composition)
+            .expect("Should parse parameter");
+        
+        let result = openapi_31.process_parameter_v3_1(&param).unwrap();
+        assert!(result.is_some());
+        
+        let (name, schema, required) = result.unwrap();
+        assert_eq!(name, "filter");
+        assert_eq!(required, true);
+        assert!(schema["anyOf"].is_array());
+        
+        let anyof_array = schema["anyOf"].as_array().unwrap();
+        assert_eq!(anyof_array.len(), 2);
+        assert_eq!(anyof_array[0]["type"], "string");
+        assert_eq!(anyof_array[0]["pattern"], "^[A-Z]+$");
+        assert_eq!(anyof_array[1]["type"], "number");
+        assert_eq!(anyof_array[1]["minimum"], json!(0));
+        
+        println!("✓ Complex parameter processing test passed!");
+    }
+
+    #[test]
+    fn test_process_request_body_v3_1_nested_schemas() {
+        // Test complex request body processing with nested schemas
+        let spec = create_test_spec();
+        let openapi_31 = OpenAPI31Specification::new(Arc::new(spec));
+        
+        // Test request body with nested type arrays
+        let request_body_with_nested = json!({
+            "required": true,
+            "description": "Complex nested request body",
+            "content": {
+                "application/json": {
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "user": {
+                                "type": "object",
+                                "properties": {
+                                    "name": {
+                                        "type": ["string", "null"],
+                                        "minLength": 1
+                                    },
+                                    "email": {
+                                        "type": "string",
+                                        "format": "email"
+                                    },
+                                    "preferences": {
+                                        "anyOf": [
+                                            {
+                                                "type": "object",
+                                                "properties": {
+                                                    "theme": {
+                                                        "type": "string",
+                                                        "enum": ["light", "dark"]
+                                                    }
+                                                }
+                                            },
+                                            {
+                                                "type": ["array", "null"],
+                                                "items": {
+                                                    "type": "string"
+                                                }
+                                            }
+                                        ]
+                                    }
+                                },
+                                "required": ["email"]
+                            },
+                            "metadata": {
+                                "type": ["object", "null"],
+                                "additionalProperties": true
+                            }
+                        },
+                        "required": ["user"]
+                    }
+                }
+            }
+        });
+        
+        let request_body: openapiv3_1::request_body::RequestBody = 
+            serde_json::from_value(request_body_with_nested)
+                .expect("Should parse request body");
+        
+        let result = openapi_31.process_request_body_v3_1(&request_body).unwrap();
+        assert!(result.is_some());
+        
+        let (properties, required) = result.unwrap();
+        
+        // Check that we have the user property
+        assert!(properties.contains_key("user"));
+        assert!(required.contains(&"user".to_string()));
+        
+        // Check nested structure processing
+        let user_prop = &properties["user"];
+        assert_eq!(user_prop["type"], "object");
+        
+        if let Some(user_props) = user_prop["properties"].as_object() {
+            // Check that nested type arrays are processed
+            if let Some(name_prop) = user_props.get("name") {
+                assert_eq!(name_prop["type"], "string");
+                assert_eq!(name_prop["nullable"], true);
+                assert_eq!(name_prop["minLength"], 1);
+            }
+            
+            // Check that composition schemas are processed
+            if let Some(prefs_prop) = user_props.get("preferences") {
+                assert!(prefs_prop["anyOf"].is_array());
+            }
+        }
+        
+        // Check metadata with type arrays
+        if let Some(metadata_prop) = properties.get("metadata") {
+            assert_eq!(metadata_prop["type"], "object");
+            assert_eq!(metadata_prop["nullable"], true);
+        }
+        
+        println!("✓ Nested request body processing test passed!");
+    }
+
+    #[test]
+    fn test_advanced_schema_integration() {
+        // Test integration of all advanced features together
+        let spec = create_test_spec();
+        let openapi_31 = OpenAPI31Specification::new(Arc::new(spec));
+        
+        // Complex schema combining type arrays, composition, and validation keywords
+        let complex_schema = json!({
+            "oneOf": [
+                {
+                    "type": "object",
+                    "properties": {
+                        "stringField": {
+                            "type": ["string", "null"],
+                            "pattern": "^[A-Za-z0-9]+$",
+                            "minLength": 3,
+                            "maxLength": 50
+                        },
+                        "numberField": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1000,
+                            "multipleOf": 5
+                        }
+                    },
+                    "required": ["stringField"]
+                },
+                {
+                    "type": "object",
+                    "properties": {
+                        "arrayField": {
+                            "type": ["array", "null"],
+                            "items": {
+                                "anyOf": [
+                                    {
+                                        "type": ["string", "null"],
+                                        "enum": ["option1", "option2", "option3"]
+                                    },
+                                    {
+                                        "type": "number",
+                                        "minimum": 1
+                                    }
+                                ]
+                            },
+                            "minItems": 1,
+                            "maxItems": 10,
+                            "uniqueItems": true
+                        }
+                    },
+                    "required": ["arrayField"]
+                }
+            ]
+        });
+        
+        let result = openapi_31.normalize_schema_v3_1(&complex_schema).unwrap();
+        
+        // Verify oneOf structure is preserved
+        assert!(result["oneOf"].is_array());
+        let oneof_array = result["oneOf"].as_array().unwrap();
+        assert_eq!(oneof_array.len(), 2);
+        
+        // Check first oneOf option
+        let first_option = &oneof_array[0];
+        assert_eq!(first_option["type"], "object");
+        
+        if let Some(props) = first_option["properties"].as_object() {
+            // Check stringField with type array and validation keywords
+            if let Some(string_field) = props.get("stringField") {
+                assert_eq!(string_field["type"], "string");
+                assert_eq!(string_field["nullable"], true);
+                assert_eq!(string_field["pattern"], "^[A-Za-z0-9]+$");
+                assert_eq!(string_field["minLength"], 3);
+                assert_eq!(string_field["maxLength"], 50);
+            }
+            
+            // Check numberField with validation keywords
+            if let Some(number_field) = props.get("numberField") {
+                assert_eq!(number_field["type"], "number");
+                assert_eq!(number_field["minimum"], 0);
+                assert_eq!(number_field["maximum"], 1000);
+                assert_eq!(number_field["multipleOf"], 5);
+            }
+        }
+        
+        // Check second oneOf option
+        let second_option = &oneof_array[1];
+        if let Some(props) = second_option["properties"].as_object() {
+            // Check arrayField with type array and nested composition
+            if let Some(array_field) = props.get("arrayField") {
+                assert_eq!(array_field["type"], "array");
+                assert_eq!(array_field["nullable"], true);
+                assert_eq!(array_field["minItems"], 1);
+                assert_eq!(array_field["maxItems"], 10);
+                assert_eq!(array_field["uniqueItems"], true);
+                
+                // Check nested anyOf in items
+                if let Some(items) = array_field.get("items") {
+                    assert!(items["anyOf"].is_array());
+                    let items_anyof = items["anyOf"].as_array().unwrap();
+                    
+                    // Check first anyOf option (string with type array and enum)
+                    assert_eq!(items_anyof[0]["type"], "string");
+                    assert_eq!(items_anyof[0]["nullable"], true);
+                    assert_eq!(items_anyof[0]["enum"], json!(["option1", "option2", "option3"]));
+                    
+                    // Check second anyOf option (number with validation)
+                    assert_eq!(items_anyof[1]["type"], "number");
+                    assert_eq!(items_anyof[1]["minimum"], 1);
+                }
+            }
+        }
+        
+        println!("✓ Advanced schema integration test passed!");
+    }
+
+    #[test]
+    fn test_normalize_schema_v3_1_edge_cases() {
+        // Test edge cases and error scenarios
+        let spec = create_test_spec();
+        let openapi_31 = OpenAPI31Specification::new(Arc::new(spec));
+        
+        // Test empty type array (should handle gracefully)
+        let empty_type_array = json!({
+            "type": [],
+            "description": "Empty type array"
+        });
+        
+        let result = openapi_31.normalize_schema_v3_1(&empty_type_array);
+        assert!(result.is_ok());
+        let normalized = result.unwrap();
+        assert_eq!(normalized["description"], "Empty type array");
+        
+        // Test single null type
+        let null_only = json!({
+            "type": ["null"],
+            "description": "Null only type"
+        });
+        
+        let result = openapi_31.normalize_schema_v3_1(&null_only).unwrap();
+        assert_eq!(result["type"], "null");
+        assert_eq!(result["description"], "Null only type");
+        
+        // Test multiple non-null types (should take first)
+        let multiple_types = json!({
+            "type": ["string", "number", "boolean"],
+            "description": "Multiple types"
+        });
+        
+        let result = openapi_31.normalize_schema_v3_1(&multiple_types).unwrap();
+        assert_eq!(result["type"], "string");
+        assert_eq!(result["description"], "Multiple types");
+        
+        // Test schema without type field
+        let no_type = json!({
+            "description": "No type field",
+            "pattern": "^test$"
+        });
+        
+        let result = openapi_31.normalize_schema_v3_1(&no_type).unwrap();
+        assert_eq!(result["description"], "No type field");
+        assert_eq!(result["pattern"], "^test$");
+        
+        // Test empty composition arrays
+        let empty_anyof = json!({
+            "anyOf": [],
+            "description": "Empty anyOf"
+        });
+        
+        let result = openapi_31.normalize_schema_v3_1(&empty_anyof).unwrap();
+        assert!(result["anyOf"].is_array());
+        assert_eq!(result["anyOf"].as_array().unwrap().len(), 0);
+        
+        println!("✓ Edge cases test passed!");
     }
 
     // Helper function to create a test spec

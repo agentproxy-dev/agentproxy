@@ -99,7 +99,7 @@ impl OpenAPI31Specification {
     }
     
     /// Process an OpenAPI 3.1 parameter and convert it to a JSON schema property
-    fn process_parameter_v3_1(
+    pub fn process_parameter_v3_1(
         &self,
         parameter: &openapiv3_1::path::Parameter,
     ) -> Result<Option<(String, Value, bool)>, ParseError> {
@@ -155,7 +155,7 @@ impl OpenAPI31Specification {
     }
     
     /// Process an OpenAPI 3.1 request body and convert it to JSON schema properties
-    fn process_request_body_v3_1(
+    pub fn process_request_body_v3_1(
         &self,
         request_body: &openapiv3_1::request_body::RequestBody,
     ) -> Result<Option<(serde_json::Map<String, Value>, Vec<String>)>, ParseError> {
