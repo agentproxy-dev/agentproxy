@@ -43,12 +43,6 @@ See the [DEVELOPMENT.md](DEVELOPMENT.md) file for more information.
   - Ensure all tests pass with `npm test`
   - Add tests for new functionality
 
-- **Python Code**:
-  - check formatting with `uv run ruff check`
-  - check linting with `uv run ruff format`
-  - Use type hints where appropriate
-  - Run tests with `uv run pytest`
-
 #### Commit Guidelines
 
 We follow the [Conventional Commits](https://www.conventionalcommits.org/) specification:
