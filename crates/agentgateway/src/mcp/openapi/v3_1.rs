@@ -202,7 +202,8 @@ impl OpenAPI31Specification {
                     if let Some(type_str) = type_item.as_str() {
                         if type_str == "null" {
                             is_nullable = true;
-                        } else {
+                        } else if main_type.is_none() {
+                            // Take the first non-null type
                             main_type = Some(type_str);
                         }
                     }

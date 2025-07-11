@@ -666,7 +666,10 @@ paths:
         
         // Check second schema in anyOf
         assert_eq!(anyof_array[1]["type"], "number");
-        assert_eq!(anyof_array[1]["minimum"], json!(0));
+        // Handle both integer and float representations of 0
+        let minimum_val = &anyof_array[1]["minimum"];
+        assert!(minimum_val == &json!(0) || minimum_val == &json!(0.0), 
+                "Expected minimum to be 0 or 0.0, got: {:?}", minimum_val);
         
         // Test anyOf with type arrays
         let anyof_with_nullable = json!({
@@ -848,7 +851,7 @@ paths:
                     },
                     {
                         "type": "number",
-                        "minimum": 0,
+                        "minimum": 0.0,
                         "maximum": 100
                     }
                 ]
@@ -871,7 +874,10 @@ paths:
         assert_eq!(anyof_array[0]["type"], "string");
         assert_eq!(anyof_array[0]["pattern"], "^[A-Z]+$");
         assert_eq!(anyof_array[1]["type"], "number");
-        assert_eq!(anyof_array[1]["minimum"], json!(0));
+        // Handle both integer and float representations of 0
+        let minimum_val = &anyof_array[1]["minimum"];
+        assert!(minimum_val == &json!(0) || minimum_val == &json!(0.0), 
+                "Expected minimum to be 0 or 0.0, got: {:?}", minimum_val);
         
         println!("✓ Complex parameter processing test passed!");
     }
