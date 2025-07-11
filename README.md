@@ -32,7 +32,7 @@
 Agentgateway is an open source data plane optimized for agentic AI connectivity within or across any agent framework or environment. Agentgateway provides drop-in security, observability, and governance for agent-to-agent and agent-to-tool communication and supports leading interoperable protocols, including [Agent2Agent (A2A)](https://developers.googleblog.com/en/a2a-a-new-era-of-agent-interoperability/) and [Model Context Protocol (MCP)](https://modelcontextprotocol.io/introduction).
 
 <div align="center">
-  <img alt="agentgateway UI" src="img/UI-homepage.png" width="500">
+  <img alt="agentgateway UI" src="img/UI-homepage.png" width="600">
 </div>
 
 **Key Features:**
