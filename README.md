@@ -29,7 +29,9 @@
 
 ---
 
-Agent Gateway is an open source data plane optimized for agentic AI connectivity in any environment. Agent Gateway provides drop-in security, observability, and governance for agent-to-agent and agent-to-tool communication and supports leading interoperable protocols, including [Agent2Agent (A2A)](https://developers.googleblog.com/en/a2a-a-new-era-of-agent-interoperability/) and [Model Context Protocol (MCP)](https://modelcontextprotocol.io/introduction).
+Agentgateway is an open source data plane optimized for agentic AI connectivity within or across any agent framework or environment. Agentgateway provides drop-in security, observability, and governance for agent-to-agent and agent-to-tool communication and supports leading interoperable protocols, including [Agent2Agent (A2A)](https://developers.googleblog.com/en/a2a-a-new-era-of-agent-interoperability/) and [Model Context Protocol (MCP)](https://modelcontextprotocol.io/introduction).
+
+<img alt="agentgateway UI" src="img/UI-homepage.svg">
 
 **Key Features:**
 
@@ -37,9 +39,8 @@ Agent Gateway is an open source data plane optimized for agentic AI connectivity
 - [x] **Security First:** agentgateway includes a robust MCP/A2A focused RBAC system.
 - [x] **Multi Tenant:** agentgateway supports multiple tenants, each with their own set of resources and users.
 - [x] **Dynamic:** agentgateway supports dynamic configuration updates via xDS, without any downtime.
-- [x] **Run Anywhere:** agentgateway can run anywhere, from a single machine to a large scale multi-tenant deployment.
+- [x] **Run Anywhere:** agentgateway can run anywhere with any agent framework, from a single machine to a large scale multi-tenant deployment.
 - [x] **Legacy API Support:** agentgateway can transform legacy APIs into MCP resources. Currently supports OpenAPI. (gRPC coming soon)
-- [x] **Open Source:** agentgateway is open source, and licensed under the [Apache 2.0 license](https://www.apache.org/licenses/LICENSE-2.0).
 <br>
 
 # Getting Started 
@@ -81,7 +82,7 @@ Open your browser and navigate to `http://localhost:19000/ui` to see the agentga
 
 Thanks to all contributors who are helping to make kagent better.
 
-<a href="https://github.com/agentgateway/graphs/contributors">
+<a href="https://github.com/agentgateway/agentgateway/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=agentgateway/agentgateway" />
 </a>
 
