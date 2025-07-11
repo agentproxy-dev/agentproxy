@@ -5,11 +5,21 @@
     <img alt="agentgateway" src="https://raw.githubusercontent.com/agentgateway/agentgateway/refs/heads/main/img/banner-light.svg">
   </picture>
   <div>
-     <a href="https://discord.gg/BdJpzaPjHv">
+    <a href="https://opensource.org/licenses/Apache-2.0">
+      <img src="https://img.shields.io/badge/License-Apache2.0-brightgreen.svg?style=flat" alt="License: Apache 2.0">
+    </a>
+    <a href="https://github.com/agentgateway/agentgateway">
+      <img src="https://img.shields.io/github/stars/agentgateway/agentgateway.svg?style=flat&logo=github&label=Stars" alt="Stars">
+    </a>
+    <a href="https://discord.gg/BdJpzaPjHv">
       <img src="https://img.shields.io/discord/1346225185166065826?style=flat&label=Join%20Discord&color=6D28D9" alt="Discord">
     </a>
     <a href="https://github.com/agentgateway/agentgateway/releases">
       <img src="https://img.shields.io/github/v/release/agentgateway/agentgateway?style=flat&label=Latest%20Release&color=6D28D9" alt="Latest Release">
+    </a>
+    <a href="https://deepwiki.com/agentgateway/agentgateway"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
+    <a href='https://codespaces.new/agentgateway/agentgateway'>
+      <img src='https://github.com/codespaces/badge.svg' alt='Open in Github Codespaces' style='max-width: 100%;' height="20">
     </a>
   </div>
   <div>
@@ -30,7 +40,6 @@
 - [x] **Legacy API Support:** agentgateway can transform legacy APIs into MCP resources. Currently supports OpenAPI. (gRPC coming soon)
 - [x] **Open Source:** agentgateway is open source, and licensed under the [Apache 2.0 license](https://www.apache.org/licenses/LICENSE-2.0).
 <br>
-
 
 # Getting Started 
 
@@ -53,8 +62,11 @@ npm run build
 Build the agentgateway binary:
 
 ```bash
+cd ..
 make build
 ```
+
+If you encounter an authentication error to the schemars repo in GitHub, try set `CARGO_NET_GIT_FETCH_WITH_CLI=true` and rerun `make build`.
 
 Run the agentgateway binary:
 
@@ -62,3 +74,23 @@ Run the agentgateway binary:
 ./target/release/agentgateway
 ```
 Open your browser and navigate to `http://localhost:19000/ui` to see the agentgateway UI.
+
+
+## Contributors
+
+Thanks to all contributors who are helping to make kagent better.
+
+<a href="https://github.com/agentgateway/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=agentgateway/agentgateway" />
+</a>
+
+
+## Star History
+
+<a href="https://www.star-history.com/#agentgateway/agentgateway&Date">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=agentgateway/agentgateway&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=agentgateway/agentgateway&type=Date" />
+   <img alt="Star history of agentgateway/agentgateway over time" src="https://api.star-history.com/svg?repos=agentgateway/agentgateway&type=Date" />
+ </picture>
+</a>
