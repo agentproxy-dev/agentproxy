@@ -6,6 +6,8 @@ mod tests {
     use crate::yamlviajson;
     use openapiv3::OpenAPI as OpenAPIv3;
     use crate::mcp::openapi::parse_openapi_schema;
+    use crate::mcp::openapi::v3_1::OpenAPI31Specification;
+    use serde_json::json;
 
     #[test]
     fn test_openapi_31_detection_and_parsing() {
@@ -486,5 +488,335 @@ paths:
                 panic!("✗ OpenAPI 3.1 request body parsing failed: {}", e);
             }
         }
+    }
+
+    #[test]
+    fn test_normalize_schema_v3_1_type_arrays() {
+        // Test the most critical method: normalize_schema_v3_1 with type arrays
+        let spec = create_test_spec();
+        let openapi_31 = OpenAPI31Specification::new(Arc::new(spec));
+        
+        // Test basic type array conversion: ["string", "null"] -> nullable: true
+        let type_array_schema = json!({
+            "type": ["string", "null"],
+            "description": "A nullable string field"
+        });
+        
+        let result = openapi_31.normalize_schema_v3_1(&type_array_schema).unwrap();
+        assert_eq!(result["type"], "string");
+        assert_eq!(result["nullable"], true);
+        assert_eq!(result["description"], "A nullable string field");
+        
+        // Test number type array
+        let number_array_schema = json!({
+            "type": ["number", "null"],
+            "minimum": 0,
+            "maximum": 100
+        });
+        
+        let result = openapi_31.normalize_schema_v3_1(&number_array_schema).unwrap();
+        assert_eq!(result["type"], "number");
+        assert_eq!(result["nullable"], true);
+        assert_eq!(result["minimum"], 0);
+        assert_eq!(result["maximum"], 100);
+        
+        // Test array type array
+        let array_type_schema = json!({
+            "type": ["array", "null"],
+            "items": {
+                "type": "string"
+            },
+            "minItems": 1,
+            "maxItems": 10
+        });
+        
+        let result = openapi_31.normalize_schema_v3_1(&array_type_schema).unwrap();
+        assert_eq!(result["type"], "array");
+        assert_eq!(result["nullable"], true);
+        assert_eq!(result["minItems"], 1);
+        assert_eq!(result["maxItems"], 10);
+        assert!(result["items"].is_object());
+        
+        // Test complex nested type array
+        let nested_schema = json!({
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": ["string", "null"]
+                },
+                "age": {
+                    "type": ["integer", "null"],
+                    "minimum": 0
+                }
+            }
+        });
+        
+        let result = openapi_31.normalize_schema_v3_1(&nested_schema).unwrap();
+        let properties = result["properties"].as_object().unwrap();
+        
+        // Check nested name property
+        let name_prop = &properties["name"];
+        assert_eq!(name_prop["type"], "string");
+        assert_eq!(name_prop["nullable"], true);
+        
+        // Check nested age property
+        let age_prop = &properties["age"];
+        assert_eq!(age_prop["type"], "integer");
+        assert_eq!(age_prop["nullable"], true);
+        assert_eq!(age_prop["minimum"], 0);
+        
+        println!("✓ Type arrays processing test passed!");
+    }
+
+    #[test]
+    fn test_normalize_schema_v3_1_validation_keywords() {
+        // Test validation keyword preservation
+        let spec = create_test_spec();
+        let openapi_31 = OpenAPI31Specification::new(Arc::new(spec));
+        
+        // Test string validation keywords
+        let string_schema = json!({
+            "type": "string",
+            "pattern": "^[A-Za-z]+$",
+            "minLength": 2,
+            "maxLength": 50,
+            "format": "email"
+        });
+        
+        let result = openapi_31.normalize_schema_v3_1(&string_schema).unwrap();
+        assert_eq!(result["type"], "string");
+        assert_eq!(result["pattern"], "^[A-Za-z]+$");
+        assert_eq!(result["minLength"], 2);
+        assert_eq!(result["maxLength"], 50);
+        assert_eq!(result["format"], "email");
+        
+        // Test array validation keywords
+        let array_schema = json!({
+            "type": "array",
+            "items": {
+                "type": "string"
+            },
+            "minItems": 1,
+            "maxItems": 10,
+            "uniqueItems": true
+        });
+        
+        let result = openapi_31.normalize_schema_v3_1(&array_schema).unwrap();
+        assert_eq!(result["type"], "array");
+        assert_eq!(result["minItems"], 1);
+        assert_eq!(result["maxItems"], 10);
+        assert_eq!(result["uniqueItems"], true);
+        
+        // Test numeric validation keywords
+        let number_schema = json!({
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100,
+            "multipleOf": 5
+        });
+        
+        let result = openapi_31.normalize_schema_v3_1(&number_schema).unwrap();
+        assert_eq!(result["type"], "number");
+        assert_eq!(result["minimum"], 0);
+        assert_eq!(result["maximum"], 100);
+        assert_eq!(result["multipleOf"], 5);
+        
+        // Test enum preservation
+        let enum_schema = json!({
+            "type": "string",
+            "enum": ["red", "green", "blue"]
+        });
+        
+        let result = openapi_31.normalize_schema_v3_1(&enum_schema).unwrap();
+        assert_eq!(result["type"], "string");
+        assert_eq!(result["enum"], json!(["red", "green", "blue"]));
+        
+        println!("✓ Validation keywords preservation test passed!");
+    }
+
+    #[test]
+    fn test_normalize_schema_composition_anyof() {
+        // Test anyOf composition processing
+        let spec = create_test_spec();
+        let openapi_31 = OpenAPI31Specification::new(Arc::new(spec));
+        
+        // Test simple anyOf composition
+        let anyof_schema = json!({
+            "anyOf": [
+                {
+                    "type": "string",
+                    "minLength": 1
+                },
+                {
+                    "type": "number",
+                    "minimum": 0
+                }
+            ]
+        });
+        
+        let result = openapi_31.normalize_schema_v3_1(&anyof_schema).unwrap();
+        assert!(result["anyOf"].is_array());
+        
+        let anyof_array = result["anyOf"].as_array().unwrap();
+        assert_eq!(anyof_array.len(), 2);
+        
+        // Check first schema in anyOf
+        assert_eq!(anyof_array[0]["type"], "string");
+        assert_eq!(anyof_array[0]["minLength"], 1);
+        
+        // Check second schema in anyOf
+        assert_eq!(anyof_array[1]["type"], "number");
+        assert_eq!(anyof_array[1]["minimum"], 0);
+        
+        // Test anyOf with type arrays
+        let anyof_with_nullable = json!({
+            "anyOf": [
+                {
+                    "type": ["string", "null"],
+                    "pattern": "^[A-Z]+$"
+                },
+                {
+                    "type": "number",
+                    "multipleOf": 2
+                }
+            ]
+        });
+        
+        let result = openapi_31.normalize_schema_v3_1(&anyof_with_nullable).unwrap();
+        let anyof_array = result["anyOf"].as_array().unwrap();
+        
+        // Check that type arrays are normalized within anyOf
+        assert_eq!(anyof_array[0]["type"], "string");
+        assert_eq!(anyof_array[0]["nullable"], true);
+        assert_eq!(anyof_array[0]["pattern"], "^[A-Z]+$");
+        
+        println!("✓ anyOf composition test passed!");
+    }
+
+    #[test]
+    fn test_normalize_schema_composition_oneof() {
+        // Test oneOf composition processing
+        let spec = create_test_spec();
+        let openapi_31 = OpenAPI31Specification::new(Arc::new(spec));
+        
+        // Test oneOf composition
+        let oneof_schema = json!({
+            "oneOf": [
+                {
+                    "type": "object",
+                    "properties": {
+                        "email": {
+                            "type": "string",
+                            "format": "email"
+                        }
+                    },
+                    "required": ["email"]
+                },
+                {
+                    "type": "object",
+                    "properties": {
+                        "phone": {
+                            "type": "string",
+                            "pattern": "^\\+?[1-9]\\d{1,14}$"
+                        }
+                    },
+                    "required": ["phone"]
+                }
+            ]
+        });
+        
+        let result = openapi_31.normalize_schema_v3_1(&oneof_schema).unwrap();
+        assert!(result["oneOf"].is_array());
+        
+        let oneof_array = result["oneOf"].as_array().unwrap();
+        assert_eq!(oneof_array.len(), 2);
+        
+        // Check first schema in oneOf
+        let first_schema = &oneof_array[0];
+        assert_eq!(first_schema["type"], "object");
+        let props = first_schema["properties"].as_object().unwrap();
+        assert_eq!(props["email"]["type"], "string");
+        assert_eq!(props["email"]["format"], "email");
+        
+        // Check second schema in oneOf
+        let second_schema = &oneof_array[1];
+        assert_eq!(second_schema["type"], "object");
+        let props = second_schema["properties"].as_object().unwrap();
+        assert_eq!(props["phone"]["type"], "string");
+        assert_eq!(props["phone"]["pattern"], "^\\+?[1-9]\\d{1,14}$");
+        
+        println!("✓ oneOf composition test passed!");
+    }
+
+    #[test]
+    fn test_normalize_schema_composition_allof() {
+        // Test allOf composition processing
+        let spec = create_test_spec();
+        let openapi_31 = OpenAPI31Specification::new(Arc::new(spec));
+        
+        // Test allOf composition
+        let allof_schema = json!({
+            "allOf": [
+                {
+                    "type": "object",
+                    "properties": {
+                        "name": {
+                            "type": "string",
+                            "minLength": 1
+                        }
+                    },
+                    "required": ["name"]
+                },
+                {
+                    "type": "object",
+                    "properties": {
+                        "timestamp": {
+                            "type": "string",
+                            "format": "date-time"
+                        }
+                    }
+                }
+            ]
+        });
+        
+        let result = openapi_31.normalize_schema_v3_1(&allof_schema).unwrap();
+        assert!(result["allOf"].is_array());
+        
+        let allof_array = result["allOf"].as_array().unwrap();
+        assert_eq!(allof_array.len(), 2);
+        
+        // Check first schema in allOf
+        let first_schema = &allof_array[0];
+        assert_eq!(first_schema["type"], "object");
+        let props = first_schema["properties"].as_object().unwrap();
+        assert_eq!(props["name"]["type"], "string");
+        assert_eq!(props["name"]["minLength"], 1);
+        
+        // Check second schema in allOf
+        let second_schema = &allof_array[1];
+        assert_eq!(second_schema["type"], "object");
+        let props = second_schema["properties"].as_object().unwrap();
+        assert_eq!(props["timestamp"]["type"], "string");
+        assert_eq!(props["timestamp"]["format"], "date-time");
+        
+        println!("✓ allOf composition test passed!");
+    }
+
+    // Helper function to create a test spec
+    fn create_test_spec() -> openapiv3_1::OpenApi {
+        let spec_content = r#"
+openapi: "3.1.0"
+info:
+  title: Test API
+  version: "1.0.0"
+paths:
+  /test:
+    get:
+      operationId: testOperation
+      responses:
+        '200':
+          description: Success
+"#;
+        yamlviajson::from_str(spec_content).expect("Should parse test spec")
     }
 }

@@ -188,7 +188,7 @@ impl OpenAPI31Specification {
     
     /// Convert OpenAPI 3.1 type arrays to compatible schema format
     /// Handles: type: ["string", "null"] -> type: "string", nullable: true
-    fn normalize_schema_v3_1(&self, schema: &Value) -> Result<Value, ParseError> {
+    pub fn normalize_schema_v3_1(&self, schema: &Value) -> Result<Value, ParseError> {
         let mut normalized = schema.clone();
         
         // Handle type arrays (key 3.1 feature)
@@ -244,6 +244,17 @@ impl OpenAPI31Specification {
         if let Some(items) = schema.get("items") {
             // Recursively normalize array items
             normalized["items"] = self.normalize_schema_v3_1(items)?;
+        }
+        
+        // Handle object properties recursively
+        if let Some(properties) = schema.get("properties") {
+            if let Some(props_obj) = properties.as_object() {
+                let mut normalized_props = serde_json::Map::new();
+                for (prop_name, prop_schema) in props_obj {
+                    normalized_props.insert(prop_name.clone(), self.normalize_schema_v3_1(prop_schema)?);
+                }
+                normalized["properties"] = json!(normalized_props);
+            }
         }
         
         // Handle JSON Schema Draft 2020-12 composition keywords
