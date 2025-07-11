@@ -69,7 +69,7 @@ For instructions on how to contribute to the agentgateway project, see the [CONT
 
 # Contributors
 
-Thanks to all contributors who are helping to make kagent better.
+Thanks to all contributors who are helping to make agentgateway better.
 
 <a href="https://github.com/agentgateway/agentgateway/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=agentgateway/agentgateway" />
