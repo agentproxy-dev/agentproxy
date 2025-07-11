@@ -56,7 +56,7 @@ To get started with agentgateway, please check out the [Getting Started Guide](h
 The agentgateway documentation is available at [agentgateway.dev/docs](https://agentgateway.dev/docs/). Agentgateway has a built-in UI for you to explore connecting agent-to-agent or agent-to-tool :
 
 <div align="center">
-  <img alt="agentgateway UI" src="img/UI-homepage.png" width="600">
+  <img alt="agentgateway UI" src="img/UI-homepage.png">
 </div>
 
 # Contributing
