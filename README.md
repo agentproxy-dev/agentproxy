@@ -23,12 +23,13 @@
     </a>
   </div>
   <div>
-    The first <strong>full featured</strong>, <strong>enterprise-grade</strong> Agent Gateway.
+    The <strong>first complete</strong> connectivity solution for Agentic AI enables both agent-to-agent and agent-to-tool communication across any environment.
   </div>
 </div>
 
 ---
 
+Agent Gateway is an open source data plane optimized for agentic AI connectivity in any environment. Agent Gateway provides drop-in security, observability, and governance for agent-to-agent and agent-to-tool communication and supports leading interoperable protocols, including [Agent2Agent (A2A)](https://developers.googleblog.com/en/a2a-a-new-era-of-agent-interoperability/) and [Model Context Protocol (MCP)](https://modelcontextprotocol.io/introduction).
 
 **Key Features:**
 
