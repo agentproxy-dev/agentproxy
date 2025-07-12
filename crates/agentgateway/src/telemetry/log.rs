@@ -9,7 +9,6 @@ use crossbeam::atomic::AtomicCell;
 use http_body::{Body, Frame, SizeHint};
 use tracing::event;
 
-use crate::llm;
 use crate::telemetry::metrics::{CommonTrafficLabels, Metrics};
 use crate::telemetry::trc;
 use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
@@ -17,6 +16,7 @@ use crate::types::agent::{
 	BackendName, GatewayName, ListenerName, RouteName, RouteRuleName, Target,
 };
 use crate::types::discovery::NamespacedHostname;
+use crate::{llm, mcp};
 
 /// AsyncLog is a wrapper around an item that can be atomically set.
 /// The intent is to provide additional info to the log after we have lost the RequestLog reference,
@@ -61,7 +61,6 @@ impl<T> Default for AsyncLog<T> {
 
 impl<T: Debug> Debug for AsyncLog<T> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		// TODO
 		f.debug_struct("AsyncLog").finish_non_exhaustive()
 	}
 }
@@ -95,6 +94,7 @@ pub struct RequestLog {
 	pub error: Option<String>,
 
 	pub grpc_status: AsyncLog<u8>,
+	pub mcp_status: AsyncLog<mcp::sse::MCPInfo>,
 
 	pub incoming_span: Option<trc::TraceParent>,
 	pub outgoing_span: Option<trc::TraceParent>,
@@ -142,6 +142,8 @@ impl Drop for RequestLog {
 			.and_then(|t| t.input_tokens_from_response)
 			.or_else(|| self.llm_request.as_ref().map(|req| req.input_tokens));
 
+		let mcp = self.mcp_status.take();
+
 		event!(
 			target: "request",
 			parent: None,
@@ -170,6 +172,9 @@ impl Drop for RequestLog {
 			jwt.sub = self.jwt_sub,
 
 			a2a.method = self.a2a_method.as_ref().map(display),
+
+			mcp.target = mcp.as_ref().and_then(|m| m.target_name.as_ref()).map(display),
+			mcp.tool = mcp.as_ref().and_then(|m| m.tool_call_name.as_ref()).map(display),
 
 			inferencepool.selected_endpoint = self.inference_pool.as_ref().map(display),
 

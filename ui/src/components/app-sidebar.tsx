@@ -26,7 +26,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Loader2, Home, Shield, Headphones, Server, Code, Settings } from "lucide-react";
+import { Loader2, Home, Shield, Headphones, Server, Code, Settings, Route } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
 import { useWizard } from "@/lib/wizard-context";
 import { toast } from "sonner";
@@ -42,7 +42,26 @@ export function AppSidebar({ setActiveView }: AppSidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const { restartWizard, isRestartingWizard } = useWizard();
-  const { listeners, targets } = useServer();
+  const { listeners } = useServer();
+
+  const routeCount = listeners.reduce((count, listener) => {
+    const httpRoutes = listener.routes?.length || 0;
+    const tcpRoutes = listener.tcpRoutes?.length || 0;
+    return count + httpRoutes + tcpRoutes;
+  }, 0);
+
+  const backendCount = listeners.reduce((count, listener) => {
+    let backendSum = 0;
+
+    listener.routes?.forEach((route) => {
+      backendSum += route.backends?.length || 0;
+    });
+
+    listener.tcpRoutes?.forEach((tcpRoute) => {
+      backendSum += tcpRoute.backends?.length || 0;
+    });
+    return count + backendSum;
+  }, 0);
 
   const handleRestartWizard = () => {
     setShowRestartDialog(true);
@@ -92,34 +111,46 @@ export function AppSidebar({ setActiveView }: AppSidebarProps) {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  tooltip="Listener Settings"
+                  tooltip="Port Binds & Listeners"
                   isActive={pathname === "/listeners"}
                   onClick={() => navigateTo("/listeners")}
-                  aria-label="Listener Settings"
+                  aria-label="Port Binds & Listeners"
                 >
                   <Headphones className="h-4 w-4" />
-                  <span>Listener</span>
+                  <span>Listeners</span>
                   <SidebarMenuBadge>{listeners.length}</SidebarMenuBadge>
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  tooltip="Target Servers"
-                  isActive={pathname === "/targets"}
-                  onClick={() => navigateTo("/targets")}
-                  aria-label="Target Servers"
+                  tooltip="Routes"
+                  isActive={pathname === "/routes"}
+                  onClick={() => navigateTo("/routes")}
+                  aria-label="Routes"
                 >
-                  <Server className="h-4 w-4" />
-                  <span>Targets</span>
-                  <SidebarMenuBadge>{targets.length}</SidebarMenuBadge>
+                  <Route className="h-4 w-4" />
+                  <span>Routes</span>
+                  <SidebarMenuBadge>{routeCount}</SidebarMenuBadge>
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  tooltip="Security Policies"
+                  tooltip="Backends"
+                  isActive={pathname === "/backends"}
+                  onClick={() => navigateTo("/backends")}
+                  aria-label="Backends"
+                >
+                  <Server className="h-4 w-4" />
+                  <span>Backends</span>
+                  <SidebarMenuBadge>{backendCount}</SidebarMenuBadge>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  tooltip="Policies"
                   isActive={pathname === "/policies"}
                   onClick={() => navigateTo("/policies")}
-                  aria-label="Security Policies"
+                  aria-label="Policies"
                 >
                   <Shield className="h-4 w-4" />
                   <span>Policies</span>
@@ -139,7 +170,6 @@ export function AppSidebar({ setActiveView }: AppSidebarProps) {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-
         <SidebarSeparator />
       </SidebarContent>
 

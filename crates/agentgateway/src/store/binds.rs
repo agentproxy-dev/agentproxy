@@ -14,7 +14,7 @@ use crate::http::{ext_authz, remoteratelimit};
 use crate::mcp::rbac::{RuleSet, RuleSets};
 use crate::store::Event;
 use crate::types::agent::{
-	A2aPolicy, BackendName, Bind, BindName, GatewayName, Listener, ListenerKey, ListenerSet,
+	A2aPolicy, Backend, BackendName, Bind, BindName, GatewayName, Listener, ListenerKey, ListenerSet,
 	McpAuthentication, Policy, PolicyName, PolicyTarget, Route, RouteKey, RouteName, TargetedPolicy,
 };
 use crate::types::discovery::{NamespacedHostname, Service, Workload};
@@ -30,6 +30,8 @@ pub struct Store {
 	by_name: HashMap<BindName, Arc<Bind>>,
 
 	policies_by_name: HashMap<PolicyName, Arc<TargetedPolicy>>,
+
+	backends_by_name: HashMap<BackendName, Arc<Backend>>,
 
 	tx: tokio::sync::broadcast::Sender<Event<Arc<Bind>>>,
 }
@@ -94,6 +96,7 @@ impl Store {
 		Self {
 			by_name: Default::default(),
 			policies_by_name: Default::default(),
+			backends_by_name: Default::default(),
 			tx,
 		}
 	}
@@ -255,7 +258,7 @@ impl Store {
 	}
 
 	pub fn mcp_policies(&self, backend: BackendName) -> (RuleSets, Option<McpAuthentication>) {
-		let t = PolicyTarget::McpTarget(backend);
+		let t = PolicyTarget::Backend(backend);
 		let rs = RuleSets::from(
 			self
 				.policies_by_name
@@ -265,7 +268,6 @@ impl Store {
 						return None;
 					};
 					match &p.policy {
-						Policy::McpAuthorization(authz) => Some(authz.clone().into_inner()),
 						Policy::McpAuthorization(authz) => Some(authz.clone().into_inner()),
 						_ => None,
 					}
@@ -298,6 +300,10 @@ impl Store {
 		self.by_name.values().cloned().collect()
 	}
 
+	pub fn backend(&self, r: &BackendName) -> Option<Arc<Backend>> {
+		self.backends_by_name.get(r).cloned()
+	}
+
 	#[instrument(
         level = Level::INFO,
         name="remove_bind",
@@ -317,6 +323,15 @@ impl Store {
     )]
 	pub fn remove_policy(&mut self, pol: PolicyName) {
 		if let Some(old) = self.policies_by_name.remove(&pol) {}
+	}
+	#[instrument(
+        level = Level::INFO,
+        name="remove_backend",
+        skip_all,
+        fields(bind),
+    )]
+	pub fn remove_backend(&mut self, backend: BackendName) {
+		if let Some(old) = self.backends_by_name.remove(&backend) {}
 	}
 
 	#[instrument(
@@ -371,6 +386,13 @@ impl Store {
 		self.by_name.insert(arc.key.clone(), arc.clone());
 		// ok to have no subs
 		let _ = self.tx.send(Event::Add(arc));
+	}
+
+	pub fn insert_backend(&mut self, b: Backend) {
+		// TODO: handle update
+		let name = b.name();
+		let arc = Arc::new(b);
+		self.backends_by_name.insert(name, arc);
 	}
 
 	#[instrument(
@@ -480,6 +502,7 @@ pub struct StoreUpdater {
 pub struct Dump {
 	binds: Vec<Arc<Bind>>,
 	policies: Vec<Arc<TargetedPolicy>>,
+	backends: Vec<Arc<Backend>>,
 }
 
 impl StoreUpdater {
@@ -507,25 +530,43 @@ impl StoreUpdater {
 			.sorted_by_key(|k| k.0)
 			.map(|k| k.1.clone())
 			.collect();
-		Dump { binds, policies }
+		let backends: Vec<_> = store
+			.backends_by_name
+			.iter()
+			.sorted_by_key(|k| k.0)
+			.map(|k| k.1.clone())
+			.collect();
+		Dump {
+			binds,
+			policies,
+			backends,
+		}
 	}
 	pub fn sync_local(
 		&self,
 		binds: Vec<Bind>,
 		policies: Vec<TargetedPolicy>,
+		backends: Vec<Backend>,
 		prev: PreviousState,
 	) -> PreviousState {
 		let mut s = self.state.write().expect("mutex acquired");
 		let mut old_binds = prev.binds;
 		let mut old_pols = prev.policies;
+		let mut old_backends = prev.backends;
 		let mut next_state = PreviousState {
 			binds: Default::default(),
 			policies: Default::default(),
+			backends: Default::default(),
 		};
 		for b in binds {
 			old_binds.remove(&b.key);
 			next_state.binds.insert(b.key.clone());
 			s.insert_bind(b);
+		}
+		for b in backends {
+			old_backends.remove(&b.name());
+			next_state.backends.insert(b.name());
+			s.insert_backend(b);
 		}
 		for p in policies {
 			old_pols.remove(&p.name);
@@ -535,8 +576,11 @@ impl StoreUpdater {
 		for remaining_bind in old_binds {
 			s.remove_bind(remaining_bind);
 		}
-		for remaining_policies in old_pols {
-			s.remove_policy(remaining_policies);
+		for remaining_policy in old_pols {
+			s.remove_policy(remaining_policy);
+		}
+		for remaining_backend in old_backends {
+			s.remove_backend(remaining_backend);
 		}
 		next_state
 	}
@@ -546,6 +590,7 @@ impl StoreUpdater {
 pub struct PreviousState {
 	pub binds: HashSet<BindName>,
 	pub policies: HashSet<PolicyName>,
+	pub backends: HashSet<BackendName>,
 }
 
 impl agent_xds::Handler<ADPResource> for StoreUpdater {

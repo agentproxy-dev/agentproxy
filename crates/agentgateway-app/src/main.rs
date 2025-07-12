@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use agent_core::{telemetry, version};
-use agentgateway::{Config, serdes};
+use agentgateway::{Config, client, serdes};
 use clap::Parser;
 use tracing::info;
 
@@ -26,6 +26,9 @@ struct Args {
 	/// Use config from file
 	#[arg(short, long, value_name = "file")]
 	file: Option<PathBuf>,
+
+	#[arg(long, value_name = "validate-only")]
+	validate_only: bool,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -42,7 +45,11 @@ fn main() -> anyhow::Result<()> {
 		.build()
 		.unwrap()
 		.block_on(async move {
-			let Args { config, file } = args;
+			let Args {
+				config,
+				file,
+				validate_only,
+			} = args;
 
 			let (contents, filename) = match (config, file) {
 				(Some(_), Some(_)) => {
@@ -55,9 +62,23 @@ fn main() -> anyhow::Result<()> {
 				},
 				(None, None) => ("{}".to_string(), None),
 			};
+			if validate_only {
+				return validate(contents, filename).await;
+			}
 			let config = agentgateway::config::parse_config(contents, filename)?;
 			proxy(Arc::new(config)).await
 		})
+}
+
+async fn validate(contents: String, filename: Option<PathBuf>) -> anyhow::Result<()> {
+	let config = agentgateway::config::parse_config(contents, filename)?;
+	let client = client::Client::new(&config.dns, None);
+	if let Some(cfg) = config.xds.local_config {
+		let cs = cfg.read_to_string().await?;
+		agentgateway::types::local::NormalizedLocalConfig::from(client, cs.as_str()).await?;
+	}
+	println!("Configuration is valid!");
+	Ok(())
 }
 
 async fn proxy(cfg: Arc<Config>) -> anyhow::Result<()> {

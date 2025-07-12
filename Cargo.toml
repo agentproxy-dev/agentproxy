@@ -1,3 +1,4 @@
+#patch = { crates-io = { wiremock = { path = "/home/john/git/wiremock" } } }
 [workspace]
 resolver = "2"
 members = [

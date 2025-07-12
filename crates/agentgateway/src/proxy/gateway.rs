@@ -1,6 +1,6 @@
 use crate::ProxyInputs;
 use crate::store::Event;
-use crate::transport::stream::{Extension, Socket};
+use crate::transport::stream::{BytesCounter, Extension, LoggingMode, Socket};
 use crate::types::agent::{Bind, BindName, Listener, ListenerProtocol};
 use agent_core::drain;
 use agent_core::drain::{DrainUpgrader, DrainWatcher};
@@ -19,7 +19,11 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::watch;
 use tokio::task::{AbortHandle, JoinSet};
 use tokio_stream::StreamExt;
-use tracing::{Instrument, debug, info, info_span, warn};
+use tracing::{Instrument, debug, event, info, info_span, warn};
+
+#[cfg(test)]
+#[path = "gateway_test.rs"]
+mod tests;
 
 pub struct Gateway {
 	pi: Arc<ProxyInputs>,
@@ -125,7 +129,8 @@ impl Gateway {
 			let (mut upgrader, weak) = drain.into_weak();
 			let (inner_trigger, inner_drain) = drain::new();
 			let handle_stream = |stream: TcpStream, upgrader: &DrainUpgrader| {
-				let stream = Socket::from_tcp(stream).expect("todo");
+				let mut stream = Socket::from_tcp(stream).expect("todo");
+				stream.with_logging(LoggingMode::Downstream);
 				let pi = pi.clone();
 				// We got the connection; make a strong drain blocker.
 				let drain = upgrader.upgrade(weak.clone());
@@ -184,15 +189,30 @@ impl Gateway {
 		Ok(())
 	}
 
-	async fn proxy_bind(
+	pub async fn proxy_bind(
 		bind_name: BindName,
 		raw_stream: Socket,
 		inputs: Arc<ProxyInputs>,
 		drain: DrainWatcher,
 	) {
-		match bind_protocol(inputs.clone(), bind_name.clone()) {
+		let bind_protocol = bind_protocol(inputs.clone(), bind_name.clone());
+		let tcp_info = raw_stream.tcp();
+		event!(
+			target: "downstream connection",
+			parent: None,
+			tracing::Level::DEBUG,
+
+			src.addr = %raw_stream.tcp().peer_addr,
+			protocol = ?bind_protocol,
+
+			"opened",
+		);
+		match bind_protocol {
 			BindProtocol::Http => {
-				let _ = Self::proxy(bind_name, inputs, None, raw_stream, drain).await;
+				let err = Self::proxy(bind_name, inputs, None, raw_stream, drain).await;
+				if let Err(e) = err {
+					warn!("proxy error: {e}");
+				}
 			},
 			BindProtocol::Tcp => Self::proxy_tcp(bind_name, inputs, None, raw_stream, drain).await,
 			BindProtocol::Tls => {
@@ -295,7 +315,7 @@ impl Gateway {
 		bind: BindName,
 	) -> anyhow::Result<(Arc<Listener>, Socket)> {
 		let listeners = inp.stores.read_binds().listeners(bind.clone()).unwrap();
-		let (ext, inner) = raw_stream.into_parts();
+		let (ext, counter, inner) = raw_stream.into_parts();
 		let acceptor =
 			tokio_rustls::LazyConfigAcceptor::new(rustls::server::Acceptor::default(), Box::new(inner));
 		let start = acceptor.await?;
@@ -305,7 +325,7 @@ impl Gateway {
 			.ok_or(anyhow!("no TLS listener match"))?;
 		let cfg = best.protocol.tls().unwrap();
 		let tls = start.into_stream(cfg).await?;
-		Ok((best, Socket::from_tls(ext, tls.into())?))
+		Ok((best, Socket::from_tls(ext, counter, tls.into())?))
 	}
 
 	async fn terminate_hbone(

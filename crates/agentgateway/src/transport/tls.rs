@@ -44,13 +44,13 @@ pub enum Error {
 }
 
 pub async fn accept(conn: Socket, cfg: Arc<ServerConfig>) -> Result<Socket, Error> {
-	let (ext, inner) = conn.into_parts();
+	let (ext, counter, inner) = conn.into_parts();
 	let tls_cfg = cfg.clone();
 	let stream = tokio_rustls::TlsAcceptor::from(tls_cfg)
 		.accept(Box::new(inner))
 		.map_err(Error::Handshake)
 		.await?;
-	Ok(Socket::from_tls(ext, stream.into())?)
+	Ok(Socket::from_tls(ext, counter, stream.into())?)
 }
 
 pub mod insecure {

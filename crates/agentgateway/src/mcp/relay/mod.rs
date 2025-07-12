@@ -27,8 +27,9 @@ use crate::client;
 use crate::http::jwt::Claims;
 use crate::mcp::rbac;
 use crate::mcp::rbac::{Identity, RuleSets};
-use crate::mcp::sse::McpBackendGroup;
+use crate::mcp::sse::{MCPInfo, McpBackendGroup};
 use crate::store::Stores;
+use crate::telemetry::log::AsyncLog;
 use crate::telemetry::trc::TraceParent;
 use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::agent::{McpAuthorization, McpBackend};
@@ -112,7 +113,14 @@ impl Relay {
 	}
 
 	fn setup_request(ext: &model::Extensions, span_name: &str) -> (BoxedSpan, RqCtx) {
-		let rq_ctx = if let Some(http) = ext.get::<Parts>() {
+		let (s, rq, _) = Self::setup_request_log(ext, span_name);
+		(s, rq)
+	}
+	fn setup_request_log(
+		ext: &model::Extensions,
+		span_name: &str,
+	) -> (BoxedSpan, RqCtx, AsyncLog<MCPInfo>) {
+		let (rq_ctx, log) = if let Some(http) = ext.get::<Parts>() {
 			let otelc = trcng::extract_context_from_request(&http.headers);
 			let traceparent = http.extensions.get::<TraceParent>();
 			let mut ctx = Context::new();
@@ -132,16 +140,25 @@ impl Relay {
 				.and_then(|tls| tls.src_identity.as_ref())
 				.map(|src_id| src_id.to_string());
 
-			RqCtx::new(Identity::new(claims.cloned(), id), ctx)
+			let log = http
+				.extensions
+				.get::<AsyncLog<MCPInfo>>()
+				.cloned()
+				.unwrap_or_default();
+
+			(RqCtx::new(Identity::new(claims.cloned(), id), ctx), log)
 		} else {
-			RqCtx::new(Identity::new(None, None), Context::new())
+			(
+				RqCtx::new(Identity::new(None, None), Context::new()),
+				Default::default(),
+			)
 		};
 
 		let tracer = trcng::get_tracer();
 		let _span = trcng::start_span(span_name.to_string(), &rq_ctx.identity)
 			.with_kind(SpanKind::Server)
 			.start_with_context(tracer, &rq_ctx.context);
-		(_span, rq_ctx)
+		(_span, rq_ctx, log)
 	}
 }
 
@@ -508,9 +525,13 @@ impl ServerHandler for Relay {
 		request: CallToolRequestParam,
 		context: RequestContext<RoleServer>,
 	) -> std::result::Result<CallToolResult, McpError> {
-		let (_span, ref rq_ctx) = Self::setup_request(&context.extensions, "call_tool");
+		let (_span, ref rq_ctx, log) = Self::setup_request_log(&context.extensions, "call_tool");
 		let tool_name = request.name.to_string();
 		let (service_name, tool) = self.parse_resource_name(&tool_name)?;
+		log.non_atomic_mutate(|l| {
+			l.tool_call_name = Some(tool.to_string());
+			l.target_name = Some(service_name.to_string());
+		});
 		if !self.policies.validate(
 			&rbac::ResourceType::Tool(rbac::ResourceId::new(
 				service_name.to_string(),

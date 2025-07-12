@@ -46,6 +46,15 @@ objects := $(wildcard examples/*/config.json)
 install-go-tools:
 	go install github.com/golang/protobuf/protoc-gen-go
 
+
+.PHONY: gen
+gen: generate-apis generate-schema
+	:
+
+.PHONY: generate-schema
+generate-schema:
+	cargo run -F schema > schema/local.json
+
 # Code generation for xds apis
 .PHONY: generate-apis
 generate-apis: install-go-tools
@@ -57,3 +66,16 @@ generate-apis: install-go-tools
 		--go_out=./go/api \
 		--go_opt=paths=source_relative \
 		./crates/agentgateway/proto/workload.proto
+
+objects := $(wildcard examples/*/config.yaml)
+.PHONY: validate
+validate: $(objects)
+	echo $(objects)
+
+# Make the wildcard files depend on themselves to trigger the pattern rule
+.PHONY: $(objects)
+$(objects):
+	:
+
+examples/%/config.yaml:
+	cargo run -- --mode=validate -f $@

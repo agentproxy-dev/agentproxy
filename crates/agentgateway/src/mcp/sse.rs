@@ -6,10 +6,12 @@ use std::time::Duration;
 
 use crate::http::*;
 use crate::json::{from_body, to_body};
+use crate::llm::LLMRequest;
 use crate::mcp::rbac::RuleSets;
 use crate::mcp::relay::Relay;
 use crate::mcp::{rbac, relay};
 use crate::store::{BackendPolicies, Stores};
+use crate::telemetry::log::AsyncLog;
 use crate::types::agent::{
 	BackendName, McpAuthentication, McpBackend, McpIDP, McpTarget as TypeMcpTarget, McpTargetSpec,
 	PolicyTarget, Target,
@@ -59,6 +61,12 @@ use url::form_urlencoded;
 type SseTxs =
 	Arc<std::sync::RwLock<HashMap<SessionId, tokio::sync::mpsc::Sender<ClientJsonRpcMessage>>>>;
 
+#[derive(Debug, Default, Clone)]
+pub struct MCPInfo {
+	pub tool_call_name: Option<String>,
+	pub target_name: Option<String>,
+}
+
 #[derive(Debug, Clone)]
 pub struct App {
 	state: Stores,
@@ -88,15 +96,21 @@ impl App {
 		}
 	}
 
-	pub async fn serve(&self, backends: McpBackend, req: Request) -> Response {
+	pub async fn serve(
+		&self,
+		name: BackendName,
+		backends: McpBackend,
+		mut req: Request,
+		log: AsyncLog<MCPInfo>,
+	) -> Response {
 		let (backends, authorization_policies, authn) = {
 			let binds = self.state.read_binds();
-			let (authorization_policies, authn) = binds.mcp_policies(backends.name.clone());
+			let (authorization_policies, authn) = binds.mcp_policies(name.clone());
 			let nt = backends
 				.targets
 				.iter()
 				.map(|t| {
-					let backend_policies = binds.backend_policies(PolicyTarget::McpTarget(t.name.clone()));
+					let backend_policies = binds.backend_policies(PolicyTarget::Backend(t.name.clone()));
 					Arc::new(McpTarget {
 						name: t.name.clone(),
 						spec: t.spec.clone(),
@@ -107,7 +121,7 @@ impl App {
 				.collect_vec();
 			(
 				McpBackendGroup {
-					name: backends.name.clone(),
+					name: name.clone(),
 					targets: nt,
 				},
 				authorization_policies,
@@ -118,7 +132,9 @@ impl App {
 		let metrics = self.metrics.clone();
 		let sm = self.session.clone();
 		let client = self.client.clone();
-
+		// Store an empty value, we will populate each field async
+		log.store(Some(MCPInfo::default()));
+		req.extensions_mut().insert(log);
 		match (req.uri().path(), req.method(), authn) {
 			("/sse", m, _) if m == Method::GET => Self::sse_get_handler(
 				self.sse_txs.clone(),
@@ -332,7 +348,7 @@ impl App {
 		// it's 4KB
 
 		let session = generate_streamable_session_id();
-		tracing::info!(%session,  "sse connection");
+		tracing::debug!(%session,  "sse connection");
 
 		use tokio_stream::wrappers::ReceiverStream;
 		use tokio_util::sync::PollSender;

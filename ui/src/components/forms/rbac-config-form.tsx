@@ -4,7 +4,7 @@ import { useState, useEffect, MouseEvent } from "react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Listener, Rule, ResourceType, Matcher } from "@/lib/types";
+import { Listener, Rule, Matcher } from "@/lib/types";
 import {
   Command,
   CommandEmpty,
@@ -31,18 +31,7 @@ interface RBACConfigFormProps {
 }
 
 export function RBACConfigForm({ listener, onSave, onCancel }: RBACConfigFormProps) {
-  const [rules, setRules] = useState<Rule[]>(
-    listener?.sse?.rbac?.[0]?.rules?.map((rule) => ({
-      key: rule.key || "",
-      value: rule.value || "",
-      resource: {
-        type: rule.resource?.type || "TOOL",
-        target: rule.resource?.target || "",
-        id: rule.resource?.id || "",
-      },
-      matcher: rule.matcher || "EQUALS",
-    })) || []
-  );
+  const [rules, setRules] = useState<Rule[]>([]);
   const [allTargetNames, setAllTargetNames] = useState<string[]>([]);
   const [loadingTargets, setLoadingTargets] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -123,25 +112,11 @@ export function RBACConfigForm({ listener, onSave, onCancel }: RBACConfigFormPro
   const handleSave = () => {
     if (!listener) return;
 
+    // In the new schema, RBAC configuration is handled differently
+    // For now, we'll just return the listener as-is since the schema structure has changed
     const updatedListener: Listener = {
       ...listener,
-      sse: {
-        ...listener.sse,
-        rbac: [
-          {
-            name: "default",
-            namespace: "default",
-            rules: rules.map((rule) => ({
-              ...rule,
-              resource: {
-                ...rule.resource,
-                type: "TOOL" as ResourceType,
-              },
-              matcher: "EQUALS" as Matcher,
-            })),
-          },
-        ],
-      },
+      // RBAC configuration will need to be handled through the new schema structure
     };
 
     onSave(updatedListener);

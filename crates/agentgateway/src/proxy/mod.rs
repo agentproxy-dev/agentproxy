@@ -1,11 +1,17 @@
 mod gateway;
 pub mod httpproxy;
+#[cfg(test)]
+pub mod request_builder;
 pub mod tcpproxy;
 
 use crate::http::Body;
 use crate::http::HeaderValue;
 use crate::http::Response;
 use crate::http::StatusCode;
+use crate::types::agent::{
+	Backend, BackendReference, RouteBackend, RouteBackendReference, SimpleBackend,
+	SimpleBackendReference,
+};
 use crate::*;
 pub use gateway::Gateway;
 use hyper_util_fork::client::legacy::Error as HyperError;
@@ -32,6 +38,8 @@ pub enum ProxyError {
 	JwtAuthenticationFailure(http::jwt::TokenError),
 	#[error("service not found")]
 	ServiceNotFound,
+	#[error("invalid backend type")]
+	InvalidBackendType,
 	#[error("no healthy backends")]
 	NoHealthyEndpoints,
 	#[error("authorization failed")]
@@ -76,6 +84,7 @@ impl ProxyError {
 			ProxyError::BackendUnsupportedMirror => StatusCode::INTERNAL_SERVER_ERROR,
 			ProxyError::ServiceNotFound => StatusCode::INTERNAL_SERVER_ERROR,
 			ProxyError::BackendAuthenticationFailed(_) => StatusCode::INTERNAL_SERVER_ERROR,
+			ProxyError::InvalidBackendType => StatusCode::INTERNAL_SERVER_ERROR,
 
 			ProxyError::UpgradeFailed(_, _) => StatusCode::BAD_GATEWAY,
 
@@ -103,4 +112,56 @@ impl ProxyError {
 			.body(http::Body::from(msg))
 			.unwrap()
 	}
+}
+
+pub fn resolve_backend(b: &BackendReference, pi: &ProxyInputs) -> Result<Backend, ProxyError> {
+	let backend = match b {
+		BackendReference::Service { name, port } => {
+			let svc = pi
+				.stores
+				.read_discovery()
+				.services
+				.get_by_namespaced_host(name)
+				.ok_or(ProxyError::ServiceNotFound)?;
+			Backend::Service(svc, *port)
+		},
+		BackendReference::Backend(name) => {
+			let be = pi
+				.stores
+				.read_binds()
+				.backend(&b.name())
+				.ok_or(ProxyError::ServiceNotFound)?;
+			Arc::unwrap_or_clone(be)
+		},
+		BackendReference::Invalid => Backend::Invalid,
+	};
+	Ok(backend)
+}
+
+pub fn resolve_simple_backend(
+	b: &SimpleBackendReference,
+	pi: &ProxyInputs,
+) -> Result<SimpleBackend, ProxyError> {
+	let backend = match b {
+		SimpleBackendReference::Service { name, port } => {
+			let svc = pi
+				.stores
+				.read_discovery()
+				.services
+				.get_by_namespaced_host(name)
+				.ok_or(ProxyError::ServiceNotFound)?;
+			SimpleBackend::Service(svc, *port)
+		},
+		SimpleBackendReference::Backend(name) => {
+			let be = pi
+				.stores
+				.read_binds()
+				.backend(&b.name())
+				.ok_or(ProxyError::ServiceNotFound)?;
+			SimpleBackend::try_from(Arc::unwrap_or_clone(be))
+				.map_err(|_| ProxyError::InvalidBackendType)?
+		},
+		SimpleBackendReference::Invalid => SimpleBackend::Invalid,
+	};
+	Ok(backend)
 }

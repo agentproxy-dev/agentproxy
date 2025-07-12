@@ -3,11 +3,11 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Target, TargetWithType, A2aTarget, BackendTls } from "@/lib/types";
+import { Target, TargetWithType, A2aTarget, BackendTLS } from "@/lib/types";
 
 interface DirectA2aTarget extends Omit<TargetWithType, "a2a">, A2aTarget {
   type: "a2a";
-  tls?: BackendTls;
+  tls?: BackendTLS;
 }
 
 interface A2ATargetFormProps {

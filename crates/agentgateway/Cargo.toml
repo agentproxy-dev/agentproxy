@@ -111,6 +111,9 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 url.workspace = true
 x509-parser.workspace = true
+serde_urlencoded = "0.7.1"
+percent-encoding = "2.3.1"
+http-serde = "2.1.1"
 
 [build-dependencies]
 anyhow.workspace = true

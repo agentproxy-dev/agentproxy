@@ -1,173 +1,153 @@
 "use client";
 
+import { PolicyConfig } from "@/components/policy-config";
 import { useServer } from "@/lib/server-context";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertCircle, ChevronDown, ChevronUp } from "lucide-react";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { Listener, RuleSet, Rule } from "@/lib/types";
-import { useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-
-interface PolicyWithListeners extends RuleSet {
-  listeners: Array<{
-    name: string;
-  }>;
-}
+import { AlertCircle, Shield } from "lucide-react";
+import { useState, useEffect } from "react";
+import { fetchBinds } from "@/lib/api";
 
 export default function PoliciesPage() {
-  const { listeners, connectionError } = useServer();
-  const [selectedPolicy, setSelectedPolicy] = useState<PolicyWithListeners | null>(null);
-
-  // Collect all unique policies across listeners
-  const policiesMap = new Map<string, PolicyWithListeners>();
-  listeners?.forEach((listener: Listener) => {
-    const policies = listener.sse?.rbac || [];
-    policies.forEach((policy: RuleSet) => {
-      if (!policiesMap.has(policy.name)) {
-        policiesMap.set(policy.name, {
-          ...policy,
-          listeners: [{ name: listener.name }],
-        });
-      } else {
-        const existingPolicy = policiesMap.get(policy.name);
-        if (existingPolicy) {
-          existingPolicy.listeners.push({
-            name: listener.name,
-          });
-        }
-      }
-    });
+  const { connectionError } = useServer();
+  const [isLoading, setIsLoading] = useState(true);
+  const [policyStats, setPolicyStats] = useState({
+    totalPolicies: 0,
+    securityPolicies: 0,
+    trafficPolicies: 0,
+    routingPolicies: 0,
+    bindsWithPolicies: 0,
   });
 
-  const allPolicies = Array.from(policiesMap.values());
-  const handlePolicyClick = (policy: PolicyWithListeners) => {
-    setSelectedPolicy(selectedPolicy?.name === policy.name ? null : policy);
+  const getPolicyCategories = (policies: any) => {
+    const categories = new Set<string>();
+
+    // Security policies
+    if (
+      policies.jwtAuth ||
+      policies.mcpAuthentication ||
+      policies.mcpAuthorization ||
+      policies.extAuthz
+    ) {
+      categories.add("security");
+    }
+
+    // Traffic policies
+    if (policies.localRateLimit || policies.remoteRateLimit || policies.timeout || policies.retry) {
+      categories.add("traffic");
+    }
+
+    // Routing policies
+    if (
+      policies.requestRedirect ||
+      policies.urlRewrite ||
+      policies.requestMirror ||
+      policies.directResponse
+    ) {
+      categories.add("routing");
+    }
+
+    return Array.from(categories);
   };
+
+  const loadPolicyStats = async () => {
+    try {
+      const binds = await fetchBinds();
+      let totalPolicies = 0;
+      let securityPolicies = 0;
+      let trafficPolicies = 0;
+      let routingPolicies = 0;
+      let bindsWithPolicies = 0;
+
+      binds.forEach((bind) => {
+        let bindHasPolicies = false;
+        bind.listeners.forEach((listener) => {
+          listener.routes?.forEach((route) => {
+            if (route.policies) {
+              totalPolicies++;
+              bindHasPolicies = true;
+
+              const categories = getPolicyCategories(route.policies);
+              if (categories.includes("security")) securityPolicies++;
+              if (categories.includes("traffic")) trafficPolicies++;
+              if (categories.includes("routing")) routingPolicies++;
+            }
+          });
+        });
+        if (bindHasPolicies) {
+          bindsWithPolicies++;
+        }
+      });
+
+      setPolicyStats({
+        totalPolicies,
+        securityPolicies,
+        trafficPolicies,
+        routingPolicies,
+        bindsWithPolicies,
+      });
+    } catch (error) {
+      console.error("Error loading policy stats:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadPolicyStats();
+  }, []);
 
   return (
     <div className="container mx-auto py-8 px-4">
-      {connectionError ? (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{connectionError}</AlertDescription>
-        </Alert>
-      ) : (
-        <div className="space-y-6">
-          <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-row items-center justify-between mb-6">
+        <div>
+          <div className="flex items-center space-x-3">
+            <Shield className="h-8 w-8 text-red-500" />
             <div>
-              <h1 className="text-3xl font-bold tracking-tight">Policies Overview</h1>
+              <h1 className="text-3xl font-bold tracking-tight">Policies</h1>
               <p className="text-muted-foreground mt-1">
-                View and manage security policies across all listeners
+                Configure security, traffic, and routing policies for your routes
               </p>
             </div>
           </div>
-
-          {allPolicies.length === 0 ? (
-            <Alert>
-              <AlertDescription>
-                No policies configured yet. Add policies through the listener configuration.
-              </AlertDescription>
-            </Alert>
-          ) : (
-            <div className="space-y-6">
-              <div className="border rounded-lg">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Policy Name</TableHead>
-                      <TableHead>Rules</TableHead>
-                      <TableHead>Applied To</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {allPolicies.map((policy) => (
-                      <TableRow
-                        key={policy.name}
-                        className="cursor-pointer hover:bg-muted/50"
-                        onClick={() => handlePolicyClick(policy)}
-                      >
-                        <TableCell className="font-medium">
-                          <div className="flex items-center">
-                            {selectedPolicy?.name === policy.name ? (
-                              <ChevronUp className="h-4 w-4 mr-2" />
-                            ) : (
-                              <ChevronDown className="h-4 w-4 mr-2" />
-                            )}
-                            {policy.name}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="secondary">{policy.rules?.length || 0} rules</Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-wrap gap-2">
-                            {policy.listeners.map((listener) => (
-                              <Badge key={listener.name} variant="outline">
-                                {listener.name}
-                              </Badge>
-                            ))}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+          {!isLoading && policyStats.totalPolicies > 0 && (
+            <div className="mt-4 flex items-center space-x-6 text-sm text-muted-foreground">
+              <div className="flex items-center space-x-2">
+                <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                <span>
+                  {policyStats.totalPolicies} route{policyStats.totalPolicies !== 1 ? "s" : ""} with
+                  policies
+                </span>
               </div>
-
-              {selectedPolicy && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Policy Details: {selectedPolicy.name}</CardTitle>
-                    <CardDescription>View the rules for this policy</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <h3 className="text-lg font-medium mb-4">Rules</h3>
-                    {selectedPolicy.rules && selectedPolicy.rules.length > 0 ? (
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Key</TableHead>
-                            <TableHead>Value</TableHead>
-                            <TableHead>Resource Type</TableHead>
-                            <TableHead>Resource ID</TableHead>
-                            <TableHead>Target</TableHead>
-                            <TableHead>Matcher</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {selectedPolicy.rules.map((rule: Rule, index: number) => (
-                            <TableRow key={index}>
-                              <TableCell>{rule.key}</TableCell>
-                              <TableCell>{rule.value}</TableCell>
-                              <TableCell>
-                                <Badge variant="outline">{rule.resource.type}</Badge>
-                              </TableCell>
-                              <TableCell>{rule.resource.id || "-"}</TableCell>
-                              <TableCell>{rule.resource.target || "-"}</TableCell>
-                              <TableCell>{rule.matcher || "EQUALS"}</TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    ) : (
-                      <p className="text-sm text-muted-foreground">
-                        No rules defined for this policy.
-                      </p>
-                    )}
-                  </CardContent>
-                </Card>
+              {policyStats.securityPolicies > 0 && (
+                <div className="flex items-center space-x-2">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                  <span>{policyStats.securityPolicies} Security</span>
+                </div>
+              )}
+              {policyStats.trafficPolicies > 0 && (
+                <div className="flex items-center space-x-2">
+                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                  <span>{policyStats.trafficPolicies} Traffic</span>
+                </div>
+              )}
+              {policyStats.routingPolicies > 0 && (
+                <div className="flex items-center space-x-2">
+                  <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+                  <span>{policyStats.routingPolicies} Routing</span>
+                </div>
               )}
             </div>
           )}
         </div>
+      </div>
+
+      {connectionError ? (
+        <Alert variant="destructive" className="mb-6">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{connectionError}</AlertDescription>
+        </Alert>
+      ) : (
+        <PolicyConfig />
       )}
     </div>
   );

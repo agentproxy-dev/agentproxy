@@ -15,27 +15,81 @@ import { z } from "zod";
 import { A2AClient, RpcError } from "@/lib/a2a-client";
 import { AgentSkill, Task, TaskSendParams, Message } from "@/lib/a2a-schema";
 import { useServer } from "@/lib/server-context";
-import { fetchListenerTargets } from "@/lib/api";
-import { ListenerInfo, ListenerProtocol } from "@/lib/types";
+import { Bind, Listener, Route, Backend, ListenerProtocol } from "@/lib/types";
 import { toast } from "sonner";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Globe,
+  ArrowRight,
+  Server,
+  Send,
+  Loader2,
+  Clock,
+  Shield,
+  Settings,
+  CheckCircle,
+  AlertCircle,
+  Info,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
 import { v4 as uuidv4 } from "uuid";
 
-// Import the playground components
-import { ConnectionSettings } from "@/components/playground/ConnectionSettings";
 import { CapabilitiesList } from "@/components/playground/CapabilitiesList";
 import { ActionPanel } from "@/components/playground/ActionPanel";
 import { ResponseDisplay } from "@/components/playground/ResponseDisplay";
 
-// Schema for MCP tool invocation response (kept for MCP)
+// Schema for MCP tool invocation response
 const McpToolResponseSchema = z.any();
 
-// Define state interfaces
+// Interface for route testing
+interface RouteInfo {
+  bindPort: number;
+  listener: Listener;
+  route: Route;
+  endpoint: string;
+  protocol: string;
+  routeIndex: number;
+  routePath: string;
+  routeDescription: string;
+}
+
+interface TestRequest {
+  method: string;
+  path: string;
+  headers: Record<string, string>;
+  body: string;
+  query: Record<string, string>;
+}
+
+interface TestResponse {
+  status: number;
+  statusText: string;
+  headers: Record<string, string>;
+  body: string;
+  responseTime: number;
+  timestamp: string;
+}
+
+// Define state interfaces for MCP/A2A
 interface ConnectionState {
   selectedEndpoint: string;
   selectedListenerName: string | null;
   selectedListenerProtocol: ListenerProtocol | null;
   authToken: string;
-  connectionType: "mcp" | "a2a" | null;
+  connectionType: "mcp" | "a2a" | "http" | null;
   isConnected: boolean;
   isConnecting: boolean;
   isLoadingA2aTargets: boolean;
@@ -64,10 +118,29 @@ interface UiState {
   isLoadingCapabilities: boolean;
 }
 
-export default function PlaygroundPage() {
-  const { listeners: rawListeners } = useServer();
-  const [listeners, setListeners] = useState<ListenerInfo[]>([]);
+const HTTP_METHODS = ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"];
 
+export default function PlaygroundPage() {
+  const { binds } = useServer();
+  const [routes, setRoutes] = useState<RouteInfo[]>([]);
+  const [selectedRoute, setSelectedRoute] = useState<RouteInfo | null>(null);
+
+  // HTTP testing state
+  const [request, setRequest] = useState<TestRequest>({
+    method: "GET",
+    path: "/",
+    headers: {},
+    body: "",
+    query: {},
+  });
+  const [response, setResponse] = useState<TestResponse | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [headerKey, setHeaderKey] = useState("");
+  const [headerValue, setHeaderValue] = useState("");
+  const [queryKey, setQueryKey] = useState("");
+  const [queryValue, setQueryValue] = useState("");
+
+  // MCP/A2A connection state
   const [connectionState, setConnectionState] = useState<ConnectionState>({
     selectedEndpoint: "",
     selectedListenerName: null,
@@ -102,75 +175,346 @@ export default function PlaygroundPage() {
     isLoadingCapabilities: false,
   });
 
-  // Process rawListeners on mount or when they change
+  // Extract routes from configuration
   useEffect(() => {
-    const processedListeners = rawListeners
-      .map((listener) => {
-        let displayEndpoint = "Unknown";
-        if (listener.sse) {
-          displayEndpoint = `localhost:${listener.sse.port}`;
+    if (!binds || binds.length === 0) return;
+
+    const extractedRoutes: RouteInfo[] = [];
+
+    binds.forEach((bind: Bind) => {
+      bind.listeners.forEach((listener: Listener) => {
+        if (listener.routes) {
+          listener.routes.forEach((route: Route, routeIndex: number) => {
+            const protocol = listener.protocol === ListenerProtocol.HTTPS ? "https" : "http";
+            const hostname = listener.hostname || "localhost";
+            const port = bind.port; // Use the actual port from the bind configuration
+            const baseEndpoint = `${protocol}://${hostname}:${port}`;
+
+            // Generate route path and description with better pattern recognition
+            let routePath = "/*";
+            let routePattern = "/*";
+            let pathType = "prefix";
+
+            if (route.matches?.[0]?.path) {
+              const pathMatch = route.matches[0].path;
+              if (pathMatch.exact) {
+                routePath = pathMatch.exact;
+                routePattern = pathMatch.exact;
+                pathType = "exact";
+              } else if (pathMatch.pathPrefix) {
+                routePath = pathMatch.pathPrefix;
+                routePattern = pathMatch.pathPrefix + "*";
+                pathType = "prefix";
+              } else if (pathMatch.regex) {
+                routePath = "/";
+                routePattern = `~${pathMatch.regex}`;
+                pathType = "regex";
+              }
+            }
+
+            // Create full endpoint with route path
+            const endpoint = `${baseEndpoint}${routePath}`;
+
+            const hostnames = route.hostnames?.join(", ") || "";
+            const backendCount = route.backends?.length || 0;
+            const backendTypes =
+              route.backends
+                ?.map((b) => {
+                  if (b.mcp) return "MCP";
+                  if (b.ai) return "AI";
+                  if (b.service) return "Service";
+                  if (b.host) return "Host";
+                  if (b.dynamic) return "Dynamic";
+                  return "Unknown";
+                })
+                .join(", ") || "";
+
+            const routeDescription = `${routePattern}${hostnames ? ` • ${hostnames}` : ""} • ${backendCount} backend${backendCount !== 1 ? "s" : ""}${backendTypes ? ` (${backendTypes})` : ""}`;
+
+            extractedRoutes.push({
+              bindPort: bind.port,
+              listener,
+              route,
+              endpoint,
+              protocol,
+              routeIndex,
+              routePath: routePattern,
+              routeDescription,
+            });
+          });
         }
-        return { ...listener, displayEndpoint };
-      })
-      .filter((l) => l.displayEndpoint !== "Unknown");
+      });
+    });
 
-    setListeners(processedListeners);
-  }, [rawListeners]);
+    setRoutes(extractedRoutes);
 
-  // Handle Listener Endpoint Selection Change
-  const handleListenerSelect = async (endpoint: string) => {
+    // Auto-select first route if available
+    if (extractedRoutes.length > 0 && !selectedRoute) {
+      setSelectedRoute(extractedRoutes[0]);
+      updateRequestFromRoute(extractedRoutes[0]);
+    }
+  }, [binds]);
+
+  // Determine backend type of selected route
+  const getRouteBackendType = (route: RouteInfo): "mcp" | "a2a" | "http" => {
+    if (!route.route.backends || route.route.backends.length === 0) return "http";
+
+    const backend = route.route.backends[0]; // Use first backend to determine type
+    if (backend.mcp) return "mcp";
+    if (backend.ai) return "a2a"; // Treat AI backends as A2A for now
+    return "http"; // Host, Service, etc.
+  };
+
+  const updateRequestFromRoute = (routeInfo: RouteInfo) => {
+    let initialPath = "/";
+
+    if (routeInfo.route.matches && routeInfo.route.matches.length > 0) {
+      const firstMatch = routeInfo.route.matches[0];
+      if (firstMatch.path.exact) {
+        initialPath = firstMatch.path.exact;
+      } else if (firstMatch.path.pathPrefix) {
+        initialPath = firstMatch.path.pathPrefix;
+      } else if (firstMatch.path.regex) {
+        initialPath = "/";
+      }
+    }
+
+    setRequest({
+      method: "GET",
+      path: initialPath,
+      headers: {},
+      body: "",
+      query: {},
+    });
+    setResponse(null);
+
+    // Reset MCP/A2A responses
+    setMcpState((prev) => ({ ...prev, response: null }));
+    setA2aState((prev) => ({ ...prev, response: null }));
+
+    // Set connection type based on backend
+    const backendType = getRouteBackendType(routeInfo);
     setConnectionState((prev) => ({
       ...prev,
-      selectedEndpoint: endpoint,
-      isConnected: false,
+      connectionType: backendType,
+      selectedEndpoint: routeInfo.endpoint,
+      selectedListenerName: routeInfo.listener.name || null,
+      selectedListenerProtocol: routeInfo.listener.protocol,
     }));
-    setA2aState((prev) => ({
-      ...prev,
-      selectedTarget: null,
-      targets: [],
-    }));
-    resetClientState();
+  };
 
-    const listener = listeners.find((l) => l.displayEndpoint === endpoint);
-    if (!listener) {
-      setConnectionState((prev) => ({
-        ...prev,
-        selectedListenerName: null,
-        selectedListenerProtocol: null,
-      }));
+  const handleRouteSelect = (routeInfo: RouteInfo) => {
+    // Don't allow selection of routes with no backends
+    if (!routeInfo.route.backends || routeInfo.route.backends.length === 0) {
+      toast.error(
+        "Cannot test route without backends. Please configure at least one backend for this route."
+      );
       return;
     }
 
-    setConnectionState((prev) => ({
-      ...prev,
-      selectedListenerName: listener.name,
-      selectedListenerProtocol: listener.protocol,
-    }));
+    setSelectedRoute(routeInfo);
+    updateRequestFromRoute(routeInfo);
+  };
 
-    if (listener.protocol === ListenerProtocol.A2A) {
-      setConnectionState((prev) => ({ ...prev, isLoadingA2aTargets: true }));
-      try {
-        const targets = await fetchListenerTargets(listener.name);
-        const targetNames = targets.map((t) => t.name);
-        setA2aState((prev) => ({ ...prev, targets: targetNames }));
-        if (targets.length === 0) {
-          toast.info(`A2A listener ${listener.name} has no targets configured.`);
-        }
-      } catch (error) {
-        console.error("Failed to fetch A2A targets:", error);
-        toast.error("Failed to fetch A2A targets for this listener.");
-        setA2aState((prev) => ({ ...prev, targets: [] }));
-      } finally {
-        setConnectionState((prev) => ({ ...prev, isLoadingA2aTargets: false }));
-      }
-    } else {
-      setA2aState((prev) => ({ ...prev, targets: [], selectedTarget: null }));
+  // HTTP request functions
+  const addHeader = () => {
+    if (headerKey && headerValue) {
+      setRequest((prev) => ({
+        ...prev,
+        headers: { ...prev.headers, [headerKey]: headerValue },
+      }));
+      setHeaderKey("");
+      setHeaderValue("");
     }
   };
 
-  // Clear client-specific state without clearing endpoint/token
+  const removeHeader = (key: string) => {
+    setRequest((prev) => ({
+      ...prev,
+      headers: Object.fromEntries(Object.entries(prev.headers).filter(([k]) => k !== key)),
+    }));
+  };
+
+  const addQuery = () => {
+    if (queryKey && queryValue) {
+      setRequest((prev) => ({
+        ...prev,
+        query: { ...prev.query, [queryKey]: queryValue },
+      }));
+      setQueryKey("");
+      setQueryValue("");
+    }
+  };
+
+  const removeQuery = (key: string) => {
+    setRequest((prev) => ({
+      ...prev,
+      query: Object.fromEntries(Object.entries(prev.query).filter(([k]) => k !== key)),
+    }));
+  };
+
+  const sendHttpRequest = async () => {
+    if (!selectedRoute) return;
+
+    setIsLoading(true);
+    const startTime = performance.now();
+
+    try {
+      const url = new URL(selectedRoute.endpoint + request.path);
+
+      // Add query parameters
+      Object.entries(request.query).forEach(([key, value]) => {
+        url.searchParams.append(key, value);
+      });
+
+      const fetchOptions: RequestInit = {
+        method: request.method,
+        headers: {
+          "Content-Type": "application/json",
+          ...request.headers,
+        },
+      };
+
+      if (request.body && ["POST", "PUT", "PATCH"].includes(request.method)) {
+        fetchOptions.body = request.body;
+      }
+
+      const response = await fetch(url.toString(), fetchOptions);
+      const endTime = performance.now();
+      const responseTime = endTime - startTime;
+
+      const responseBody = await response.text();
+      const responseHeaders: Record<string, string> = {};
+      response.headers.forEach((value, key) => {
+        responseHeaders[key] = value;
+      });
+
+      setResponse({
+        status: response.status,
+        statusText: response.statusText,
+        headers: responseHeaders,
+        body: responseBody,
+        responseTime,
+        timestamp: new Date().toISOString(),
+      });
+
+      toast.success(`Request completed in ${responseTime.toFixed(2)}ms`);
+    } catch (error) {
+      const endTime = performance.now();
+      const responseTime = endTime - startTime;
+
+      setResponse({
+        status: 0,
+        statusText: "Network Error",
+        headers: {},
+        body: error instanceof Error ? error.message : "Unknown error",
+        responseTime,
+        timestamp: new Date().toISOString(),
+      });
+
+      toast.error("Request failed");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // MCP/A2A connection functions
+  const connect = async () => {
+    if (!selectedRoute) return;
+
+    setConnectionState((prev) => ({ ...prev, isConnecting: true }));
+    resetClientState();
+
+    const backendType = getRouteBackendType(selectedRoute);
+
+    try {
+      if (backendType === "mcp") {
+        // Connect to MCP endpoint
+        setConnectionState((prev) => ({ ...prev, connectionType: "mcp" }));
+        const connectUrl = `${selectedRoute.endpoint}/sse`;
+
+        const headers: Record<string, string> = {};
+        if (connectionState.authToken) {
+          headers["Authorization"] = `Bearer ${connectionState.authToken}`;
+        }
+
+        const client = new McpClient(
+          { name: "agentgateway-dashboard", version: "0.1.0" },
+          { capabilities: {} }
+        );
+
+        const transport = new McpSseTransport(new URL(connectUrl), {
+          eventSourceInit: {
+            fetch: (url, init) => fetch(url, { ...init, headers: headers as HeadersInit }),
+          },
+          requestInit: { headers: headers as HeadersInit },
+        });
+
+        await client.connect(transport);
+        setMcpState((prev) => ({ ...prev, client }));
+        setConnectionState((prev) => ({ ...prev, isConnected: true }));
+        toast.success("Connected to MCP endpoint");
+
+        setUiState((prev) => ({ ...prev, isLoadingCapabilities: true }));
+        const listToolsRequest: McpClientRequest = { method: "tools/list", params: {} };
+        const toolsResponse = await client.request(listToolsRequest, McpListToolsResultSchema);
+        setMcpState((prev) => ({ ...prev, tools: toolsResponse.tools }));
+      } else if (backendType === "a2a") {
+        // Connect to A2A endpoint
+        setConnectionState((prev) => ({ ...prev, connectionType: "a2a" }));
+        const connectUrl = selectedRoute.endpoint;
+
+        const client = new A2AClient(
+          connectUrl,
+          connectionState.authToken
+            ? { Authorization: `Bearer ${connectionState.authToken}` }
+            : undefined
+        );
+        // Note: A2A skills would be loaded here based on actual A2A API
+        setA2aState((prev) => ({ ...prev, client, skills: [] }));
+        setConnectionState((prev) => ({ ...prev, isConnected: true }));
+        toast.success("Connected to A2A endpoint");
+      }
+    } catch (error: any) {
+      console.error("Failed to connect:", error);
+      const errorMessage =
+        error instanceof RpcError || error instanceof McpError || error instanceof Error
+          ? error.message
+          : "Unknown connection error";
+
+      if (errorMessage.includes("401") || (error instanceof RpcError && error.code === 401)) {
+        toast.error("Unauthorized: Check bearer token");
+      } else if (
+        errorMessage.includes("Not Found") ||
+        (error instanceof Error && error.message.includes("404"))
+      ) {
+        toast.error(`Connection failed: Endpoint or target not found (${errorMessage})`);
+      } else if (errorMessage.includes("Failed to fetch")) {
+        toast.error("Connection failed: Server unreachable or refused connection.");
+      } else {
+        toast.error(`Connection failed: ${errorMessage}`);
+      }
+      resetFullStateAfterDisconnect();
+    } finally {
+      setConnectionState((prev) => ({ ...prev, isConnecting: false }));
+      setUiState((prev) => ({ ...prev, isLoadingCapabilities: false }));
+    }
+  };
+
+  const disconnect = async () => {
+    if (connectionState.connectionType === "mcp" && mcpState.client) {
+      try {
+        await mcpState.client.close();
+      } catch (e) {
+        console.error("Error closing MCP client:", e);
+      }
+    }
+    resetFullStateAfterDisconnect();
+    toast.info("Disconnected");
+  };
+
   const resetClientState = () => {
-    setConnectionState((prev) => ({ ...prev, connectionType: null }));
+    setConnectionState((prev) => ({ ...prev, connectionType: connectionState.connectionType }));
     setMcpState((prev) => ({
       ...prev,
       client: null,
@@ -193,158 +537,19 @@ export default function PlaygroundPage() {
     });
   };
 
-  const connect = async () => {
-    const selectedListener = listeners.find(
-      (l) => l.displayEndpoint === connectionState.selectedEndpoint
-    );
-
-    if (!selectedListener || !selectedListener.sse) {
-      toast.error("Listener details not found or invalid.");
-      return;
-    }
-
-    const protocol = selectedListener.protocol;
-
-    if (protocol === ListenerProtocol.A2A && !a2aState.selectedTarget) {
-      toast.warning("Please select an A2A target to connect to.");
-      return;
-    }
-
-    setConnectionState((prev) => ({ ...prev, isConnecting: true }));
-    resetClientState();
-
-    const port = selectedListener.sse.port;
-    const useTls = !!selectedListener.sse.tls;
-    const httpProtocol = useTls ? "https" : "http";
-
-    const headers: HeadersInit = {};
-    if (connectionState.authToken) {
-      headers["Authorization"] = `Bearer ${connectionState.authToken}`;
-    }
-
-    try {
-      if (protocol === ListenerProtocol.MCP || !protocol) {
-        setConnectionState((prev) => ({ ...prev, connectionType: "mcp" }));
-        const connectUrl = `${httpProtocol}://localhost:${port}/sse`;
-
-        const client = new McpClient(
-          { name: "agentgateway-dashboard", version: "0.1.0" },
-          { capabilities: {} }
-        );
-
-        const transport = new McpSseTransport(new URL(connectUrl), {
-          eventSourceInit: {
-            fetch: (url, init) => fetch(url, { ...init, headers }),
-          },
-          requestInit: { headers },
-        });
-
-        await client.connect(transport);
-        setMcpState((prev) => ({ ...prev, client }));
-        setConnectionState((prev) => ({ ...prev, isConnected: true }));
-        toast.success("Connected to MCP endpoint");
-
-        setUiState((prev) => ({ ...prev, isLoadingCapabilities: true }));
-        const listToolsRequest: McpClientRequest = { method: "tools/list", params: {} };
-        const toolsResponse = await client.request(listToolsRequest, McpListToolsResultSchema);
-        setMcpState((prev) => ({ ...prev, tools: toolsResponse.tools }));
-      } else if (protocol === ListenerProtocol.A2A) {
-        setConnectionState((prev) => ({ ...prev, connectionType: "a2a" }));
-        const baseUrl = `${httpProtocol}://localhost:${port}/${a2aState.selectedTarget}`;
-
-        const client = new A2AClient(baseUrl, headers);
-        setA2aState((prev) => ({ ...prev, client }));
-        setConnectionState((prev) => ({ ...prev, isConnected: true }));
-        toast.success(
-          `Initialized A2A client for target ${a2aState.selectedTarget} (fetching Agent Card...)`
-        );
-
-        setUiState((prev) => ({ ...prev, isLoadingCapabilities: true }));
-        const agentCard = await client.agentCard();
-        setA2aState((prev) => ({ ...prev, skills: agentCard.skills || [] }));
-        toast.success(`Connected to A2A Agent: ${agentCard.name}`);
-      } else {
-        toast.error("Unknown listener protocol.");
-        setConnectionState((prev) => ({ ...prev, connectionType: null }));
-      }
-    } catch (error: any) {
-      console.error("Failed to connect:", error);
-      const errorMessage =
-        error instanceof RpcError || error instanceof McpError || error instanceof Error
-          ? error.message
-          : "Unknown connection error";
-
-      if (errorMessage.includes("401") || (error instanceof RpcError && error.code === 401)) {
-        toast.error("Unauthorized: Check bearer token");
-      } else if (
-        errorMessage.includes("Not Found") ||
-        (error instanceof Error && error.message.includes("404"))
-      ) {
-        toast.error(`Connection failed: Endpoint or target not found (${errorMessage})`);
-      } else if (errorMessage.includes("Failed to fetch")) {
-        toast.error("Connection failed: Server unreachable or refused connection.");
-      } else {
-        toast.error(`Connection failed: ${errorMessage}`);
-      }
-      resetFullStateAfterDisconnect(); // Full reset on connection failure
-    } finally {
-      setConnectionState((prev) => ({ ...prev, isConnecting: false }));
-      setUiState((prev) => ({ ...prev, isLoadingCapabilities: false }));
-    }
-  };
-
-  const disconnect = async () => {
-    if (connectionState.connectionType === "mcp" && mcpState.client) {
-      try {
-        await mcpState.client.close();
-      } catch (e) {
-        console.error("Error closing MCP client:", e);
-      }
-    }
-    resetFullStateAfterDisconnect();
-    toast.info("Disconnected");
-  };
-
-  // Resets everything including endpoint/token selections
   const resetFullStateAfterDisconnect = () => {
-    setConnectionState({
-      // Reset full connection state
-      selectedEndpoint: "",
-      selectedListenerName: null,
-      selectedListenerProtocol: null,
-      authToken: connectionState.authToken, // Keep token maybe? Or reset? Let's keep it for now.
-      connectionType: null,
+    setConnectionState((prev) => ({
+      ...prev,
       isConnected: false,
       isConnecting: false,
       isLoadingA2aTargets: false,
-    });
-    setMcpState({
-      // Reset full MCP state
-      client: null,
-      tools: [],
-      selectedTool: null,
-      paramValues: {},
-      response: null,
-    });
-    setA2aState({
-      // Reset full A2A state
-      client: null,
-      targets: [],
-      selectedTarget: null,
-      skills: [],
-      selectedSkill: null,
-      message: "",
-      response: null,
-    });
-    setUiState({
-      isRequestRunning: false,
-      isLoadingCapabilities: false,
-    });
+    }));
+    resetClientState();
   };
 
   const handleMcpToolSelect = (tool: McpTool) => {
     setMcpState((prev) => ({ ...prev, selectedTool: tool, response: null }));
-    setA2aState((prev) => ({ ...prev, response: null })); // Clear other response type
+    setA2aState((prev) => ({ ...prev, response: null }));
 
     const initialParams: Record<string, any> = {};
     Object.entries(tool.inputSchema.properties || {}).forEach(([key, prop]: [string, any]) => {
@@ -455,65 +660,728 @@ export default function PlaygroundPage() {
     setA2aState((prev) => ({ ...prev, message }));
   };
 
+  const getBackendInfo = (backend: Backend) => {
+    if (backend.mcp) {
+      return { type: "MCP", name: backend.mcp.name, icon: Server };
+    } else if (backend.host) {
+      return {
+        type: "Host",
+        name: backend.host.Hostname?.[0] || backend.host.Address || "Unknown",
+        icon: Globe,
+      };
+    } else if (backend.service) {
+      return { type: "Service", name: backend.service.name.hostname, icon: Server };
+    } else if (backend.ai) {
+      return { type: "AI", name: backend.ai.name, icon: Settings };
+    }
+    return { type: "Unknown", name: "Unknown", icon: AlertCircle };
+  };
+
+  const getStatusColor = (status: number) => {
+    if (status >= 200 && status < 300) return "text-green-600";
+    if (status >= 300 && status < 400) return "text-blue-600";
+    if (status >= 400 && status < 500) return "text-orange-600";
+    if (status >= 500) return "text-red-600";
+    return "text-gray-600";
+  };
+
+  const getStatusIcon = (status: number) => {
+    if (status >= 200 && status < 300) return CheckCircle;
+    if (status >= 300 && status < 400) return Info;
+    return AlertCircle;
+  };
+
   return (
     <div className="container mx-auto py-8 px-4 space-y-6">
       <div className="mb-6">
         <h1 className="text-3xl font-bold tracking-tight">Playground</h1>
-        <p className="text-muted-foreground mt-1">Test your MCP and A2A server endpoints</p>
+        <p className="text-muted-foreground mt-1">Test your configured routes and backends</p>
       </div>
 
-      <ConnectionSettings
-        listeners={listeners}
-        a2aTargets={a2aState.targets}
-        isLoadingA2aTargets={connectionState.isLoadingA2aTargets}
-        selectedEndpoint={connectionState.selectedEndpoint}
-        selectedA2aTarget={a2aState.selectedTarget}
-        authToken={connectionState.authToken}
-        isConnected={connectionState.isConnected}
-        isConnecting={connectionState.isConnecting}
-        selectedListenerProtocol={connectionState.selectedListenerProtocol}
-        onListenerSelect={handleListenerSelect}
-        onA2aTargetSelect={handleA2aTargetSelect}
-        onAuthTokenChange={handleAuthTokenChange}
-        onConnect={connect}
-        onDisconnect={disconnect}
-      />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Routes Panel */}
+        <Card className="lg:col-span-1">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Globe className="h-5 w-5" />
+              Routes
+            </CardTitle>
+            <CardDescription>
+              {routes.length === 0
+                ? "No routes configured"
+                : `${routes.length} route${routes.length !== 1 ? "s" : ""} available`}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {routes.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <Globe className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>No routes configured</p>
+                <p className="text-sm mt-2">Add routes in the configuration to test them here</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {(() => {
+                  // Group routes by bind port and listener
+                  const groupedRoutes = new Map<string, RouteInfo[]>();
+                  routes.forEach((routeInfo) => {
+                    const groupKey = `${routeInfo.bindPort}-${routeInfo.listener.name || "unnamed"}`;
+                    if (!groupedRoutes.has(groupKey)) {
+                      groupedRoutes.set(groupKey, []);
+                    }
+                    groupedRoutes.get(groupKey)!.push(routeInfo);
+                  });
 
-      {connectionState.isConnected && (
+                  return Array.from(groupedRoutes.entries()).map(([groupKey, routeInfos]) => {
+                    const firstRoute = routeInfos[0];
+                    const port = firstRoute.bindPort;
+                    const listenerName = firstRoute.listener.name || "unnamed";
+                    const endpoint = firstRoute.endpoint;
+
+                    return (
+                      <div key={groupKey} className="border rounded-lg bg-background">
+                        {/* Group Header */}
+                        <div className="p-3 border-b bg-muted/30">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Server className="h-4 w-4 text-muted-foreground" />
+                              <span className="font-medium text-sm">{listenerName}</span>
+                              <Badge variant="secondary" className="text-xs">
+                                Port {port}
+                              </Badge>
+                            </div>
+                            <div className="text-xs text-muted-foreground font-mono">
+                              {endpoint}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Routes in this group */}
+                        <div className="divide-y">
+                          {routeInfos.map((routeInfo, index) => {
+                            const hasBackends =
+                              routeInfo.route.backends && routeInfo.route.backends.length > 0;
+                            const backendTypes =
+                              routeInfo.route.backends?.map((b) => {
+                                if (b.mcp) return "MCP";
+                                if (b.ai) return "AI";
+                                if (b.service) return "Service";
+                                if (b.host) return "Host";
+                                if (b.dynamic) return "Dynamic";
+                                return "Unknown";
+                              }) || [];
+
+                            return (
+                              <div
+                                key={`${groupKey}-${index}`}
+                                className={cn(
+                                  "p-3 transition-colors",
+                                  !hasBackends
+                                    ? "bg-destructive/5 cursor-not-allowed opacity-75"
+                                    : selectedRoute === routeInfo
+                                      ? "bg-primary/10 cursor-pointer"
+                                      : "hover:bg-muted/50 cursor-pointer"
+                                )}
+                                onClick={() => handleRouteSelect(routeInfo)}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <div className="flex-1 min-w-0">
+                                    {/* Route name and path */}
+                                    <div className="flex items-center gap-2 mb-2">
+                                      {!hasBackends && (
+                                        <AlertCircle className="h-4 w-4 text-destructive flex-shrink-0" />
+                                      )}
+                                      <span className="font-medium">
+                                        {routeInfo.route.name ||
+                                          `Route ${routeInfo.routeIndex + 1}`}
+                                      </span>
+                                      <Badge variant="outline" className="text-xs font-mono">
+                                        {routeInfo.routePath}
+                                      </Badge>
+                                      {routeInfo.route.matches?.[0]?.path?.regex && (
+                                        <Badge variant="secondary" className="text-xs">
+                                          regex
+                                        </Badge>
+                                      )}
+                                      {routeInfo.route.matches?.[0]?.path?.pathPrefix && (
+                                        <Badge variant="secondary" className="text-xs">
+                                          prefix
+                                        </Badge>
+                                      )}
+                                      {routeInfo.route.matches?.[0]?.path?.exact && (
+                                        <Badge variant="secondary" className="text-xs">
+                                          exact
+                                        </Badge>
+                                      )}
+                                    </div>
+
+                                    {/* Route details */}
+                                    <div className="text-sm text-muted-foreground space-y-1">
+                                      {/* Hostnames */}
+                                      {routeInfo.route.hostnames &&
+                                        routeInfo.route.hostnames.length > 0 && (
+                                          <div className="flex items-center gap-1 text-xs">
+                                            <Globe className="h-3 w-3" />
+                                            <span>
+                                              Hosts: {routeInfo.route.hostnames.join(", ")}
+                                            </span>
+                                          </div>
+                                        )}
+
+                                      {/* Backends */}
+                                      <div className="flex items-center gap-2 text-xs">
+                                        <div
+                                          className={cn(
+                                            "flex items-center gap-1",
+                                            !hasBackends && "text-destructive"
+                                          )}
+                                        >
+                                          <Server className="h-3 w-3" />
+                                          <span>
+                                            {routeInfo.route.backends?.length || 0} backend
+                                            {(routeInfo.route.backends?.length || 0) !== 1
+                                              ? "s"
+                                              : ""}
+                                          </span>
+                                        </div>
+
+                                        {/* Backend types */}
+                                        {hasBackends && (
+                                          <div className="flex gap-1">
+                                            {backendTypes.map((type, idx) => (
+                                              <Badge
+                                                key={idx}
+                                                variant="secondary"
+                                                className="text-xs py-0 px-1"
+                                              >
+                                                {type}
+                                              </Badge>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </div>
+
+                                      {/* Error message */}
+                                      {!hasBackends && (
+                                        <div className="text-destructive text-xs mt-1 flex items-center gap-1">
+                                          <AlertCircle className="h-3 w-3" />
+                                          <span>Cannot test - no backends configured</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {hasBackends && (
+                                    <ArrowRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Testing Panel */}
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Send className="h-5 w-5" />
+              Testing
+            </CardTitle>
+            <CardDescription>
+              {selectedRoute
+                ? `Test ${getRouteBackendType(selectedRoute)} backend`
+                : "Select a route to start testing"}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {!selectedRoute ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <Send className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>Select a route to start testing</p>
+              </div>
+            ) : connectionState.connectionType === "http" ? (
+              // HTTP Testing Interface
+              <div className="space-y-4">
+                {/* Request URL Display */}
+                <div className="bg-muted/30 rounded-lg p-4 border">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Globe className="h-4 w-4 text-muted-foreground" />
+                    <span className="font-medium text-sm">Request URL</span>
+                  </div>
+                  <div className="font-mono text-sm break-all">
+                    {selectedRoute.protocol}://{selectedRoute.listener.hostname || "localhost"}:
+                    {selectedRoute.bindPort}
+                    {request.path}
+                  </div>
+                </div>
+
+                {/* Method and Path Configuration */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="space-y-2">
+                    <Label>HTTP Method</Label>
+                    <Select
+                      value={request.method}
+                      onValueChange={(value) => setRequest((prev) => ({ ...prev, method: value }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {HTTP_METHODS.map((method) => (
+                          <SelectItem key={method} value={method}>
+                            {method}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="md:col-span-3 space-y-2">
+                    <Label>
+                      Request Path
+                      {selectedRoute.route.matches?.[0]?.path?.regex && (
+                        <span className="text-xs text-muted-foreground ml-2">
+                          (Must match pattern: {selectedRoute.route.matches[0].path.regex})
+                        </span>
+                      )}
+                      {selectedRoute.route.matches?.[0]?.path?.pathPrefix && (
+                        <span className="text-xs text-muted-foreground ml-2">
+                          (Must start with: {selectedRoute.route.matches[0].path.pathPrefix})
+                        </span>
+                      )}
+                      {selectedRoute.route.matches?.[0]?.path?.exact && (
+                        <span className="text-xs text-muted-foreground ml-2">
+                          (Must be exactly: {selectedRoute.route.matches[0].path.exact})
+                        </span>
+                      )}
+                    </Label>
+                    <div className="flex gap-2">
+                      <Input
+                        value={request.path}
+                        onChange={(e) => setRequest((prev) => ({ ...prev, path: e.target.value }))}
+                        placeholder={
+                          selectedRoute.route.matches?.[0]?.path?.regex
+                            ? "/your/path/here"
+                            : selectedRoute.route.matches?.[0]?.path?.pathPrefix
+                              ? `${selectedRoute.route.matches[0].path.pathPrefix}...`
+                              : selectedRoute.route.matches?.[0]?.path?.exact
+                                ? selectedRoute.route.matches[0].path.exact
+                                : "/path"
+                        }
+                        className="flex-1"
+                      />
+                      <Button onClick={sendHttpRequest} disabled={isLoading}>
+                        {isLoading ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Sending...
+                          </>
+                        ) : (
+                          <>
+                            <Send className="mr-2 h-4 w-4" />
+                            Send
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Route Info */}
+                <div className="bg-muted/30 rounded-lg p-4 border">
+                  <h4 className="font-medium mb-2 flex items-center gap-2">
+                    <Settings className="h-4 w-4" />
+                    Route Configuration
+                  </h4>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Name:</span>
+                      <span>{selectedRoute.route.name || "Unnamed"}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Listener:</span>
+                      <span>{selectedRoute.listener.name || "Unnamed"}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Port:</span>
+                      <span>{selectedRoute.bindPort}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Route Pattern:</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs">{selectedRoute.routePath}</span>
+                        {selectedRoute.route.matches?.[0]?.path?.regex && (
+                          <Badge variant="secondary" className="text-xs">
+                            regex
+                          </Badge>
+                        )}
+                        {selectedRoute.route.matches?.[0]?.path?.pathPrefix && (
+                          <Badge variant="secondary" className="text-xs">
+                            prefix
+                          </Badge>
+                        )}
+                        {selectedRoute.route.matches?.[0]?.path?.exact && (
+                          <Badge variant="secondary" className="text-xs">
+                            exact
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                    {selectedRoute.route.hostnames && selectedRoute.route.hostnames.length > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Host Match:</span>
+                        <span className="text-xs">{selectedRoute.route.hostnames.join(", ")}</span>
+                      </div>
+                    )}
+                    <div>
+                      <span className="text-muted-foreground">Backends:</span>
+                      <div className="mt-1 space-y-1">
+                        {selectedRoute.route.backends?.map((backend, idx) => {
+                          const info = getBackendInfo(backend);
+                          const Icon = info.icon;
+                          return (
+                            <div key={idx} className="flex items-center gap-2">
+                              <Icon className="h-3 w-3" />
+                              <Badge variant="secondary" className="text-xs">
+                                {info.type}
+                              </Badge>
+                              <span className="text-xs">{info.name}</span>
+                              {backend.weight && backend.weight !== 1 && (
+                                <span className="text-xs text-muted-foreground">
+                                  (weight: {backend.weight})
+                                </span>
+                              )}
+                            </div>
+                          );
+                        }) || (
+                          <div className="text-xs text-muted-foreground">
+                            No backends configured
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    {selectedRoute.route.policies &&
+                      Object.keys(selectedRoute.route.policies).length > 0 && (
+                        <div>
+                          <span className="text-muted-foreground">Policies:</span>
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {Object.entries(selectedRoute.route.policies).map(
+                              ([policyType, policyConfig]) => {
+                                // Skip null/undefined policies
+                                if (!policyConfig) return null;
+
+                                // Get policy display info
+                                const getPolicyInfo = (type: string) => {
+                                  switch (type) {
+                                    case "jwtAuth":
+                                      return { name: "JWT Auth", icon: Shield };
+                                    case "mcpAuthentication":
+                                      return { name: "MCP Auth", icon: Shield };
+                                    case "mcpAuthorization":
+                                      return { name: "MCP Authz", icon: Shield };
+                                    case "cors":
+                                      return { name: "CORS", icon: Globe };
+                                    case "backendTLS":
+                                      return { name: "Backend TLS", icon: Shield };
+                                    case "backendAuth":
+                                      return { name: "Backend Auth", icon: Shield };
+                                    case "localRateLimit":
+                                      return { name: "Local Rate Limit", icon: Clock };
+                                    case "remoteRateLimit":
+                                      return { name: "Remote Rate Limit", icon: Clock };
+                                    case "timeout":
+                                      return { name: "Timeout", icon: Clock };
+                                    case "retry":
+                                      return { name: "Retry", icon: ArrowRight };
+                                    case "requestHeaderModifier":
+                                      return { name: "Request Headers", icon: Settings };
+                                    case "responseHeaderModifier":
+                                      return { name: "Response Headers", icon: Settings };
+                                    case "requestRedirect":
+                                      return { name: "Redirect", icon: ArrowRight };
+                                    case "urlRewrite":
+                                      return { name: "URL Rewrite", icon: Settings };
+                                    case "directResponse":
+                                      return { name: "Direct Response", icon: Server };
+                                    case "extAuthz":
+                                      return { name: "External Auth", icon: Shield };
+                                    case "ai":
+                                      return { name: "AI Policy", icon: Settings };
+                                    default:
+                                      return { name: type, icon: Settings };
+                                  }
+                                };
+
+                                const info = getPolicyInfo(policyType);
+                                const Icon = info.icon;
+
+                                return (
+                                  <Badge key={policyType} variant="outline" className="text-xs">
+                                    <Icon className="h-3 w-3 mr-1" />
+                                    {info.name}
+                                  </Badge>
+                                );
+                              }
+                            )}
+                          </div>
+                        </div>
+                      )}
+                  </div>
+                </div>
+
+                <Tabs defaultValue="headers" className="w-full">
+                  <TabsList className="grid w-full grid-cols-3">
+                    <TabsTrigger value="headers">Headers</TabsTrigger>
+                    <TabsTrigger value="query">Query</TabsTrigger>
+                    <TabsTrigger value="body">Body</TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="headers" className="space-y-4">
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="Header name"
+                        value={headerKey}
+                        onChange={(e) => setHeaderKey(e.target.value)}
+                      />
+                      <Input
+                        placeholder="Header value"
+                        value={headerValue}
+                        onChange={(e) => setHeaderValue(e.target.value)}
+                      />
+                      <Button onClick={addHeader} variant="outline">
+                        Add
+                      </Button>
+                    </div>
+                    <div className="space-y-2">
+                      {Object.entries(request.headers).map(([key, value]) => (
+                        <div
+                          key={key}
+                          className="flex items-center justify-between p-2 bg-muted/30 rounded"
+                        >
+                          <span className="text-sm">
+                            <span className="font-medium">{key}:</span> {value}
+                          </span>
+                          <Button variant="ghost" size="sm" onClick={() => removeHeader(key)}>
+                            Remove
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="query" className="space-y-4">
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="Query parameter name"
+                        value={queryKey}
+                        onChange={(e) => setQueryKey(e.target.value)}
+                      />
+                      <Input
+                        placeholder="Query parameter value"
+                        value={queryValue}
+                        onChange={(e) => setQueryValue(e.target.value)}
+                      />
+                      <Button onClick={addQuery} variant="outline">
+                        Add
+                      </Button>
+                    </div>
+                    <div className="space-y-2">
+                      {Object.entries(request.query).map(([key, value]) => (
+                        <div
+                          key={key}
+                          className="flex items-center justify-between p-2 bg-muted/30 rounded"
+                        >
+                          <span className="text-sm">
+                            <span className="font-medium">{key}:</span> {value}
+                          </span>
+                          <Button variant="ghost" size="sm" onClick={() => removeQuery(key)}>
+                            Remove
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="body" className="space-y-4">
+                    <div>
+                      <Label htmlFor="request-body">Request Body</Label>
+                      <Textarea
+                        id="request-body"
+                        placeholder="Enter request body (JSON, XML, etc.)"
+                        value={request.body}
+                        onChange={(e) => setRequest((prev) => ({ ...prev, body: e.target.value }))}
+                        className="mt-2 min-h-32"
+                      />
+                    </div>
+                  </TabsContent>
+                </Tabs>
+              </div>
+            ) : (
+              // MCP/A2A Testing Interface
+              <div className="space-y-4">
+                {/* Connection Status */}
+                <div className="bg-muted/30 rounded-lg p-4 border">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Server className="h-4 w-4 text-muted-foreground" />
+                    <span className="font-medium text-sm">Connection</span>
+                  </div>
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-muted-foreground">Endpoint:</span>
+                      <span className="font-mono text-sm">{connectionState.selectedEndpoint}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-muted-foreground">Type:</span>
+                      <Badge variant="secondary" className="text-xs">
+                        {connectionState.connectionType?.toUpperCase()}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor="auth-token" className="text-sm">
+                        Bearer Token (Optional):
+                      </Label>
+                      <Input
+                        id="auth-token"
+                        placeholder="Enter token if required"
+                        type="password"
+                        value={connectionState.authToken}
+                        onChange={(e) => handleAuthTokenChange(e.target.value)}
+                        disabled={connectionState.isConnected || connectionState.isConnecting}
+                        className="flex-1"
+                      />
+                      <Button
+                        onClick={connectionState.isConnected ? disconnect : connect}
+                        disabled={connectionState.isConnecting}
+                        className="w-[130px]"
+                      >
+                        {connectionState.isConnecting ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Connecting...
+                          </>
+                        ) : connectionState.isConnected ? (
+                          "Disconnect"
+                        ) : (
+                          "Connect"
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                {connectionState.isConnected && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <CapabilitiesList
+                      mcpTools={mcpState.tools}
+                      a2aSkills={a2aState.skills}
+                      connectionType={connectionState.connectionType}
+                      isLoading={uiState.isLoadingCapabilities}
+                      selectedMcpToolName={mcpState.selectedTool?.name ?? null}
+                      selectedA2aSkillId={a2aState.selectedSkill?.id ?? null}
+                      onMcpToolSelect={handleMcpToolSelect}
+                      onA2aSkillSelect={handleA2aSkillSelect}
+                    />
+
+                    <ActionPanel
+                      connectionType={connectionState.connectionType}
+                      mcpSelectedTool={mcpState.selectedTool}
+                      a2aSelectedSkill={a2aState.selectedSkill}
+                      mcpParamValues={mcpState.paramValues}
+                      a2aMessage={a2aState.message}
+                      isRequestRunning={uiState.isRequestRunning}
+                      onMcpParamChange={handleMcpParamChange}
+                      onA2aMessageChange={handleA2aMessageChange}
+                      onRunMcpTool={runMcpTool}
+                      onRunA2aSkill={runA2aSkill}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Response Panel */}
+      {(response || mcpState.response || a2aState.response) && (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <CapabilitiesList
-              mcpTools={mcpState.tools}
-              a2aSkills={a2aState.skills}
-              connectionType={connectionState.connectionType}
-              isLoading={uiState.isLoadingCapabilities}
-              selectedMcpToolName={mcpState.selectedTool?.name ?? null}
-              selectedA2aSkillId={a2aState.selectedSkill?.id ?? null}
-              onMcpToolSelect={handleMcpToolSelect}
-              onA2aSkillSelect={handleA2aSkillSelect}
-            />
+          {/* HTTP Response */}
+          {response && connectionState.connectionType === "http" && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <div className="flex items-center gap-2">
+                    {(() => {
+                      const StatusIcon = getStatusIcon(response.status);
+                      return <StatusIcon className="h-5 w-5" />;
+                    })()}
+                    Response
+                  </div>
+                  <div className="ml-auto flex items-center gap-4 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-1">
+                      <Clock className="h-4 w-4" />
+                      {response.responseTime.toFixed(2)}ms
+                    </div>
+                    <div className={cn("font-medium", getStatusColor(response.status))}>
+                      {response.status} {response.statusText}
+                    </div>
+                  </div>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Tabs defaultValue="body" className="w-full">
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="body">Response Body</TabsTrigger>
+                    <TabsTrigger value="headers">Headers</TabsTrigger>
+                  </TabsList>
 
-            <ActionPanel
-              connectionType={connectionState.connectionType}
-              mcpSelectedTool={mcpState.selectedTool}
-              a2aSelectedSkill={a2aState.selectedSkill}
-              mcpParamValues={mcpState.paramValues}
-              a2aMessage={a2aState.message}
-              isRequestRunning={uiState.isRequestRunning}
-              onMcpParamChange={handleMcpParamChange}
-              onA2aMessageChange={handleA2aMessageChange}
-              onRunMcpTool={runMcpTool}
-              onRunA2aSkill={runA2aSkill}
-            />
-          </div>
+                  <TabsContent value="body" className="space-y-4">
+                    <div>
+                      <Label>Response Body</Label>
+                      <Textarea
+                        value={response.body}
+                        readOnly
+                        className="mt-2 min-h-64 font-mono text-sm"
+                      />
+                    </div>
+                  </TabsContent>
 
-          {(mcpState.response || a2aState.response) && (
-            <ResponseDisplay
-              mcpResponse={mcpState.response}
-              a2aResponse={a2aState.response}
-              connectionType={connectionState.connectionType}
-            />
+                  <TabsContent value="headers" className="space-y-4">
+                    <div className="space-y-2">
+                      {Object.entries(response.headers).map(([key, value]) => (
+                        <div
+                          key={key}
+                          className="flex items-center justify-between p-2 bg-muted/30 rounded"
+                        >
+                          <span className="text-sm">
+                            <span className="font-medium">{key}:</span> {value}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </TabsContent>
+                </Tabs>
+              </CardContent>
+            </Card>
           )}
+
+          {/* MCP/A2A Response */}
+          {(mcpState.response || a2aState.response) &&
+            connectionState.connectionType !== "http" && (
+              <ResponseDisplay
+                mcpResponse={mcpState.response}
+                a2aResponse={a2aState.response}
+                connectionType={connectionState.connectionType}
+              />
+            )}
         </>
       )}
     </div>

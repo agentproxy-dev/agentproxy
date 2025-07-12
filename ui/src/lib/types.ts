@@ -1,79 +1,343 @@
 import { z } from "zod";
 
-export interface Target {
-  // The name of the target.
+// Main configuration structure
+export interface LocalConfig {
+  binds: Bind[];
+  workloads?: any[];
+  services?: any[];
+}
+
+export interface Bind {
+  port: number; // uint16, 0-65535
+  listeners: Listener[];
+}
+
+export interface Listener {
+  name?: string | null;
+  gatewayName?: string | null;
+  hostname?: string | null; // Can be a wildcard
+  protocol: ListenerProtocol;
+  tls?: TlsConfig | null;
+  routes?: Route[] | null;
+  tcpRoutes?: TcpRoute[] | null;
+}
+
+export enum ListenerProtocol {
+  HTTP = "HTTP",
+  HTTPS = "HTTPS",
+  TLS = "TLS",
+  TCP = "TCP",
+  HBONE = "HBONE",
+}
+
+export interface TlsConfig {
+  cert: string;
+  key: string;
+}
+
+export interface Route {
+  name?: string | null;
+  ruleName?: string | null;
+  hostnames: string[]; // Can be wildcards
+  matches: Match[];
+  policies?: Policies | null;
+  backends: Backend[];
+}
+
+export interface TcpRoute {
+  name?: string | null;
+  ruleName?: string | null;
+  hostnames: string[]; // Can be wildcards
+  policies?: TcpPolicies | null;
+  backends: TcpBackend[];
+}
+
+export interface Match {
+  headers?: HeaderMatch[];
+  path: PathMatch;
+  method?: MethodMatch | null;
+  query?: QueryMatch[];
+}
+
+export interface HeaderMatch {
   name: string;
+  value: ExactOrRegexMatch;
+}
 
-  // The listeners which are allowed to connect to the target.
-  listeners?: string[];
+export interface PathMatch {
+  exact?: string;
+  pathPrefix?: string;
+  regex?: [string, number]; // [pattern, flags]
+}
 
-  // Only one of these fields will be set
+export interface MethodMatch {
+  method: string;
+}
+
+export interface QueryMatch {
+  name: string;
+  value: ExactOrRegexMatch;
+}
+
+export interface ExactOrRegexMatch {
+  exact?: string;
+  regex?: string;
+}
+
+export interface Policies {
+  requestHeaderModifier?: HeaderModifier | null;
+  responseHeaderModifier?: HeaderModifier | null;
+  requestRedirect?: RequestRedirect | null;
+  urlRewrite?: UrlRewrite | null;
+  requestMirror?: RequestMirror | null;
+  directResponse?: DirectResponse | null;
+  cors?: CorsPolicy | null;
+  mcpAuthorization?: McpAuthorization | null;
+  mcpAuthentication?: McpAuthentication | null;
+  a2a?: any | null;
+  ai?: any;
+  backendTLS?: BackendTLS | null;
+  backendAuth?: BackendAuth | null;
+  localRateLimit?: any;
+  remoteRateLimit?: any;
+  jwtAuth?: JwtAuth;
+  extAuthz?: any;
+  timeout?: TimeoutPolicy | null;
+  retry?: RetryPolicy | null;
+}
+
+export interface TcpPolicies {
+  backendTls?: BackendTLS | null;
+}
+
+export interface HeaderModifier {
+  add?: [string, string][];
+  set?: [string, string][];
+  remove?: string[];
+}
+
+export interface RequestRedirect {
+  scheme?: string | null;
+  authority?: AuthorityRewrite | null;
+  path?: PathRewrite | null;
+  status?: number | null; // uint16, 1-65535
+}
+
+export interface UrlRewrite {
+  authority?: AuthorityRewrite | null;
+  path?: PathRewrite | null;
+}
+
+export interface AuthorityRewrite {
+  full?: string;
+  host?: string;
+  port?: number; // uint16, 1-65535
+}
+
+export interface PathRewrite {
+  full?: string;
+  prefix?: string;
+}
+
+export interface RequestMirror {
+  backend: BackendRef;
+  percentage: number;
+}
+
+export interface DirectResponse {
+  body: number[] | string; // uint8[] or string
+  status: number; // uint16, 1-65535
+}
+
+export interface CorsPolicy {
+  allowCredentials?: boolean;
+  allowHeaders?: string[];
+  allowMethods?: string[];
+  allowOrigins?: string[];
+  exposeHeaders?: string[];
+  maxAge?: string | null;
+}
+
+export interface McpAuthorization {
+  rules: any;
+}
+
+export interface McpAuthentication {
+  issuer: string;
+  scopes: string[];
+  provider: Auth0Provider;
+}
+
+export interface Auth0Provider {
+  auth0: {
+    audience?: string | null;
+  };
+}
+
+export interface BackendTLS {
+  cert?: string | null;
+  key?: string | null;
+  root?: string | null;
+  insecure?: boolean;
+  insecureHost?: boolean;
+}
+
+export interface BackendAuth {
+  passthrough?: any;
+  key?: string | { file: string };
+  gcp?: any;
+  aws?: any;
+}
+
+export interface JwtAuth {
+  issuer: string;
+  audiences: string[];
+  jwks: string | { file: string };
+}
+
+export interface TimeoutPolicy {
+  requestTimeout?: string | null;
+  backendRequestTimeout?: string | null;
+}
+
+export interface RetryPolicy {
+  attempts?: number; // uint8, 1-255, default: 1
+  backoff?: string | null;
+  codes: number[]; // uint8[], 1-255
+}
+
+export interface Backend {
+  weight?: number; // uint, default: 1
+  filters?: Filter[];
+  // Backend reference - one of these will be set
+  service?: ServiceBackend;
+  host?: HostBackend;
+  dynamic?: DynamicBackend;
+  mcp?: McpBackend;
+  ai?: AiBackend;
+}
+
+export interface TcpBackend {
+  weight?: number; // uint, default: 1
+  backend: TcpBackendRef;
+}
+
+export interface TcpBackendRef {
+  service?: ServiceBackend;
+  host?: HostBackend;
+}
+
+export interface Filter {
+  requestHeaderModifier?: HeaderModifier;
+  responseHeaderModifier?: HeaderModifier;
+  requestRedirect?: RequestRedirect;
+  urlRewrite?: UrlRewrite;
+  requestMirror?: RequestMirror;
+  directResponse?: DirectResponse;
+  cors?: CorsPolicy;
+}
+
+export interface ServiceBackend {
+  name: {
+    namespace: string;
+    hostname: string;
+  };
+  port: number; // uint16, 0-65535
+}
+
+export interface HostBackend {
+  Address?: string;
+  Hostname?: [string, number]; // [hostname, port]
+}
+
+export interface DynamicBackend {
+  // Empty object
+}
+
+export interface McpBackend {
+  name: string;
+  targets: McpTarget[];
+}
+
+export interface AiBackend {
+  name: string;
+  provider: AiProvider;
+  hostOverride?: HostBackend | null;
+}
+
+export interface AiProvider {
+  openAI?: { model?: string | null };
+  gemini?: { model?: string | null };
+  vertex?: { model?: string | null; region?: string | null; projectId: string };
+  anthropic?: { model?: string | null };
+  bedrock?: { model: string; region: string };
+}
+
+export interface McpTarget {
+  name: string;
+  filters?: TargetFilter[];
+  // Target type - one of these will be set
   sse?: SseTarget;
-  openapi?: OpenAPITarget;
+  mcp?: McpConnectionTarget;
+  stdio?: StdioTarget;
+  openapi?: OpenApiTarget;
+}
+
+export interface TargetFilter {
+  matcher: TargetMatcher;
+  resource_type: string;
+}
+
+export interface TargetMatcher {
+  Equals?: string;
+  Prefix?: string;
+  Suffix?: string;
+  Contains?: string;
+  Regex?: string;
+}
+
+export interface SseTarget {
+  host: string;
+  port: number; // uint32
+  path: string;
+}
+
+export interface StdioTarget {
+  cmd: string;
+  args?: string[];
+  env?: { [key: string]: string };
+}
+
+export interface OpenApiTarget {
+  host: string;
+  port: number; // uint32
+  schema: any; // Schema definition
+}
+
+export interface BackendRef {
+  service?: ServiceBackend;
+  host?: HostBackend;
+}
+
+// Legacy types for backward compatibility
+export interface Target {
+  name: string;
+  listeners?: string[];
+  filters?: TargetFilter[];
+  sse?: SseTarget;
+  mcp?: McpConnectionTarget;
+  openapi?: OpenApiTarget;
   stdio?: StdioTarget;
   a2a?: A2aTarget;
 }
 
-export type TargetType = "mcp" | "sse" | "openapi" | "stdio" | "a2a" | "unknown";
-
-export interface SseTarget {
-  // The host of the target.
-  host: string;
-  // The port of the target.
-  port: number;
-  // The path of the target.
-  path: string;
-  // The headers of the target.
-  headers?: Header[];
-  // The auth of the target.
-  auth?: BackendAuth;
-  // The tls of the target.
-  tls?: BackendTls;
-}
-
-export interface StdioTarget {
-  // The command of the target.
-  cmd: string;
-  // The arguments of the target.
-  args: string[];
-  // The environment variables of the target.
-  env: { [key: string]: string };
-}
-
-export interface LocalDataSource {
-  // Only one of these fields will be set
-  file_path?: string;
-  inline?: Uint8Array; // For bytes in proto3, we use Uint8Array in TypeScript
-}
-
-export interface OpenAPITarget {
-  // The host of the target.
-  host: string;
-  // The port of the target.
-  port: number;
-  // The schema of the target.
-  schema: LocalDataSource;
-  // The auth of the target.
-  auth?: BackendAuth;
-  // The tls of the target.
-  tls?: BackendTls;
-  // The headers of the target.
-  headers?: Header[];
-}
-
 export interface A2aTarget {
-  // The host of the target.
   host: string;
-  // The port of the target.
   port: number;
-  // The path of the target.
   path: string;
-  // The headers of the target.
   headers?: Header[];
-  // The auth of the target.
   auth?: BackendAuth;
-  // The tls of the target.
-  tls?: BackendTls;
+  tls?: BackendTLS;
 }
 
 export interface Header {
@@ -84,27 +348,11 @@ export interface Header {
   };
 }
 
-export interface BackendAuth {
-  passthrough?: boolean;
-}
+export type TargetType = "mcp" | "sse" | "openapi" | "stdio" | "a2a" | "unknown";
 
-export interface BackendTls {
-  insecure_skip_verify: boolean;
-}
-
-export interface Listener {
-  // The name of the listener
-  name: string;
-  // SSE is the only listener we can configure through UI
-  sse: SseListener;
-  // The policies attached to this listener
-  policies?: RBACConfig[];
-  protocol: ListenerProtocol;
-}
-
-export enum ListenerProtocol {
-  MCP = "MCP",
-  A2A = "A2A",
+export interface LocalDataSource {
+  file_path?: string;
+  inline?: Uint8Array;
 }
 
 export interface RemoteDataSource {
@@ -123,37 +371,20 @@ export interface Authn {
 }
 
 export interface SseListener {
-  // The address can be either 'address' or 'host'
   address?: string;
   host?: string;
   port: number;
   tls?: TlsConfig;
   authn?: Authn;
-  // RBAC configuration is now part of the listener
   rbac?: RuleSet[];
 }
 
-export interface TlsConfig {
-  key_pem: LocalDataSource;
-  cert_pem: LocalDataSource;
-}
-
 export interface StdioListener {
-  // Empty interface as the message has no fields
-  // eslint-disable-next-line @typescript-eslint/no-empty-object-type
+  // Empty interface
 }
 
-// Enum for matcher types
-export type Matcher =
-  // The value must be equal to the value in the claims.
-  "EQUALS";
-//"CONTAINS" |
-//"STARTS_WITH" |
-//"ENDS_WITH"
-
-export type ResourceType = "TOOL"; //|
-// "PROMPT" |
-// "RESOURCE"
+export type Matcher = "EQUALS";
+export type ResourceType = "TOOL";
 
 export interface Rule {
   key: string;
@@ -181,19 +412,15 @@ export interface RuleSet {
 type ConfigType = "static";
 
 export interface Config {
-  // The type of the configuration.
   type: ConfigType;
-  // The listeners for the configuration.
   listeners: Listener[];
-  // The policies for the configuration.
   policies?: RBACConfig[];
-  // The targets for the configuration.
   targets: TargetWithType[];
 }
 
 export type TargetWithType = Target & { type: "mcp" | "a2a" | "openapi" | "stdio" | "sse" };
 
-// Schema specifically for Playground UI representation, might differ from backend config Listener
+// Schema specifically for Playground UI representation
 export const PlaygroundListenerSchema = z.object({
   name: z.string(),
   protocol: z.nativeEnum(ListenerProtocol).optional(),
@@ -206,11 +433,14 @@ export const PlaygroundListenerSchema = z.object({
     .optional(),
 });
 
-// Type derived from the Playground-specific schema
 export type PlaygroundListener = z.infer<typeof PlaygroundListenerSchema>;
 
-// Type for listener info including protocol, extending the original Listener type
-// It combines the config Listener with the derived displayEndpoint for UI purposes
 export interface ListenerInfo extends Listener {
   displayEndpoint: string;
+}
+
+export interface McpConnectionTarget {
+  host: string;
+  port: number; // uint32
+  path: string;
 }

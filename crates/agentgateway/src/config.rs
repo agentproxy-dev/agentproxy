@@ -43,9 +43,9 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 
 	let xds = {
 		let address = validate_uri(empty_to_none(parse("XDS_ADDRESS")?).or(raw.xds_address))?;
-		if local_config.is_none() && address.is_none() {
-			anyhow::bail!("file or XDS configuration is required")
-		}
+		// if local_config.is_none() && address.is_none() {
+		// 	anyhow::bail!("file or XDS configuration is required")
+		// }
 		let (namespace, gateway) = if address.is_some() {
 			(
 				parse("NAMESPACE")?

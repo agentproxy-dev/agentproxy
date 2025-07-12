@@ -39,16 +39,16 @@ impl Debug for RateLimit {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct RateLimitSerde {
+pub struct RateLimitSerde {
 	#[serde(default)]
-	max_tokens: u64,
+	pub max_tokens: u64,
 	#[serde(default)]
-	tokens_per_fill: u64,
+	pub tokens_per_fill: u64,
 	#[serde(with = "serde_dur")]
-	fill_interval: Duration,
+	pub fill_interval: Duration,
 	#[serde(default)]
 	#[serde(rename = "type")]
-	limit_type: RateLimitType,
+	pub limit_type: RateLimitType,
 }
 
 #[derive(Default, Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize)]

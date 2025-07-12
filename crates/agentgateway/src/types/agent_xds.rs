@@ -55,12 +55,12 @@ impl TryFrom<&proto::agent::TlsConfig> for TLSConfig {
 	}
 }
 
-impl TryFrom<&proto::agent::RouteBackend> for RouteBackend {
+impl TryFrom<&proto::agent::RouteBackend> for RouteBackendReference {
 	type Error = ProtoError;
 
 	fn try_from(s: &proto::agent::RouteBackend) -> Result<Self, Self::Error> {
 		let kind = match &s.kind {
-			None => Backend::Invalid,
+			None => BackendReference::Invalid,
 			Some(proto::agent::route_backend::Kind::Service(svc_key)) => {
 				let ns = match svc_key.split_once('/') {
 					Some((namespace, hostname)) => Ok(NamespacedHostname {
@@ -69,7 +69,7 @@ impl TryFrom<&proto::agent::RouteBackend> for RouteBackend {
 					}),
 					None => Err(ProtoError::NamespacedHostnameParse(svc_key.clone())),
 				}?;
-				Backend::Service {
+				BackendReference::Service {
 					name: ns,
 					port: s.port as u16,
 				}
@@ -198,7 +198,7 @@ impl TryFrom<&proto::agent::Route> for (Route, ListenerKey) {
 			backends: s
 				.backends
 				.iter()
-				.map(RouteBackend::try_from)
+				.map(RouteBackendReference::try_from)
 				.collect::<Result<Vec<_>, _>>()?,
 			policies: s.traffic_policy.map(TrafficPolicy::try_from).transpose()?,
 		};
@@ -348,7 +348,7 @@ impl TryFrom<&proto::agent::RouteFilter> for RouteFilter {
 			Some(proto::agent::route_filter::Kind::RequestMirror(m)) => {
 				RouteFilter::RequestMirror(filters::RequestMirror {
 					backend: match &m.kind {
-						None => SimpleBackend::Invalid,
+						None => SimpleBackendReference::Invalid,
 						Some(proto::agent::request_mirror::Kind::Service(svc_key)) => {
 							let ns = match svc_key.split_once('/') {
 								Some((namespace, hostname)) => Ok(NamespacedHostname {
@@ -357,7 +357,7 @@ impl TryFrom<&proto::agent::RouteFilter> for RouteFilter {
 								}),
 								None => Err(ProtoError::NamespacedHostnameParse(svc_key.clone())),
 							}?;
-							SimpleBackend::Service {
+							SimpleBackendReference::Service {
 								name: ns,
 								port: m.port as u16,
 							}

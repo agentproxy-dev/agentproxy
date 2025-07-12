@@ -5,7 +5,9 @@ use anyhow::anyhow;
 
 use crate::http::uri::Scheme;
 use crate::http::{HeaderMap, HeaderName, HeaderValue, Request, Response, StatusCode, Uri};
-use crate::types::agent::{Backend, HostRedirect, PathMatch, PathRedirect, SimpleBackend};
+use crate::types::agent::{
+	Backend, HostRedirect, PathMatch, PathRedirect, SimpleBackend, SimpleBackendReference,
+};
 use crate::*;
 
 #[cfg(test)]
@@ -150,11 +152,10 @@ impl DirectResponse {
 	}
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub struct RequestMirror {
-	pub backend: SimpleBackend,
+	pub backend: SimpleBackendReference,
 	// 0.0-1.0
 	pub percentage: f64,
 }

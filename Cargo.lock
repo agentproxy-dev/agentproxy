@@ -133,6 +133,7 @@ dependencies = [
  "http 1.3.1",
  "http-body 1.0.1",
  "http-body-util",
+ "http-serde",
  "hyper",
  "hyper-rustls",
  "hyper-util",
@@ -155,6 +156,7 @@ dependencies = [
  "opentelemetry-otlp",
  "opentelemetry_sdk",
  "parking_lot",
+ "percent-encoding",
  "phonenumber",
  "pin-project-lite",
  "pprof",
@@ -178,6 +180,7 @@ dependencies = [
  "serde_json",
  "serde_json_path_to_error",
  "serde_regex",
+ "serde_urlencoded",
  "serde_with",
  "serde_yaml",
  "shellexpand",
@@ -2384,6 +2387,16 @@ dependencies = [
  "http 1.3.1",
  "http-body 1.0.1",
  "pin-project-lite",
+]
+
+[[package]]
+name = "http-serde"
+version = "2.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0f056c8559e3757392c8d091e796416e4649d8e49e88b8d76df6c002f05027fd"
+dependencies = [
+ "http 1.3.1",
+ "serde",
 ]
 
 [[package]]

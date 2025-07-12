@@ -241,6 +241,7 @@ pub enum FileInlineOrRemote {
 	Inline(String),
 	Remote {
 		#[serde(deserialize_with = "de_parse")]
+		#[cfg_attr(feature = "schema", schemars(with = "String"))]
 		url: http::Uri,
 	},
 }

@@ -48,12 +48,12 @@ impl Service<Uri> for HttpsConnector {
 		let connecting_future = self.http.call(dst);
 		Box::pin(async move {
 			let tcp = connecting_future.await?.into_inner();
-			let (ext, tcp) = Socket::from_tcp(tcp)?.into_parts();
+			let (ext, counter, tcp) = Socket::from_tcp(tcp)?.into_parts();
 			let tls = TlsConnector::from(cfg)
 				.connect(hostname, Box::new(tcp))
 				.await
 				.map_err(io::Error::other)?;
-			let socket = Socket::from_tls(stream::Extension::new(), tls.into())?;
+			let socket = Socket::from_tls(stream::Extension::new(), counter, tls.into())?;
 			Ok(socket)
 		})
 	}

@@ -2,22 +2,26 @@ use crate::http::auth::BackendAuth;
 use crate::http::backendtls::{BackendTLS, LocalBackendTLS};
 use crate::http::jwt::{JwkError, Jwt};
 use crate::http::{filters, retry, timeout};
+use crate::llm::AIProvider;
 use crate::store::LocalWorkload;
 use crate::transport::tls;
 use crate::types::agent::PolicyTarget::RouteRule;
 use crate::types::agent::{
-	A2aPolicy, Backend, Bind, BindName, GatewayName, Listener, ListenerKey, ListenerProtocol,
-	ListenerSet, McpAuthentication, McpAuthorization, PathMatch, Policy, PolicyTarget, Route,
-	RouteBackend, RouteFilter, RouteMatch, RouteName, RouteRuleName, RouteSet, SimpleBackend,
-	TCPRoute, TCPRouteBackend, TCPRouteSet, TLSConfig, TargetedPolicy, TrafficPolicy, parse_cert,
-	parse_key,
+	A2aPolicy, Backend, BackendName, BackendReference, Bind, BindName, GatewayName, Listener,
+	ListenerKey, ListenerProtocol, ListenerSet, McpAuthentication, McpAuthorization, McpBackend,
+	PathMatch, Policy, PolicyTarget, Route, RouteBackend, RouteBackendReference, RouteFilter,
+	RouteMatch, RouteName, RouteRuleName, RouteSet, SimpleBackend, SimpleBackendReference, TCPRoute,
+	TCPRouteBackendReference, TCPRouteSet, TLSConfig, Target, TargetedPolicy, TrafficPolicy,
+	parse_cert, parse_key,
 };
-use crate::types::discovery::Service;
+use crate::types::discovery::{NamespacedHostname, Service};
 use crate::*;
 use agent_core::prelude::Strng;
 use anyhow::{Error, anyhow, bail};
+use itertools::Itertools;
 use jsonwebtoken::jwk::{AlgorithmParameters, JwkSet, KeyAlgorithm};
 use jsonwebtoken::{DecodingKey, Validation};
+use rmcp::handler::server::router::tool::CallToolHandlerExt;
 use rustls::{ClientConfig, ServerConfig};
 use serde::de::DeserializeOwned;
 use serde_with::serde_as;
@@ -42,6 +46,7 @@ impl NormalizedLocalConfig {
 pub struct NormalizedLocalConfig {
 	pub binds: Vec<Bind>,
 	pub policies: Vec<TargetedPolicy>,
+	pub backends: Vec<Backend>,
 	// Note: here we use LocalWorkload since it conveys useful info, we could maybe change but not a problem
 	// for now
 	pub workloads: Vec<LocalWorkload>,
@@ -134,7 +139,57 @@ struct LocalRoute {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	policies: Option<FilterOrPolicy>,
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
-	backends: Vec<RouteBackend>,
+	backends: Vec<LocalRouteBackend>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+pub struct LocalRouteBackend {
+	#[serde(default = "default_weight")]
+	pub weight: usize,
+	#[serde(flatten)]
+	pub backend: LocalBackend,
+	// TODO: add back per-backend filters
+	// #[serde(default, skip_serializing_if = "Vec::is_empty")]
+	// pub filters: Vec<RouteFilter>,
+}
+
+fn default_weight() -> usize {
+	1
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+pub enum LocalBackend {
+	// This one is a reference
+	Service {
+		name: NamespacedHostname,
+		port: u16,
+	},
+	// Rest are inlined
+	#[serde(rename = "host")]
+	Opaque(Target), // Hostname or IP
+	Dynamic {},
+	#[serde(rename = "mcp")]
+	MCP(McpBackend),
+	#[serde(rename = "ai")]
+	AI(crate::llm::AIBackend),
+	Invalid,
+}
+
+impl LocalBackend {
+	pub fn as_backend(&self, name: BackendName) -> Option<Backend> {
+		match self {
+			LocalBackend::Service { .. } => None, // These stay as references
+			LocalBackend::Opaque(tgt) => Some(Backend::Opaque(name, tgt.clone())),
+			LocalBackend::Dynamic { .. } => Some(Backend::Dynamic {}),
+			LocalBackend::MCP(tgt) => Some(Backend::MCP(name, tgt.clone())),
+			LocalBackend::AI(tgt) => Some(Backend::AI(name, tgt.clone())),
+			LocalBackend::Invalid => Some(Backend::Invalid),
+		}
+	}
 }
 
 fn default_matches() -> Vec<RouteMatch> {
@@ -162,9 +217,40 @@ struct LocalTCPRoute {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	policies: Option<TCPFilterOrPolicy>,
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
-	backends: Vec<TCPRouteBackend>,
+	backends: Vec<LocalTCPRouteBackend>,
 }
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+pub struct LocalTCPRouteBackend {
+	#[serde(default = "default_weight")]
+	pub weight: usize,
+	pub backend: SimpleLocalBackend,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+pub enum SimpleLocalBackend {
+	Service {
+		name: NamespacedHostname,
+		port: u16,
+	},
+	#[serde(rename = "host")]
+	Opaque(Target), // Hostname or IP
+	Invalid,
+}
+
+impl SimpleLocalBackend {
+	pub fn as_backend(&self, name: BackendName) -> Option<Backend> {
+		match self {
+			SimpleLocalBackend::Service { .. } => None, // These stay as references
+			SimpleLocalBackend::Opaque(tgt) => Some(Backend::Opaque(name, tgt.clone())),
+			SimpleLocalBackend::Invalid => Some(Backend::Invalid),
+		}
+	}
+}
 #[serde_as]
 #[derive(Debug, Clone, serde::Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -180,7 +266,7 @@ struct FilterOrPolicy {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	url_rewrite: Option<filters::UrlRewrite>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
-	request_mirror: Option<filters::RequestMirror>,
+	request_mirror: Option<LocalRequestMirror>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	direct_response: Option<filters::DirectResponse>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
@@ -238,13 +324,15 @@ async fn convert(client: client::Client, i: LocalConfig) -> anyhow::Result<Norma
 		services,
 	} = i;
 	let mut all_policies = vec![];
+	let mut all_backends = vec![];
 	let mut all_binds = vec![];
 	for b in binds {
 		let bind_name = strng::format!("bind/{}", b.port);
 		let mut ls = ListenerSet::default();
 		for (idx, l) in b.listeners.into_iter().enumerate() {
-			let (l, pol) = convert_listener(client.clone(), bind_name.clone(), idx, l).await?;
+			let (l, pol, backends) = convert_listener(client.clone(), bind_name.clone(), idx, l).await?;
 			all_policies.extend_from_slice(&pol);
+			all_backends.extend_from_slice(&backends);
 			ls.insert(l.key.clone(), l)
 		}
 		let b = Bind {
@@ -257,6 +345,7 @@ async fn convert(client: client::Client, i: LocalConfig) -> anyhow::Result<Norma
 	Ok(NormalizedLocalConfig {
 		binds: all_binds,
 		policies: all_policies,
+		backends: all_backends,
 		workloads,
 		services,
 	})
@@ -267,7 +356,7 @@ async fn convert_listener(
 	bind_name: BindName,
 	idx: usize,
 	l: LocalListener,
-) -> anyhow::Result<(Listener, Vec<TargetedPolicy>)> {
+) -> anyhow::Result<(Listener, Vec<TargetedPolicy>, Vec<Backend>)> {
 	let LocalListener {
 		name,
 		gateway_name,
@@ -317,11 +406,13 @@ async fn convert_listener(
 	let key: ListenerKey = strng::format!("{}/{}", name, gateway_name);
 
 	let mut all_policies = vec![];
+	let mut all_backends = vec![];
 
 	let mut rs = RouteSet::default();
 	for (idx, l) in routes.into_iter().flatten().enumerate() {
-		let (route, policies) = convert_route(client.clone(), l, idx, key.clone()).await?;
+		let (route, policies, backends) = convert_route(client.clone(), l, idx, key.clone()).await?;
 		all_policies.extend_from_slice(&policies);
+		all_backends.extend_from_slice(&backends);
 		rs.insert(route)
 	}
 
@@ -341,7 +432,7 @@ async fn convert_listener(
 		routes: rs,
 		tcp_routes: trs,
 	};
-	Ok((l, all_policies))
+	Ok((l, all_policies, all_backends))
 }
 
 async fn convert_route(
@@ -349,7 +440,7 @@ async fn convert_route(
 	lr: LocalRoute,
 	idx: usize,
 	listener_key: ListenerKey,
-) -> anyhow::Result<(Route, Vec<TargetedPolicy>)> {
+) -> anyhow::Result<(Route, Vec<TargetedPolicy>, Vec<Backend>)> {
 	let LocalRoute {
 		route_name,
 		rule_name,
@@ -378,29 +469,38 @@ async fn convert_route(
 			policy: p,
 		}
 	};
+
+	let (refs, mut external_backends): (Vec<_>, Vec<Option<Backend>>) = backends
+		.into_iter()
+		.map(|b| {
+			let bref = match &b.backend {
+				LocalBackend::Service { name, port } => BackendReference::Service {
+					name: name.clone(),
+					port: *port,
+				},
+				LocalBackend::Invalid => BackendReference::Invalid,
+				_ => BackendReference::Backend(key.clone()),
+			};
+			let backend = b.backend.as_backend(bref.name());
+			let bref = RouteBackendReference {
+				weight: b.weight,
+				backend: bref,
+				filters: vec![],
+				// filters: b.filters,
+			};
+			(bref, backend)
+		})
+		.unzip();
 	let mut be_pol = 0;
 	let mut backend_tgt = |p: Policy| {
-		if backends.len() != 1 {
+		if refs.len() != 1 {
 			anyhow::bail!("backend policies currently only work with exactly 1 backend")
 		}
-		let be = backends.first().unwrap();
-		let tgt = match &be.backend {
-			Backend::Service { name, .. } => PolicyTarget::Service(name.clone()),
-			Backend::Opaque(t) => PolicyTarget::Opaque(t.clone()),
-			Backend::Dynamic {} => PolicyTarget::TODO,
-			Backend::MCP(mcp) => PolicyTarget::McpTarget(mcp.name.clone()),
-			Backend::AI(ai) => {
-				// TODO: this is probably not right
-				PolicyTarget::RouteBackend(be.backend.name())
-			},
-			Backend::Invalid => {
-				anyhow::bail!("backend invalid")
-			},
-		};
+		let be = refs.first().unwrap();
 		be_pol += 1;
 		Ok(TargetedPolicy {
 			name: format!("{key}/backend-{be_pol}").into(),
-			target: tgt,
+			target: PolicyTarget::Backend(be.backend.name()),
 			policy: p,
 		})
 	};
@@ -444,7 +544,13 @@ async fn convert_route(
 			filters.push(RouteFilter::UrlRewrite(p));
 		}
 		if let Some(p) = request_mirror {
-			filters.push(RouteFilter::RequestMirror(p));
+			let (bref, backend) = to_simple_backend_and_ref(strng::format!("{}/mirror", key), &p.backend);
+			let pol = filters::RequestMirror {
+				backend: bref,
+				percentage: p.percentage,
+			};
+			external_backends.push(backend);
+			filters.push(RouteFilter::RequestMirror(pol));
 		}
 		if let Some(p) = direct_response {
 			filters.push(RouteFilter::DirectResponse(p));
@@ -500,10 +606,14 @@ async fn convert_route(
 		hostnames,
 		matches,
 		filters,
-		backends,
+		backends: refs,
 		policies: Some(traffic_policy),
 	};
-	Ok((route, external_policies))
+	Ok((
+		route,
+		external_policies,
+		external_backends.into_iter().flatten().collect(),
+	))
 }
 
 async fn convert_tcp_route(
@@ -542,18 +652,23 @@ async fn convert_tcp_route(
 		if backends.len() != 1 {
 			anyhow::bail!("backend policies currently only work with exactly 1 backend")
 		}
-		let be = backends.first().unwrap();
-		let tgt = match &be.backend {
-			SimpleBackend::Service { name, .. } => PolicyTarget::Service(name.clone()),
-			SimpleBackend::Opaque(t) => PolicyTarget::Opaque(t.clone()),
-			SimpleBackend::Invalid => {
-				anyhow::bail!("backend invalid")
-			},
-		};
+
+		let (refs, to_add): (Vec<_>, Vec<Option<Backend>>) = backends
+			.into_iter()
+			.map(|b| {
+				let (bref, backend) = to_simple_backend_and_ref(key.clone(), &b.backend);
+				let bref = TCPRouteBackendReference {
+					weight: b.weight,
+					backend: bref,
+				};
+				(bref, backend)
+			})
+			.unzip();
+		let be = refs.first().unwrap();
 		be_pol += 1;
 		Ok(TargetedPolicy {
 			name: format!("{key}/backend-{be_pol}").into(),
-			target: tgt,
+			target: PolicyTarget::Backend(be.backend.name()),
 			policy: p,
 		})
 	};
@@ -573,9 +688,25 @@ async fn convert_tcp_route(
 		route_name,
 		rule_name,
 		hostnames,
-		backends,
+		backends: todo!(),
 	};
 	Ok((route, external_policies))
+}
+
+fn to_simple_backend_and_ref(
+	name: BackendName,
+	b: &SimpleLocalBackend,
+) -> (SimpleBackendReference, Option<Backend>) {
+	let bref = match &b {
+		SimpleLocalBackend::Service { name, port } => SimpleBackendReference::Service {
+			name: name.clone(),
+			port: *port,
+		},
+		SimpleLocalBackend::Invalid => SimpleBackendReference::Invalid,
+		_ => SimpleBackendReference::Backend(name.clone()),
+	};
+	let backend = b.as_backend(name);
+	(bref, backend)
 }
 
 fn convert_tls_server(tls: LocalTLSServerConfig) -> anyhow::Result<TLSConfig> {
@@ -593,4 +724,13 @@ fn convert_tls_server(tls: LocalTLSServerConfig) -> anyhow::Result<TLSConfig> {
 	Ok(TLSConfig {
 		config: Arc::new(ccb),
 	})
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+pub struct LocalRequestMirror {
+	pub backend: SimpleLocalBackend,
+	// 0.0-1.0
+	pub percentage: f64,
 }

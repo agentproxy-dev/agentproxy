@@ -73,6 +73,7 @@ fn test_bedrock() {
 
 	let request = |i| Ok(bedrock::translate_request(i));
 	test_request("bedrock", "basic_input", request);
+	test_request("bedrock", "full_input", request);
 }
 
 #[test]
@@ -82,4 +83,5 @@ fn test_anthropic() {
 
 	let request = |i| Ok(anthropic::translate_request(i));
 	test_request("anthropic", "basic_input", request);
+	test_request("anthropic", "full_input", request);
 }

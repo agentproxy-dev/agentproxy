@@ -218,7 +218,9 @@ export function ActionPanel({
                         <Checkbox
                           id={key}
                           checked={!!mcpParamValues[key]}
-                          onCheckedChange={(checked) => onMcpParamChange(key, Boolean(checked))}
+                          onCheckedChange={(checked: boolean) =>
+                            onMcpParamChange(key, Boolean(checked))
+                          }
                         />
                         <label htmlFor={key} className="text-sm text-muted-foreground">
                           {prop.description || "Toggle option"}

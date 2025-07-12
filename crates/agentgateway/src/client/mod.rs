@@ -7,7 +7,7 @@ use std::task;
 use crate::http::backendtls::BackendTLS;
 use crate::proxy::ProxyError;
 use crate::transport::hbone::WorkloadKey;
-use crate::transport::stream::Socket;
+use crate::transport::stream::{LoggingMode, Socket};
 use crate::transport::{hbone, stream};
 use crate::types::agent;
 use crate::types::agent::ListenerProtocol::TLS;
@@ -19,6 +19,7 @@ use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util_fork::rt::TokioIo;
 use rand::prelude::IteratorRandom;
 use rustls_pki_types::{DnsName, ServerName};
+use tracing::event;
 
 #[derive(Clone)]
 pub struct Client {
@@ -44,6 +45,15 @@ pub enum Transport {
 	Plaintext,
 	Tls(BackendTLS),
 	Hbone(Option<BackendTLS>, Identity),
+}
+impl Transport {
+	pub fn name(&self) -> &'static str {
+		match self {
+			Transport::Plaintext => "plaintext",
+			Transport::Tls(_) => "tls",
+			Transport::Hbone(_, _) => "hbone",
+		}
+	}
 }
 
 impl From<Option<BackendTLS>> for Transport {
@@ -101,10 +111,11 @@ impl tower::Service<::http::Extensions> for Connector {
 
 			match transport {
 				Transport::Plaintext => {
-					let res = Socket::dial(ep)
+					let mut res = Socket::dial(ep)
 						.await
 						.context("http call failed")
 						.map_err(crate::http::Error::new)?;
+					res.with_logging(LoggingMode::Upstream);
 					Ok(TokioIo::new(res))
 				},
 				Transport::Tls(tls) => {
@@ -128,8 +139,8 @@ impl tower::Service<::http::Extensions> for Connector {
 						.build()
 						.expect("todo");
 
-					let res = https.call(uri).await.map_err(crate::http::Error::new)?;
-
+					let mut res = https.call(uri).await.map_err(crate::http::Error::new)?;
+					res.with_logging(LoggingMode::Upstream);
 					Ok(TokioIo::new(res))
 				},
 				Transport::Hbone(inner, identity) => {
@@ -168,7 +179,8 @@ impl tower::Service<::http::Extensions> for Connector {
 						stream: upgraded,
 						buf: Default::default(),
 					};
-					let socket = Socket::from_hbone(Arc::new(stream::Extension::new()), pool_key.dst, rw);
+					let mut socket = Socket::from_hbone(Arc::new(stream::Extension::new()), pool_key.dst, rw);
+					socket.with_logging(LoggingMode::Upstream);
 					Ok(TokioIo::new(socket))
 				},
 			}
@@ -235,6 +247,7 @@ impl Client {
 	}
 
 	pub async fn call(&self, call: Call) -> Result<http::Response, ProxyError> {
+		let start = std::time::Instant::now();
 		let Call {
 			mut req,
 			target,
@@ -257,16 +270,38 @@ impl Client {
 			Ok(())
 		})
 		.map_err(ProxyError::Processing)?;
-		let ver = req.version();
+		let version = req.version();
+		let transport_name = transport.name();
+		let target_name = target.to_string();
 		req
 			.extensions_mut()
-			.insert(PoolKey(target, dest, transport, ver));
+			.insert(PoolKey(target, dest, transport, version));
 		trace!(?req, "sending request");
+		let method = req.method().clone();
+		let uri = req.uri().clone();
+		let path = uri.path();
+		let host = uri.authority().to_owned();
+		let resp = self.client.request(req).await;
+		let dur = format!("{}ms", start.elapsed().as_millis());
+		event!(
+			target: "upstream request",
+			parent: None,
+			tracing::Level::DEBUG,
+
+			target = %target_name,
+			endpoint = %dest,
+			transport = %transport_name,
+
+			http.method = %method,
+			http.host = host.as_ref().map(display),
+			http.path = %path,
+			http.version = ?version,
+			http.status = resp.as_ref().ok().map(|s| s.status().as_u16()),
+
+			duration = dur,
+		);
 		Ok(
-			self
-				.client
-				.request(req)
-				.await
+			resp
 				.map_err(ProxyError::UpstreamCallFailed)?
 				.map(http::Body::new),
 		)

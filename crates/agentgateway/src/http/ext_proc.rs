@@ -46,14 +46,14 @@ impl InferencePoolRouter {
 		}
 	}
 	fn build_ext_proc(upstream: client::Client, backend: &Backend) -> Option<ExtProc> {
-		let Backend::Service { name, port } = backend else {
+		let Backend::Service(svc, port) = backend else {
 			return None;
 		};
 		// Hack, assume EPP name. TODO: make this a proper policy
-		if !name.hostname.ends_with(".inference.cluster.local") {
+		if !svc.hostname.ends_with(".inference.cluster.local") {
 			return None;
 		};
-		let target = name
+		let target = svc
 			.hostname
 			.split_once(".")
 			.and_then(|ep| Target::try_from((format!("{}-epp", ep.0).as_str(), 9002)).ok())?;

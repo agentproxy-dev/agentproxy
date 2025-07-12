@@ -1,17 +1,19 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect } from "react";
-import { Config, Target, RBACConfig, Listener, TargetWithType } from "@/lib/types";
-import { fetchListeners, fetchMcpTargets, fetchA2aTargets } from "@/lib/api";
+import { Config, Target, RBACConfig, Listener, TargetWithType, Bind } from "@/lib/types";
+import { fetchBinds, fetchMcpTargets, fetchA2aTargets } from "@/lib/api";
 
 interface ServerContextType {
   config: Config;
   setConfig: (config: Config) => void;
   isConnected: boolean;
   connectionError: string | null;
+  binds: Bind[];
   listeners: Listener[];
   targets: Target[];
   policies: RBACConfig[];
+  refreshBinds: () => Promise<void>;
   refreshListeners: () => Promise<void>;
   refreshTargets: () => Promise<void>;
   isConfigurationEmpty: () => Promise<boolean>;
@@ -29,39 +31,47 @@ export function ServerProvider({ children }: { children: React.ReactNode }) {
 
   const [isConnected, setIsConnected] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [binds, setBinds] = useState<Bind[]>([]);
   const [listeners, setListeners] = useState<Listener[]>([]);
   const [targets, setTargets] = useState<TargetWithType[]>([]);
   const [policies, setPolicies] = useState<RBACConfig[]>([]);
 
-  // Function to refresh listeners
-  const refreshListeners = async () => {
+  // Function to refresh binds
+  const refreshBinds = async () => {
     try {
-      // Fetch listeners configuration
-      const listenersData = await fetchListeners();
-      const listenersArray = Array.isArray(listenersData) ? listenersData : [listenersData];
-      setListeners(listenersArray);
+      const bindsData = await fetchBinds();
+      setBinds(bindsData);
 
-      // Extract policies from listeners
-      const allPolicies = listenersArray.flatMap((listener) => listener.sse?.rbac || []);
+      // Extract all listeners from binds
+      const allListeners: Listener[] = [];
+      bindsData.forEach((bind) => {
+        allListeners.push(...bind.listeners);
+      });
+      setListeners(allListeners);
+
+      // Extract policies from listeners - in the new schema, policies are handled at the route level
+      // For now, we'll set an empty array since policies are handled at the route level
+      const allPolicies: any[] = [];
       setPolicies(allPolicies);
     } catch (err) {
-      console.error("Error refreshing listeners:", err);
-      setConnectionError(err instanceof Error ? err.message : "Failed to refresh listeners");
+      console.error("Error refreshing binds:", err);
+      setConnectionError(err instanceof Error ? err.message : "Failed to refresh binds");
     }
+  };
+
+  // Function to refresh listeners (now delegates to refreshBinds)
+  const refreshListeners = async () => {
+    await refreshBinds();
   };
 
   // Function to refresh targets
   const refreshTargets = async () => {
     try {
-      // Fetch MCP and A2A targets
+      // Fetch MCP targets (A2A targets are no longer supported in the new schema)
       const mcpTargetsData = await fetchMcpTargets();
-      const a2aTargetsData = await fetchA2aTargets();
 
-      // Combine targets
-      const targetsArray = [
-        ...mcpTargetsData.map((target) => ({ ...target, type: "mcp" as const })),
-        ...a2aTargetsData.map((target) => ({ ...target, type: "a2a" as const })),
-      ];
+      // Set targets directly as they're already properly typed
+      const targetsArray: TargetWithType[] = mcpTargetsData;
       setTargets(targetsArray);
 
       // Update the config with the new targets
@@ -79,30 +89,33 @@ export function ServerProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const loadConfiguration = async () => {
       try {
-        // Fetch listeners configuration
-        const listenersData = await fetchListeners();
-        const listenersArray = Array.isArray(listenersData) ? listenersData : [listenersData];
-        setListeners(listenersArray);
+        // Fetch binds configuration
+        const bindsData = await fetchBinds();
+        setBinds(bindsData);
 
-        // Fetch MCP and A2A targets
+        // Extract all listeners from binds
+        const allListeners: Listener[] = [];
+        bindsData.forEach((bind) => {
+          allListeners.push(...bind.listeners);
+        });
+        setListeners(allListeners);
+
+        // Fetch MCP targets (A2A targets are no longer supported in the new schema)
         const mcpTargetsData = await fetchMcpTargets();
-        const a2aTargetsData = await fetchA2aTargets();
 
-        // Combine targets
-        const targetsArray = [
-          ...mcpTargetsData.map((target) => ({ ...target, type: "mcp" as const })),
-          ...a2aTargetsData.map((target) => ({ ...target, type: "a2a" as const })),
-        ];
+        // Set targets directly as they're already properly typed
+        const targetsArray: TargetWithType[] = mcpTargetsData;
         setTargets(targetsArray);
 
-        // Extract policies from listeners
-        const allPolicies = listenersArray.flatMap((listener) => listener.sse?.rbac || []);
+        // Extract policies from listeners - in the new schema, policies are handled differently
+        // For now, we'll set an empty array since policies are handled at the route level
+        const allPolicies: any[] = [];
         setPolicies(allPolicies);
 
         // Update the config state with the loaded data
         setConfig({
           type: "static",
-          listeners: listenersArray,
+          listeners: allListeners,
           targets: targetsArray,
           policies: allPolicies,
         });
@@ -120,10 +133,14 @@ export function ServerProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const isConfigurationEmpty = async () => {
-    const listeners = await fetchListeners();
+    const bindsData = await fetchBinds();
     const mcpTargets = await fetchMcpTargets();
     const a2aTargets = await fetchA2aTargets();
-    return listeners.length === 0 && mcpTargets.length === 0 && a2aTargets.length === 0;
+
+    // Check if there are any listeners in any bind
+    const hasListeners = bindsData.some((bind) => bind.listeners.length > 0);
+
+    return !hasListeners && mcpTargets.length === 0 && a2aTargets.length === 0;
   };
 
   return (
@@ -133,9 +150,11 @@ export function ServerProvider({ children }: { children: React.ReactNode }) {
         setConfig,
         isConnected,
         connectionError,
+        binds,
         listeners,
         targets,
         policies,
+        refreshBinds,
         refreshListeners,
         refreshTargets,
         isConfigurationEmpty,

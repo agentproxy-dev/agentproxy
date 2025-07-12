@@ -6,8 +6,9 @@ use crate::transport::stream;
 use crate::transport::stream::{Socket, TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::agent;
 use crate::types::agent::{
-	Backend, BindName, HeaderMatch, HeaderValueMatch, Listener, ListenerProtocol, PathMatch,
-	PolicyTarget, QueryValueMatch, Route, RouteBackend, SimpleBackend, TCPRoute, TCPRouteBackend,
+	Backend, BackendReference, BindName, HeaderMatch, HeaderValueMatch, Listener, ListenerProtocol,
+	PathMatch, PolicyTarget, QueryValueMatch, Route, RouteBackend, RouteBackendReference,
+	SimpleBackend, SimpleBackendReference, TCPRoute, TCPRouteBackend, TCPRouteBackendReference,
 	Target,
 };
 use crate::types::discovery::NetworkAddress;
@@ -70,14 +71,15 @@ impl TCPProxy {
 		debug!(bind=%bind_name, listener=%selected_listener.key, route=%selected_route.key, "selected route");
 		let selected_backend =
 			select_tcp_backend(selected_route.as_ref()).ok_or(ProxyError::NoValidBackends)?;
+		let selected_backend = resolve_backend(selected_backend, self.inputs.as_ref())?;
 
 		let (target, policy_key) = match &selected_backend.backend {
-			SimpleBackend::Service { name, port } => {
+			SimpleBackend::Service(_, _) => {
 				return Err(ProxyError::Processing(anyhow!(
 					"service is not currently supported for TCPRoute"
 				)));
 			},
-			SimpleBackend::Opaque(target) => (target.clone(), PolicyTarget::Opaque(target.clone())),
+			SimpleBackend::Opaque(name, target) => (target.clone(), PolicyTarget::Backend(name.clone())),
 			SimpleBackend::Invalid => return Err(ProxyError::BackendDoesNotExist),
 		};
 
@@ -124,10 +126,21 @@ fn select_best_route(host: Option<&str>, listener: Arc<Listener>) -> Option<Arc<
 	None
 }
 
-fn select_tcp_backend(route: &TCPRoute) -> Option<TCPRouteBackend> {
+fn select_tcp_backend(route: &TCPRoute) -> Option<TCPRouteBackendReference> {
 	route
 		.backends
 		.choose_weighted(&mut rand::rng(), |b| b.weight)
 		.ok()
 		.cloned()
+}
+
+fn resolve_backend(
+	b: TCPRouteBackendReference,
+	pi: &ProxyInputs,
+) -> Result<TCPRouteBackend, ProxyError> {
+	let backend = super::resolve_simple_backend(&b.backend, pi)?;
+	Ok(TCPRouteBackend {
+		weight: b.weight,
+		backend,
+	})
 }

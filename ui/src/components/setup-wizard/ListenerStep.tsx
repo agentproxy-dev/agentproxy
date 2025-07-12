@@ -10,29 +10,33 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { AgentgatewayLogo } from "@/components/agentgateway-logo";
-import { ArrowLeft, ArrowRight } from "lucide-react";
+import { ArrowLeft, ArrowRight, Network } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Config, Listener, ListenerProtocol } from "@/lib/types";
-import { createListener } from "@/lib/api";
+import { LocalConfig, Listener, ListenerProtocol } from "@/lib/types";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 interface ListenerStepProps {
   onNext: () => void;
   onPrevious: () => void;
-  config: Config;
-  onConfigChange: (config: Config) => void;
+  config: LocalConfig;
+  onConfigChange: (config: LocalConfig) => void;
 }
 
 export function ListenerStep({ onNext, onPrevious, config, onConfigChange }: ListenerStepProps) {
-  const [listenerAddress, setListenerAddress] = useState("0.0.0.0");
-  const [listenerPort, setListenerPort] = useState("5555");
-  const [selectedProtocol, setSelectedProtocol] = useState<ListenerProtocol>(ListenerProtocol.MCP);
-  const [isUpdatingListener, setIsUpdatingListener] = useState(false);
+  const [listenerName, setListenerName] = useState("default");
+  const [listenerHostname, setListenerHostname] = useState("localhost");
+  const [listenerPort, setListenerPort] = useState("8080");
+  const [selectedProtocol, setSelectedProtocol] = useState<ListenerProtocol>(ListenerProtocol.HTTP);
+  const [isUpdating, setIsUpdating] = useState(false);
 
-  const updateListenerConfig = async () => {
-    if (!listenerAddress.trim()) {
-      toast.error("Listener address is required.");
+  const handleNext = async () => {
+    if (!listenerName.trim()) {
+      toast.error("Listener name is required.");
+      return;
+    }
+    if (!listenerHostname.trim()) {
+      toast.error("Listener hostname is required.");
       return;
     }
     if (!listenerPort.trim()) {
@@ -46,77 +50,116 @@ export function ListenerStep({ onNext, onPrevious, config, onConfigChange }: Lis
       return;
     }
 
-    setIsUpdatingListener(true);
+    setIsUpdating(true);
 
     try {
       const newListener: Listener = {
-        name: "default",
+        name: listenerName,
+        hostname: listenerHostname,
         protocol: selectedProtocol,
-        sse: {
-          address: listenerAddress,
-          port: portNumber,
-          tls: undefined,
-          rbac: [],
-        },
+        routes: [],
+        tcpRoutes: [],
       };
 
-      const newConfig = {
+      // Create or update the bind with the listener
+      const existingBind = config.binds?.find((bind) => bind.port === portNumber);
+
+      let newBinds;
+      if (existingBind) {
+        // Update existing bind
+        newBinds = config.binds.map((bind) =>
+          bind.port === portNumber ? { ...bind, listeners: [...bind.listeners, newListener] } : bind
+        );
+      } else {
+        // Create new bind
+        newBinds = [
+          ...(config.binds || []),
+          {
+            port: portNumber,
+            listeners: [newListener],
+          },
+        ];
+      }
+
+      const newConfig: LocalConfig = {
         ...config,
-        listeners: [newListener],
+        binds: newBinds,
       };
 
       onConfigChange(newConfig);
-
-      await createListener(newListener);
-
+      toast.success("Listener configured successfully!");
       onNext();
     } catch (err) {
-      console.error("Error updating listener configuration:", err);
-      toast.error(err instanceof Error ? err.message : "Failed to update listener configuration");
+      console.error("Error configuring listener:", err);
+      toast.error(err instanceof Error ? err.message : "Failed to configure listener");
     } finally {
-      setIsUpdatingListener(false);
+      setIsUpdating(false);
     }
   };
 
   return (
-    <Card className="w-full max-w-2xl">
+    <Card className="w-full max-w-3xl">
       <CardHeader>
         <div className="flex justify-center mb-6">
           <AgentgatewayLogo className="h-12" />
         </div>
-        <CardTitle className="text-center">Configure Listener</CardTitle>
+        <CardTitle className="text-center flex items-center justify-center gap-2">
+          <Network className="h-5 w-5 text-blue-500" />
+          Configure Listener
+        </CardTitle>
         <CardDescription className="text-center">
-          Set up your first listener to start accepting connections
+          Set up your first listener to accept incoming connections
         </CardDescription>
       </CardHeader>
       <CardContent>
         <div className="space-y-6">
-          <div className="space-y-2">
+          <div className="space-y-3">
             <h3 className="font-medium">What is a Listener?</h3>
             <p className="text-sm text-muted-foreground">
-              A listener is a network endpoint that accepts incoming connections. You can configure
-              the protocol (MCP or A2A), address, and port. MCP listeners support connections from
-              MCP Servers and OpenAPI endpoints, while A2A listeners handle Google&apos;s
-              Agent2Agent protocol.
+              A listener is a network endpoint that accepts incoming connections on a specific port.
+              You can configure the protocol (HTTP, HTTPS, TLS, TCP, or HBONE), hostname, and port.
+              The listener will handle incoming requests and route them to appropriate backends.
             </p>
           </div>
 
           <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>Protocol</Label>
+            <div className="space-y-3">
+              <Label htmlFor="listenerName">Listener Name</Label>
+              <Input
+                id="listenerName"
+                value={listenerName}
+                onChange={(e) => setListenerName(e.target.value)}
+                placeholder="e.g., default"
+              />
+              <p className="text-xs text-muted-foreground">A unique name for this listener.</p>
+            </div>
 
+            <div className="space-y-3">
+              <Label>Protocol</Label>
               <RadioGroup
                 value={selectedProtocol}
                 onValueChange={(value) => setSelectedProtocol(value as ListenerProtocol)}
-                className="flex space-x-4"
+                className="grid grid-cols-2 gap-4"
               >
                 <div className="flex items-center space-x-2">
-                  <RadioGroupItem value={ListenerProtocol.MCP} id="mcp-protocol" />
-                  <Label htmlFor="mcp-protocol">MCP (MCP Server / OpenAPI)</Label>
+                  <RadioGroupItem value={ListenerProtocol.HTTP} id="http-protocol" />
+                  <Label htmlFor="http-protocol">HTTP</Label>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <RadioGroupItem value={ListenerProtocol.A2A} id="a2a-protocol" />
-                  <Label htmlFor="a2a-protocol">A2A (Agent2Agent)</Label>
+                  <RadioGroupItem value={ListenerProtocol.HTTPS} id="https-protocol" />
+                  <Label htmlFor="https-protocol">HTTPS</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value={ListenerProtocol.TLS} id="tls-protocol" />
+                  <Label htmlFor="tls-protocol">TLS</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value={ListenerProtocol.TCP} id="tcp-protocol" />
+                  <Label htmlFor="tcp-protocol">TCP</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value={ListenerProtocol.HBONE} id="hbone-protocol" />
+                  <Label htmlFor="hbone-protocol">HBONE</Label>
                 </div>
               </RadioGroup>
               <p className="text-xs text-muted-foreground">
@@ -124,31 +167,44 @@ export function ListenerStep({ onNext, onPrevious, config, onConfigChange }: Lis
               </p>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="listenerAddress">Address</Label>
+            <div className="space-y-3">
+              <Label htmlFor="listenerHostname">Hostname</Label>
               <Input
-                id="listenerAddress"
-                value={listenerAddress}
-                onChange={(e) => setListenerAddress(e.target.value)}
-                placeholder="e.g., 0.0.0.0"
+                id="listenerHostname"
+                value={listenerHostname}
+                onChange={(e) => setListenerHostname(e.target.value)}
+                placeholder="e.g., localhost or *"
               />
               <p className="text-xs text-muted-foreground">
-                The IP address the listener is bound to.
+                The hostname the listener will bind to. Use * for all hostnames.
               </p>
             </div>
-            <div className="space-y-2">
+
+            <div className="space-y-3">
               <Label htmlFor="listenerPort">Port</Label>
               <Input
                 id="listenerPort"
                 value={listenerPort}
                 onChange={(e) => setListenerPort(e.target.value)}
-                placeholder="e.g., 5555"
+                placeholder="e.g., 8080"
                 type="number"
+                min="1"
+                max="65535"
               />
               <p className="text-xs text-muted-foreground">
-                The port number the listener is using.
+                The port number the listener will use (1-65535).
               </p>
             </div>
+          </div>
+
+          <div className="p-4 bg-muted/30 rounded-lg">
+            <h4 className="font-medium text-sm mb-2">Preview</h4>
+            <p className="text-sm text-muted-foreground">
+              Your listener will be available at:{" "}
+              <code className="bg-muted px-1 py-0.5 rounded text-xs">
+                {selectedProtocol.toLowerCase()}://{listenerHostname}:{listenerPort}
+              </code>
+            </p>
           </div>
         </div>
       </CardContent>
@@ -157,8 +213,8 @@ export function ListenerStep({ onNext, onPrevious, config, onConfigChange }: Lis
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back
         </Button>
-        <Button onClick={updateListenerConfig} disabled={isUpdatingListener}>
-          {isUpdatingListener ? "Updating..." : "Next"}
+        <Button onClick={handleNext} disabled={isUpdating}>
+          {isUpdating ? "Configuring..." : "Next"}
           <ArrowRight className="ml-2 h-4 w-4" />
         </Button>
       </CardFooter>

@@ -60,7 +60,7 @@ use crate::types::agent;
 use crate::types::proto::ProtoError;
 use crate::{ProxyInputs, *};
 
-fn select_backend(route: &Route, _req: &Request) -> Option<RouteBackend> {
+fn select_backend(route: &Route, _req: &Request) -> Option<RouteBackendReference> {
 	route
 		.backends
 		.choose_weighted(&mut rand::rng(), |b| b.weight)
@@ -365,6 +365,7 @@ impl HTTPProxy {
 
 		let selected_backend =
 			select_backend(selected_route.as_ref(), &req).ok_or(ProxyError::NoValidBackends)?;
+		let selected_backend = resolve_backend(selected_backend, self.inputs.as_ref())?;
 		let (direct_response, response_headers_backend) =
 			apply_request_filters(selected_backend.filters.as_slice(), &path_match, &mut req)?;
 		if let Some(resp) = direct_response {
@@ -579,6 +580,15 @@ impl HTTPProxy {
 	}
 }
 
+fn resolve_backend(b: RouteBackendReference, pi: &ProxyInputs) -> Result<RouteBackend, ProxyError> {
+	let backend = super::resolve_backend(&b.backend, pi)?;
+	Ok(RouteBackend {
+		weight: b.weight,
+		backend,
+		filters: b.filters,
+	})
+}
+
 async fn handle_upgrade(
 	req_upgrade_type: &mut Option<RequestUpgrade>,
 	mut resp: Response,
@@ -664,8 +674,9 @@ async fn make_backend_call(
 	mut log: Option<&mut RequestLog>,
 ) -> Result<Pin<Box<dyn Future<Output = Result<Response, ProxyError>> + Send>>, ProxyError> {
 	let client = inputs.upstream.clone();
+	let policy_target = PolicyTarget::Backend(backend.name());
 	let backend_call = match backend {
-		Backend::AI(ai) => {
+		Backend::AI(_, ai) => {
 			let (target, default_policies) = match &ai.host_override {
 				Some(target) => (
 					target.clone(),
@@ -685,21 +696,13 @@ async fn make_backend_call(
 			};
 			BackendCall {
 				target,
-				// TODO: move name to backend level
-				policy_key: PolicyTarget::RouteBackend(backend.name()),
 				default_policies,
 				http_version_override: None,
 				transport_override: None,
 			}
 		},
-		Backend::Service { name, port } => {
+		Backend::Service(svc, port) => {
 			let port = *port;
-			let svc = inputs
-				.stores
-				.read_discovery()
-				.services
-				.get_by_namespaced_host(name)
-				.ok_or(ProxyError::ServiceNotFound)?;
 			let (ep, wl) = load_balance(inputs.clone(), svc.as_ref(), port, override_dest)
 				.ok_or(ProxyError::NoHealthyEndpoints)?;
 			let svc_target_port = svc.ports.get(&port).copied().unwrap_or_default();
@@ -725,15 +728,13 @@ async fn make_backend_call(
 			let dest = SocketAddr::from((*ip, target_port));
 			BackendCall {
 				target: Target::Address(dest),
-				policy_key: PolicyTarget::Service(name.clone()),
 				http_version_override,
 				transport_override: Some((wl.protocol, wl.identity())),
 				default_policies: None,
 			}
 		},
-		Backend::Opaque(target) => BackendCall {
+		Backend::Opaque(_, target) => BackendCall {
 			target: target.clone(),
-			policy_key: PolicyTarget::Opaque(target.clone()),
 			http_version_override: None,
 			transport_override: None,
 			default_policies: None,
@@ -748,17 +749,22 @@ async fn make_backend_call(
 			let target = Target::try_from((get_host(&req)?, port)).map_err(ProxyError::Processing)?;
 			BackendCall {
 				target: target.clone(),
-				policy_key: PolicyTarget::Opaque(target),
 				http_version_override: None,
 				transport_override: None,
 				default_policies: None,
 			}
 		},
-		Backend::MCP(backend) => {
+		Backend::MCP(name, backend) => {
 			let inputs = inputs.clone();
 			let backend = backend.clone();
+			let name = name.clone();
+			let mcp_response_log = log.map(|l| l.mcp_status.clone()).expect("must be set");
 			return Ok(Box::pin(async move {
-				inputs.mcp_state.serve(backend, req).map(Ok).await
+				inputs
+					.mcp_state
+					.serve(name, backend, req, mcp_response_log)
+					.map(Ok)
+					.await
 			}));
 		},
 		Backend::Invalid => return Err(ProxyError::BackendDoesNotExist),
@@ -776,10 +782,7 @@ async fn make_backend_call(
 	};
 	log.add(|l| l.endpoint = Some(backend_call.target.clone()));
 
-	let policies = inputs
-		.stores
-		.read_binds()
-		.backend_policies(backend_call.policy_key.clone());
+	let policies = inputs.stores.read_binds().backend_policies(policy_target);
 	let policies = match backend_call.default_policies.clone() {
 		Some(def) => def.merge(policies),
 		None => policies,
@@ -866,7 +869,8 @@ async fn send_mirror(
 	mut req: Request,
 ) -> Result<(), ProxyError> {
 	req.headers_mut().remove(http::header::CONTENT_LENGTH);
-	let _ = upstream.call(req, mirror.backend).await?;
+	let backend = super::resolve_simple_backend(&mirror.backend, inputs.as_ref())?;
+	let _ = upstream.call(req, backend).await?;
 	Ok(())
 }
 
@@ -983,7 +987,6 @@ fn normalize_uri(connection: &Extension, req: &mut Request) -> anyhow::Result<()
 
 struct BackendCall {
 	target: Target,
-	policy_key: PolicyTarget,
 	http_version_override: Option<::http::Version>,
 	transport_override: Option<(InboundProtocol, Identity)>,
 	default_policies: Option<BackendPolicies>,

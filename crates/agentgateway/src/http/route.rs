@@ -8,8 +8,8 @@ use itertools::Itertools;
 use crate::http::Request;
 use crate::types::agent;
 use crate::types::agent::{
-	Backend, HeaderMatch, HeaderValueMatch, Listener, ListenerProtocol, PathMatch, QueryValueMatch,
-	Route, RouteBackend,
+	Backend, BackendReference, HeaderMatch, HeaderValueMatch, Listener, ListenerProtocol, PathMatch,
+	QueryValueMatch, Route, RouteBackend, RouteBackendReference,
 };
 use crate::types::discovery::NetworkAddress;
 use crate::types::discovery::gatewayaddress::Destination;
@@ -84,9 +84,9 @@ pub fn select_best_route(
 			matches: vec![],
 			filters: vec![],
 			policies: None,
-			backends: vec![RouteBackend {
+			backends: vec![RouteBackendReference {
 				weight: 1,
-				backend: Backend::Service {
+				backend: BackendReference::Service {
 					name: svc.namespaced_hostname(),
 					port: dst.port(), // TODO: get from req
 				},

@@ -14,8 +14,8 @@ interface TLSConfigFormProps {
 
 export function TLSConfigForm({ listener, onSave, onCancel }: TLSConfigFormProps) {
   const [config, setConfig] = useState({
-    certFile: listener?.sse?.tls?.cert_pem?.file_path || "",
-    keyFile: listener?.sse?.tls?.key_pem?.file_path || "",
+    certFile: listener?.tls?.cert || "",
+    keyFile: listener?.tls?.key || "",
   });
 
   const handleSave = () => {
@@ -23,16 +23,9 @@ export function TLSConfigForm({ listener, onSave, onCancel }: TLSConfigFormProps
 
     const updatedListener: Listener = {
       ...listener,
-      sse: {
-        ...listener.sse,
-        tls: {
-          cert_pem: {
-            file_path: config.certFile,
-          },
-          key_pem: {
-            file_path: config.keyFile,
-          },
-        },
+      tls: {
+        cert: config.certFile,
+        key: config.keyFile,
       },
     };
 

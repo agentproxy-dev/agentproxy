@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Listener } from "@/lib/types";
+import { toast } from "sonner";
 
 interface JWTConfigFormProps {
   listener: Listener | null;
@@ -14,48 +15,81 @@ interface JWTConfigFormProps {
 }
 
 export function JWTConfigForm({ listener, onSave, onCancel }: JWTConfigFormProps) {
-  const [config, setConfig] = useState({
-    issuer: listener?.sse?.authn?.jwt?.issuer?.join(",") || "",
-    audience: listener?.sse?.authn?.jwt?.audience?.join(",") || "",
-    localJwksPath: listener?.sse?.authn?.jwt?.localJwks?.file_path || "",
-    remoteJwksUrl: listener?.sse?.authn?.jwt?.remoteJwks?.url || "",
-    jwksSource: listener?.sse?.authn?.jwt?.localJwks ? "local" : "remote",
+  const [config, setConfig] = useState(() => {
+    // Initialize with existing JWT config if available
+    const existingJwt = listener?.routes?.[0]?.policies?.jwtAuth;
+    return {
+      issuer: existingJwt?.issuer || "",
+      audience: existingJwt?.audiences?.join(", ") || "",
+      localJwksPath: typeof existingJwt?.jwks === "object" ? existingJwt.jwks.file : "",
+      remoteJwksUrl: typeof existingJwt?.jwks === "string" ? existingJwt.jwks : "",
+      jwksSource: (typeof existingJwt?.jwks === "object" ? "local" : "remote") as
+        | "local"
+        | "remote",
+    };
   });
 
   const handleSave = () => {
     if (!listener) return;
 
+    // Validate required fields
+    if (!config.issuer) {
+      toast.error("JWT Issuer is required");
+      return;
+    }
+
+    if (!config.audience) {
+      toast.error("JWT Audience is required");
+      return;
+    }
+
+    if (config.jwksSource === "local" && !config.localJwksPath) {
+      toast.error("Local JWKS file path is required");
+      return;
+    }
+
+    if (config.jwksSource === "remote" && !config.remoteJwksUrl) {
+      toast.error("Remote JWKS URL is required");
+      return;
+    }
+
+    // Create JWT auth configuration
+    const jwtAuth = {
+      issuer: config.issuer,
+      audiences: config.audience
+        .split(",")
+        .map((a) => a.trim())
+        .filter((a) => a),
+      jwks: config.jwksSource === "local" ? { file: config.localJwksPath } : config.remoteJwksUrl,
+    };
+
+    // Apply JWT auth to all routes (or create a default route if none exist)
     const updatedListener: Listener = {
       ...listener,
-      sse: {
-        ...listener.sse,
-        authn: {
-          jwt: {
-            issuer: config.issuer
-              .split(",")
-              .map((s) => s.trim())
-              .filter(Boolean),
-            audience: config.audience
-              .split(",")
-              .map((s) => s.trim())
-              .filter(Boolean),
-            ...(config.jwksSource === "local" && config.localJwksPath
-              ? {
-                  local_jwks: {
-                    file_path: config.localJwksPath,
+      routes:
+        listener.routes && listener.routes.length > 0
+          ? listener.routes.map((route) => ({
+              ...route,
+              policies: {
+                ...route.policies,
+                jwtAuth,
+              },
+            }))
+          : [
+              {
+                name: "default",
+                hostnames: [listener.hostname || "*"],
+                matches: [
+                  {
+                    path: { pathPrefix: "/" },
                   },
-                }
-              : {}),
-            ...(config.jwksSource === "remote" && config.remoteJwksUrl
-              ? {
-                  remote_jwks: {
-                    url: config.remoteJwksUrl,
-                  },
-                }
-              : {}),
-          },
-        },
-      },
+                ],
+                policies: {
+                  jwtAuth,
+                },
+                backends: [],
+              },
+            ],
     };
 
     onSave(updatedListener);

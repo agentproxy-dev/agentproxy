@@ -34,7 +34,7 @@ export const OpenAPITargetForm = forwardRef<
       const openapi = existingTarget.openapi;
       setHost(openapi.host);
       setPort(openapi.port.toString());
-      setHeaders(openapi.headers || []);
+      setHeaders([]);
     }
   }, [existingTarget]);
 
@@ -70,7 +70,7 @@ export const OpenAPITargetForm = forwardRef<
           host,
           port: parseInt(port),
           schema,
-          headers: headers.length > 0 ? headers : undefined,
+          // Headers are no longer supported in the new schema
         },
       };
 

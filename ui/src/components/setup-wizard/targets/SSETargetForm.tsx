@@ -31,21 +31,13 @@ export const SSETargetForm = forwardRef<{ submitForm: () => Promise<void> }, SSE
       if (existingTarget) {
         if (existingTarget.sse) {
           const sse = existingTarget.sse;
-          const protocol = sse.tls?.insecure_skip_verify ? "https" : "http";
+          // TLS configuration is no longer part of SSE target in the new schema
+          const protocol = "http"; // Default to http since TLS is handled at listener level
           const url = `${protocol}://${sse.host}:${sse.port}${sse.path}`;
           setSseUrl(url);
 
-          if (sse.headers) {
-            setHeaders(sse.headers);
-          }
-
-          if (sse.auth?.passthrough) {
-            setPassthroughAuth(true);
-          }
-
-          if (sse.tls?.insecure_skip_verify) {
-            setInsecureSkipVerify(true);
-          }
+          // Headers, auth, and TLS are no longer part of SSE target in the new schema
+          // These configurations are now handled at the listener/route level
         }
         if (existingTarget.listeners) {
           setSelectedListeners(existingTarget.listeners);
@@ -83,23 +75,9 @@ export const SSETargetForm = forwardRef<{ submitForm: () => Promise<void> }, SSE
             host: urlObj.hostname,
             port: port,
             path: urlObj.pathname + urlObj.search,
-            headers: headers.length > 0 ? headers : undefined,
+            // Headers, auth, and TLS are no longer supported in the new schema
           },
         };
-
-        // Add auth if passthrough is enabled
-        if (passthroughAuth) {
-          target.sse!.auth = {
-            passthrough: true,
-          };
-        }
-
-        // Add TLS config if insecure skip verify is enabled
-        if (insecureSkipVerify) {
-          target.sse!.tls = {
-            insecure_skip_verify: true,
-          };
-        }
 
         await onSubmit(target as TargetWithType);
       } catch (err) {

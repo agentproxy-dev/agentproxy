@@ -4,9 +4,27 @@ import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Listener, ListenerProtocol } from "@/lib/types";
-import { Trash2, Shield, Lock, Key, Settings2, MoreVertical, Loader2 } from "lucide-react";
-import { addListener, deleteListener, fetchListenerTargets } from "@/lib/api";
+import { Listener, ListenerProtocol, Bind } from "@/lib/types";
+import {
+  Trash2,
+  Lock,
+  Settings2,
+  MoreVertical,
+  Loader2,
+  Plus,
+  Network,
+  ChevronDown,
+  ChevronRight,
+  ExternalLink,
+} from "lucide-react";
+import Link from "next/link";
+import {
+  fetchBinds,
+  createBind,
+  deleteBind,
+  addListenerToBind,
+  removeListenerFromBind,
+} from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -35,145 +53,237 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useServer } from "@/lib/server-context";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
 interface ListenerConfigProps {
   isAddingListener?: boolean;
   setIsAddingListener?: (isAdding: boolean) => void;
 }
 
+interface NewBindState {
+  port: string;
+}
+
 interface NewListenerState {
   name: string;
-  address: string;
-  port: string;
+  gatewayName: string;
+  hostname: string;
   protocol: ListenerProtocol;
-  type: "sse";
+  targetBindPort: number | null;
 }
 
 interface ConfigDialogState {
   type: "jwt" | "tls" | "rbac" | null;
   isOpen: boolean;
   listener: Listener | null;
+  bindPort: number;
   listenerIndex: number;
 }
 
 interface DeleteDialogState {
+  type: "bind" | "listener";
   isOpen: boolean;
-  listenerIndex: number;
+  bindPort?: number;
+  listenerName?: string;
+  listenerIndex?: number;
 }
 
 interface DeleteConfigDialogState {
   isOpen: boolean;
+  bindPort: number;
   listenerIndex: number;
   configType: "jwt" | "tls" | "rbac" | null;
 }
 
-interface ListenerWithTargets extends Listener {
-  targetCount?: number;
+interface BindWithBackendsAndRoutes extends Bind {
+  listeners: ListenerWithBackendsAndRoutes[];
+}
+
+interface ListenerWithBackendsAndRoutes extends Listener {
+  backendCount?: number;
 }
 
 export function ListenerConfig({
   isAddingListener = false,
   setIsAddingListener = () => {},
 }: ListenerConfigProps) {
-  // Get listeners from context, remove local state fetch
-  const { listeners: contextListeners, refreshListeners } = useServer();
-  const [listenersWithTargets, setListenersWithTargets] = useState<ListenerWithTargets[]>([]);
-  const [isLoadingCounts, setIsLoadingCounts] = useState(true);
+  const { refreshListeners } = useServer();
+  const [binds, setBinds] = useState<BindWithBackendsAndRoutes[]>([]);
+  const [expandedBinds, setExpandedBinds] = useState<Set<number>>(new Set());
+  const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isAddingBind, setIsAddingBind] = useState(false);
+
   const [configDialog, setConfigDialog] = useState<ConfigDialogState>({
     type: null,
     isOpen: false,
     listener: null,
+    bindPort: 0,
     listenerIndex: -1,
   });
+
+  const [newBind, setNewBind] = useState<NewBindState>({
+    port: "8080",
+  });
+
   const [newListener, setNewListener] = useState<NewListenerState>({
     name: "",
-    address: "0.0.0.0",
-    port: "5555",
-    protocol: ListenerProtocol.MCP,
-    type: "sse",
+    gatewayName: "",
+    hostname: "localhost",
+    protocol: ListenerProtocol.HTTP,
+    targetBindPort: null,
   });
+
   const [deleteDialog, setDeleteDialog] = useState<DeleteDialogState>({
+    type: "bind",
     isOpen: false,
-    listenerIndex: -1,
   });
+
   const [deleteConfigDialog, setDeleteConfigDialog] = useState<DeleteConfigDialogState>({
     isOpen: false,
+    bindPort: 0,
     listenerIndex: -1,
     configType: null,
   });
 
-  // Fetch target counts when context listeners change
-  useEffect(() => {
-    const fetchAllTargetCounts = async () => {
-      if (!contextListeners || contextListeners.length === 0) {
-        setListenersWithTargets([]);
-        setIsLoadingCounts(false);
-        return;
-      }
+  // Helper function to count backends from listener structure
+  const getListenerCounts = (listener: Listener): { backendCount: number } => {
+    let backendCount = 0;
 
-      setIsLoadingCounts(true);
-      try {
-        const listenersWithFetchedTargets = await Promise.all(
-          contextListeners.map(async (listener) => {
-            try {
-              const targets = await fetchListenerTargets(listener.name);
-              return {
-                ...listener,
-                targetCount: targets.length,
-              };
-            } catch (err) {
-              console.error(`Error fetching targets for listener ${listener.name}:`, err);
-              // Return listener with 0 count or handle error as needed
-              return {
-                ...listener,
-                targetCount: 0,
-              };
-            }
-          })
-        );
-        setListenersWithTargets(listenersWithFetchedTargets);
-      } catch (err) {
-        console.error("Error fetching target counts:", err);
-        toast.error(err instanceof Error ? err.message : "Failed to fetch target counts");
-        setListenersWithTargets(contextListeners.map((l) => ({ ...l, targetCount: undefined })));
-      } finally {
-        setIsLoadingCounts(false);
-      }
-    };
+    const listenerName = listener.name || "unnamed";
 
-    fetchAllTargetCounts();
-  }, [contextListeners]);
+    // Count backends across all routes
+    if (listener.routes && listener.routes.length > 0) {
+      listener.routes.forEach((route, routeIndex) => {
+        if (route.backends && route.backends.length > 0) {
+          backendCount += route.backends.length;
+        }
+      });
+    }
 
-  const handleAddListener = async () => {
-    // Use submitting state
-    setIsSubmitting(true);
+    console.log(`Listener ${listenerName}: ${backendCount} backends`);
+    return { backendCount };
+  };
 
+  // Fetch binds and their listener backend/route counts
+  const loadBinds = async () => {
+    setIsLoading(true);
     try {
-      const listenerToAdd: Listener = {
-        name: newListener.name || `listener-${listenersWithTargets.length + 1}`,
-        protocol: newListener.protocol,
-        sse: {
-          address: newListener.address,
-          port: parseInt(newListener.port),
-        },
-      };
+      const fetchedBinds = await fetchBinds();
 
-      await addListener(listenerToAdd);
+      // Count backends directly from listener structure
+      const bindsWithCounts = fetchedBinds.map((bind) => {
+        const listenersWithCounts = bind.listeners.map((listener) => {
+          const { backendCount } = getListenerCounts(listener);
+          return {
+            ...listener,
+            backendCount,
+          };
+        });
 
-      // Refresh the listeners list (from context)
-      await refreshListeners();
-
-      // Reset the form
-      setNewListener({
-        name: "",
-        address: "0.0.0.0",
-        port: "5555",
-        protocol: ListenerProtocol.MCP,
-        type: "sse",
+        return {
+          ...bind,
+          listeners: listenersWithCounts,
+        };
       });
 
+      setBinds(bindsWithCounts);
+
+      // Auto-expand binds that have listeners
+      const newExpandedBinds = new Set<number>();
+      bindsWithCounts.forEach((bind) => {
+        if (bind.listeners.length > 0) {
+          newExpandedBinds.add(bind.port);
+        }
+      });
+      setExpandedBinds(newExpandedBinds);
+    } catch (err) {
+      console.error("Error loading binds:", err);
+      toast.error(err instanceof Error ? err.message : "Failed to load binds");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadBinds();
+  }, []);
+
+  const handleAddBind = async () => {
+    setIsSubmitting(true);
+    try {
+      const port = parseInt(newBind.port, 10);
+      if (isNaN(port) || port <= 0 || port > 65535) {
+        throw new Error("Port must be a valid number between 1 and 65535");
+      }
+
+      await createBind(port);
+      await loadBinds();
+      await refreshListeners();
+
+      setNewBind({ port: "8080" });
+      setIsAddingBind(false);
+      toast.success(`Bind created for port ${port}`);
+    } catch (err) {
+      console.error("Error adding bind:", err);
+      toast.error(err instanceof Error ? err.message : "Failed to add bind");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteBind = async (port: number) => {
+    setIsSubmitting(true);
+    try {
+      await deleteBind(port);
+      await loadBinds();
+      await refreshListeners();
+
+      setDeleteDialog({ type: "bind", isOpen: false });
+      toast.success(`Bind for port ${port} deleted`);
+    } catch (err) {
+      console.error("Error deleting bind:", err);
+      toast.error(err instanceof Error ? err.message : "Failed to delete bind");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleAddListener = async () => {
+    setIsSubmitting(true);
+    try {
+      if (!newListener.targetBindPort) {
+        throw new Error("Please select a bind to add the listener to");
+      }
+
+      const listenerToAdd: Listener = {
+        name: newListener.name || `listener-${Date.now()}`,
+        gatewayName: newListener.gatewayName || null,
+        hostname: newListener.hostname,
+        protocol: newListener.protocol,
+        ...(newListener.protocol === ListenerProtocol.TCP ||
+        newListener.protocol === ListenerProtocol.TLS
+          ? { tcpRoutes: [] }
+          : { routes: [] }),
+      };
+
+      await addListenerToBind(listenerToAdd, newListener.targetBindPort);
+      await loadBinds();
+      await refreshListeners();
+
+      // Expand the bind we added to
+      setExpandedBinds((prev) => new Set([...prev, newListener.targetBindPort!]));
+
+      setNewListener({
+        name: "",
+        gatewayName: "",
+        hostname: "localhost",
+        protocol: ListenerProtocol.HTTP,
+        targetBindPort: null,
+      });
       setIsAddingListener(false);
+      toast.success("Listener added successfully");
     } catch (err) {
       console.error("Error adding listener:", err);
       toast.error(err instanceof Error ? err.message : "Failed to add listener");
@@ -182,127 +292,15 @@ export function ListenerConfig({
     }
   };
 
-  const handleUpdateListener = async (updatedListener: Listener) => {
+  const handleDeleteListener = async (listenerName: string) => {
     setIsSubmitting(true);
-
-    // Make sure the updatedListener only includes the fields from the Listener type
-    const updatedListenerOnly: Listener = {
-      name: updatedListener.name,
-      protocol: updatedListener.protocol,
-      sse: updatedListener.sse,
-      policies: updatedListener.policies,
-    };
-
     try {
-      await addListener(updatedListenerOnly);
-
-      // Refresh the listeners list (from context)
+      await removeListenerFromBind(listenerName);
+      await loadBinds();
       await refreshListeners();
 
-      setConfigDialog({
-        type: null,
-        isOpen: false,
-        listener: null,
-        listenerIndex: -1,
-      });
-    } catch (err) {
-      console.error("Error updating listener:", err);
-      toast.error(err instanceof Error ? err.message : "Failed to update listener");
-    } finally {
-      // Use submitting state
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleDeleteConfiguration = async () => {
-    if (deleteConfigDialog.listenerIndex === -1 || !deleteConfigDialog.configType) return;
-
-    setIsSubmitting(true);
-
-    try {
-      const listenerIndex = deleteConfigDialog.listenerIndex;
-      const configType = deleteConfigDialog.configType;
-      const listenerToUpdate = listenersWithTargets[listenerIndex];
-
-      let updatedListener: Listener;
-
-      switch (configType) {
-        case "jwt":
-          updatedListener = {
-            ...listenerToUpdate,
-            sse: {
-              ...listenerToUpdate.sse,
-              authn: undefined,
-              rbac: undefined, // Also remove RBAC when removing JWT auth
-            },
-          };
-          break;
-        case "tls":
-          updatedListener = {
-            ...listenerToUpdate,
-            sse: {
-              ...listenerToUpdate.sse,
-              tls: undefined,
-            },
-          };
-          break;
-        case "rbac":
-          updatedListener = {
-            ...listenerToUpdate,
-            sse: {
-              ...listenerToUpdate.sse,
-              rbac: undefined,
-            },
-          };
-          break;
-        default:
-          throw new Error("Invalid configuration type for deletion.");
-      }
-
-      await handleUpdateListener(updatedListener); // Reuse existing update logic
-
-      // Close the confirmation dialog
-      setDeleteConfigDialog({ isOpen: false, listenerIndex: -1, configType: null });
-    } catch (err) {
-      console.error(`Error deleting ${deleteConfigDialog.configType} configuration:`, err);
-      toast.error(
-        err instanceof Error
-          ? err.message
-          : `Failed to delete ${deleteConfigDialog.configType} configuration`
-      );
-      // Keep dialog open on error? Or close? Closing for now.
-      setDeleteConfigDialog({ isOpen: false, listenerIndex: -1, configType: null });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleDeleteListener = async (index: number) => {
-    // Use submitting state
-    setIsSubmitting(true);
-
-    try {
-      // Get listener from the state that includes target counts, but use index safely
-      if (index < 0 || index >= listenersWithTargets.length) {
-        throw new Error("Invalid listener index for deletion.");
-      }
-      const listenerToDelete = listenersWithTargets[index];
-
-      // API expects basic Listener type
-      const listenerApiPayload: Listener = {
-        name: listenerToDelete.name,
-        sse: listenerToDelete.sse,
-        protocol: listenerToDelete.protocol,
-        policies: listenerToDelete.policies,
-      };
-
-      await deleteListener(listenerApiPayload);
-
-      // Refresh the listeners list (from context)
-      await refreshListeners();
-
-      // Close the delete dialog
-      setDeleteDialog({ isOpen: false, listenerIndex: -1 });
+      setDeleteDialog({ type: "listener", isOpen: false });
+      toast.success("Listener deleted successfully");
     } catch (err) {
       console.error("Error deleting listener:", err);
       toast.error(err instanceof Error ? err.message : "Failed to delete listener");
@@ -311,255 +309,361 @@ export function ListenerConfig({
     }
   };
 
+  const handleAddListenerToBind = (bindPort: number) => {
+    setNewListener({
+      name: "",
+      gatewayName: "",
+      hostname: "localhost",
+      protocol: ListenerProtocol.HTTP,
+      targetBindPort: bindPort,
+    });
+    setIsAddingListener(true);
+  };
+
+  const handleUpdateListener = async (updatedListener: Listener, bindPort: number) => {
+    setIsSubmitting(true);
+    try {
+      await addListenerToBind(updatedListener, bindPort);
+      await loadBinds();
+      await refreshListeners();
+
+      setConfigDialog({
+        type: null,
+        isOpen: false,
+        listener: null,
+        bindPort: 0,
+        listenerIndex: -1,
+      });
+
+      toast.success("Listener updated successfully");
+    } catch (err) {
+      console.error("Error updating listener:", err);
+      toast.error(err instanceof Error ? err.message : "Failed to update listener");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const toggleBindExpansion = (port: number) => {
+    setExpandedBinds((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(port)) {
+        newSet.delete(port);
+      } else {
+        newSet.add(port);
+      }
+      return newSet;
+    });
+  };
+
+  const getDisplayEndpoint = (listener: ListenerWithBackendsAndRoutes, port: number) => {
+    const listenerProtocol = listener.protocol || ListenerProtocol.HTTP;
+    const protocol = listenerProtocol === ListenerProtocol.HTTPS ? "https" : "http";
+    const hostname = listener.hostname || "localhost";
+    return `${protocol}://${hostname}:${port}`;
+  };
+
+  const hasJWTAuth = (listener: Listener) => {
+    return (
+      listener.routes?.some(
+        (route) => route.policies?.jwtAuth || route.policies?.mcpAuthentication
+      ) || false
+    );
+  };
+
+  const hasTLS = (listener: Listener) => {
+    return !!listener.tls;
+  };
+
+  const hasRBAC = (listener: Listener) => {
+    return listener.routes?.some((route) => route.policies?.mcpAuthorization) || false;
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+        <span className="ml-2">Loading binds and listeners...</span>
+      </div>
+    );
+  }
+
   return (
-    <div>
-      {isLoadingCounts ? (
-        <div className="flex items-center justify-center py-8">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
-          <span className="ml-2">Loading listener details...</span>
-        </div>
-      ) : listenersWithTargets.length === 0 ? (
+    <div className="space-y-6">
+      <div className="flex gap-2">
+        <Button onClick={() => setIsAddingBind(true)} variant="outline">
+          <Plus className="mr-2 h-4 w-4" />
+          Add Bind
+        </Button>
+      </div>
+
+      {binds.length === 0 ? (
         <div className="text-center py-12 border rounded-md bg-muted/20">
+          <Network className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
           <p className="text-muted-foreground">
-            No listeners configured. Add a listener to get started.
+            No port binds configured. Add a bind to get started.
           </p>
         </div>
       ) : (
-        <div className="border rounded-md overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/50">
-                <TableHead>Name</TableHead>
-                <TableHead>Protocol</TableHead>
-                <TableHead>Address</TableHead>
-                <TableHead>Targets</TableHead>
-                <TableHead>Authentication</TableHead>
-                <TableHead>TLS</TableHead>
-                <TableHead>Policies</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {listenersWithTargets.map((listener, index) => (
-                <TableRow key={listener.name || index} className="hover:bg-muted/30">
-                  <TableCell className="font-medium">
-                    {listener.name || `listener-${index + 1}`}
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={listener.protocol === ListenerProtocol.A2A ? "secondary" : "outline"}
-                    >
-                      {listener.protocol === ListenerProtocol.A2A ? "A2A" : "MCP"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    {listener.sse?.address}:{listener.sse?.port}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline">
-                      {listener.targetCount ?? 0} target
-                      {(listener.targetCount ?? 0) !== 1 ? "s" : ""}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center space-x-2">
-                      <Badge
-                        variant={listener.sse?.authn ? "default" : "outline"}
-                        className="h-7 space-x-2"
-                      >
-                        <Shield className="h-4 w-4" />
-                        <span>JWT</span>
-                      </Badge>
-                      <DropdownMenu>
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="hover:bg-primary/20">
-                                  <MoreVertical className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                            </TooltipTrigger>
-                            <TooltipContent side="top">
-                              <p className="text-xs">Manage JWT Authentication</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem
-                            onClick={() =>
-                              setConfigDialog({
-                                type: "jwt",
-                                isOpen: true,
-                                listener,
-                                listenerIndex: index,
-                              })
-                            }
-                          >
-                            <Settings2 className="h-4 w-4 mr-2" />
-                            Configure
-                          </DropdownMenuItem>
-                          {listener.sse?.authn && (
-                            <DropdownMenuItem
-                              className="text-destructive"
-                              onClick={() => {
-                                setDeleteConfigDialog({
-                                  isOpen: true,
-                                  listenerIndex: index,
-                                  configType: "jwt",
-                                });
-                              }}
-                            >
-                              <Trash2 className="h-4 w-4 mr-2" />
-                              Delete
-                            </DropdownMenuItem>
-                          )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+        <div className="space-y-4">
+          {binds.map((bind) => (
+            <Card key={bind.port}>
+              <Collapsible
+                open={expandedBinds.has(bind.port)}
+                onOpenChange={() => toggleBindExpansion(bind.port)}
+              >
+                <CollapsibleTrigger asChild>
+                  <CardHeader className="hover:bg-muted/50 cursor-pointer">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-4">
+                        {expandedBinds.has(bind.port) ? (
+                          <ChevronDown className="h-4 w-4" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4" />
+                        )}
+                        <div className="flex items-center space-x-2">
+                          <Network className="h-5 w-5 text-blue-500" />
+                          <div>
+                            <h3 className="text-lg font-semibold">Port {bind.port}</h3>
+                            <p className="text-sm text-muted-foreground">
+                              {bind.listeners.length} listener
+                              {bind.listeners.length !== 1 ? "s" : ""}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Badge variant="secondary">{bind.port}</Badge>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeleteDialog({
+                              type: "bind",
+                              isOpen: true,
+                              bindPort: bind.port,
+                            });
+                          }}
+                          className="text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center space-x-2">
-                      <Badge
-                        variant={listener.sse?.tls ? "default" : "outline"}
-                        className="h-7 space-x-2"
+                  </CardHeader>
+                </CollapsibleTrigger>
+
+                <CollapsibleContent>
+                  <CardContent className="pt-0">
+                    <div className="mb-4 flex justify-between items-center">
+                      <h4 className="text-sm font-medium text-muted-foreground">
+                        Listeners on Port {bind.port}
+                      </h4>
+                      <Button
+                        size="sm"
+                        onClick={() => handleAddListenerToBind(bind.port)}
+                        className="h-8"
                       >
-                        <Lock className="h-4 w-4" />
-                        <span>TLS</span>
-                      </Badge>
-                      <DropdownMenu>
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="hover:bg-primary/20">
-                                  <MoreVertical className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                            </TooltipTrigger>
-                            <TooltipContent side="top">
-                              <p className="text-xs">Manage TLS Encryption</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem
-                            onClick={() =>
-                              setConfigDialog({
-                                type: "tls",
-                                isOpen: true,
-                                listener,
-                                listenerIndex: index,
-                              })
-                            }
-                          >
-                            <Settings2 className="h-4 w-4 mr-2" />
-                            Configure
-                          </DropdownMenuItem>
-                          {listener.sse?.tls && (
-                            <DropdownMenuItem
-                              className="text-destructive"
-                              onClick={() => {
-                                setDeleteConfigDialog({
-                                  isOpen: true,
-                                  listenerIndex: index,
-                                  configType: "tls",
-                                });
-                              }}
-                            >
-                              <Trash2 className="h-4 w-4 mr-2" />
-                              Delete
-                            </DropdownMenuItem>
-                          )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                        <Plus className="mr-2 h-3 w-3" />
+                        Add Listener
+                      </Button>
                     </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center space-x-2">
-                      <Badge
-                        variant={
-                          listener.sse?.rbac && listener.sse.rbac.length > 0 ? "default" : "outline"
-                        }
-                        className="h-7 space-x-2"
-                      >
-                        <Key className="h-4 w-4" />
-                        <span>Policy</span>
-                      </Badge>
-                      <DropdownMenu>
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <div>
-                                <DropdownMenuTrigger asChild>
+                    {bind.listeners.length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        No listeners in this bind. Add a listener to get started.
+                      </div>
+                    ) : (
+                      <div className="border rounded-md overflow-hidden">
+                        <Table>
+                          <TableHeader>
+                            <TableRow className="bg-muted/50">
+                              <TableHead>Name</TableHead>
+                              <TableHead>Protocol</TableHead>
+                              <TableHead>Hostname</TableHead>
+                              <TableHead>Endpoint</TableHead>
+                              <TableHead>Backends</TableHead>
+                              <TableHead>TLS</TableHead>
+                              <TableHead>Policies</TableHead>
+                              <TableHead className="text-right">Actions</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {bind.listeners.map((listener, listenerIndex) => (
+                              <TableRow
+                                key={listener.name || listenerIndex}
+                                className="hover:bg-muted/30"
+                              >
+                                <TableCell className="font-medium">
+                                  <div className="flex items-center space-x-2">
+                                    <span>{listener.name || `listener-${listenerIndex + 1}`}</span>
+                                    {!listener.name && (
+                                      <Badge variant="outline" className="text-xs">
+                                        unnamed
+                                      </Badge>
+                                    )}
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  <Badge variant="outline">
+                                    {listener.protocol || ListenerProtocol.HTTP}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell>{listener.hostname || "localhost"}</TableCell>
+                                <TableCell className="font-mono text-sm">
+                                  {getDisplayEndpoint(listener, bind.port)}
+                                </TableCell>
+                                <TableCell>
+                                  <Badge variant="outline">
+                                    {listener.backendCount ?? 0} backend
+                                    {listener.backendCount !== 1 ? "s" : ""}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell>
+                                  <div className="flex items-center space-x-2">
+                                    <Badge
+                                      variant={hasTLS(listener) ? "default" : "outline"}
+                                      className="h-7 space-x-2"
+                                    >
+                                      <Lock className="h-4 w-4" />
+                                      <span>TLS</span>
+                                    </Badge>
+                                    <DropdownMenu>
+                                      <TooltipProvider>
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <DropdownMenuTrigger asChild>
+                                              <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="hover:bg-primary/20"
+                                              >
+                                                <MoreVertical className="h-4 w-4" />
+                                              </Button>
+                                            </DropdownMenuTrigger>
+                                          </TooltipTrigger>
+                                          <TooltipContent side="top">
+                                            <p className="text-xs">Manage TLS Encryption</p>
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      </TooltipProvider>
+                                      <DropdownMenuContent align="end">
+                                        <DropdownMenuItem
+                                          onClick={() =>
+                                            setConfigDialog({
+                                              type: "tls",
+                                              isOpen: true,
+                                              listener,
+                                              bindPort: bind.port,
+                                              listenerIndex,
+                                            })
+                                          }
+                                        >
+                                          <Settings2 className="h-4 w-4 mr-2" />
+                                          Configure
+                                        </DropdownMenuItem>
+                                        {hasTLS(listener) && (
+                                          <DropdownMenuItem
+                                            className="text-destructive"
+                                            onClick={() => {
+                                              setDeleteConfigDialog({
+                                                isOpen: true,
+                                                bindPort: bind.port,
+                                                listenerIndex,
+                                                configType: "tls",
+                                              });
+                                            }}
+                                          >
+                                            <Trash2 className="h-4 w-4 mr-2" />
+                                            Delete
+                                          </DropdownMenuItem>
+                                        )}
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  <div className="flex items-center space-x-2">
+                                    <Link
+                                      href="/policies"
+                                      className="flex items-center underline space-x-1 hover:text-primary"
+                                    >
+                                      <span className="text-sm">View Policies</span>
+                                      <ExternalLink className="h-3 w-3" />
+                                    </Link>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-right">
                                   <Button
                                     variant="ghost"
                                     size="icon"
-                                    disabled={!listener.sse?.authn}
+                                    onClick={() =>
+                                      setDeleteDialog({
+                                        type: "listener",
+                                        isOpen: true,
+                                        listenerName: listener.name || `listener-${listenerIndex}`,
+                                        listenerIndex,
+                                      })
+                                    }
+                                    className="text-destructive hover:text-destructive"
                                   >
-                                    <MoreVertical className="h-4 w-4" />
+                                    <Trash2 className="h-4 w-4" />
                                   </Button>
-                                </DropdownMenuTrigger>
-                              </div>
-                            </TooltipTrigger>
-                            <TooltipContent side="top">
-                              <p className="text-xs">
-                                {!listener.sse?.authn
-                                  ? "Enable JWT Authentication first to configure RBAC"
-                                  : "Manage RBAC Policies"}
-                              </p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem
-                            onClick={() =>
-                              setConfigDialog({
-                                type: "rbac",
-                                isOpen: true,
-                                listener,
-                                listenerIndex: index,
-                              })
-                            }
-                          >
-                            <Settings2 className="h-4 w-4 mr-2" />
-                            Configure
-                          </DropdownMenuItem>
-                          {listener.sse?.rbac && listener.sse.rbac.length > 0 && (
-                            <DropdownMenuItem
-                              className="text-destructive"
-                              onClick={() => {
-                                setDeleteConfigDialog({
-                                  isOpen: true,
-                                  listenerIndex: index,
-                                  configType: "rbac",
-                                });
-                              }}
-                            >
-                              <Trash2 className="h-4 w-4 mr-2" />
-                              Delete
-                            </DropdownMenuItem>
-                          )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => setDeleteDialog({ isOpen: true, listenerIndex: index })}
-                      className="text-destructive hover:text-destructive"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    )}
+                  </CardContent>
+                </CollapsibleContent>
+              </Collapsible>
+            </Card>
+          ))}
         </div>
       )}
+
+      <Dialog open={isAddingBind} onOpenChange={setIsAddingBind}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add New Bind</DialogTitle>
+            <DialogDescription>
+              Create a new port binding. Listeners can then be added to this bind.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="bind-port">Port</Label>
+              <Input
+                id="bind-port"
+                type="number"
+                min="1"
+                max="65535"
+                value={newBind.port}
+                onChange={(e) => setNewBind({ port: e.target.value })}
+                placeholder="8080"
+              />
+              <p className="text-xs text-muted-foreground">
+                The port number for the bind (1-65535).
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsAddingBind(false)}
+              disabled={isSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleAddBind} disabled={isSubmitting}>
+              {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Add Bind
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Add New Listener Dialog */}
       <Dialog open={isAddingListener} onOpenChange={setIsAddingListener}>
@@ -567,8 +671,7 @@ export function ListenerConfig({
           <DialogHeader>
             <DialogTitle>Add New Listener</DialogTitle>
             <DialogDescription>
-              Configure a new SSE listener for the gateway. Additional features can be configured
-              after creation.
+              Configure a new listener and assign it to a port bind.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -584,51 +687,89 @@ export function ListenerConfig({
                 A unique name for this listener. If left empty, a default name will be generated.
               </p>
             </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="gatewayName">Gateway Name</Label>
+              <Input
+                id="gatewayName"
+                value={newListener.gatewayName}
+                onChange={(e) => setNewListener({ ...newListener, gatewayName: e.target.value })}
+                placeholder="e.g., main-gateway"
+              />
+              <p className="text-xs text-muted-foreground">
+                Optional gateway name for this listener. Can be used for grouping or identification.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Target Bind</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {binds.map((bind) => (
+                  <Button
+                    key={bind.port}
+                    variant={newListener.targetBindPort === bind.port ? "default" : "outline"}
+                    onClick={() => setNewListener({ ...newListener, targetBindPort: bind.port })}
+                    className="justify-start"
+                  >
+                    <Network className="mr-2 h-4 w-4" />
+                    Port {bind.port}
+                  </Button>
+                ))}
+              </div>
+              {binds.length === 0 && (
+                <p className="text-sm text-muted-foreground">
+                  No binds available. Create a bind first.
+                </p>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Select the port bind to add this listener to.
+              </p>
+            </div>
+
             <div className="space-y-2">
               <Label>Protocol</Label>
               <RadioGroup
-                defaultValue={ListenerProtocol.MCP}
+                defaultValue={ListenerProtocol.HTTP}
                 value={newListener.protocol}
                 onValueChange={(value) =>
                   setNewListener({ ...newListener, protocol: value as ListenerProtocol })
                 }
-                className="flex space-x-4"
+                className="grid grid-cols-2 gap-4"
               >
                 <div className="flex items-center space-x-2">
-                  <RadioGroupItem value={ListenerProtocol.MCP} id="proto-mcp" />
-                  <Label htmlFor="proto-mcp">MCP</Label>
+                  <RadioGroupItem value={ListenerProtocol.HTTP} id="proto-http" />
+                  <Label htmlFor="proto-http">HTTP</Label>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <RadioGroupItem value={ListenerProtocol.A2A} id="proto-a2a" />
-                  <Label htmlFor="proto-a2a">A2A</Label>
+                  <RadioGroupItem value={ListenerProtocol.HTTPS} id="proto-https" />
+                  <Label htmlFor="proto-https">HTTPS</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value={ListenerProtocol.TLS} id="proto-tls" />
+                  <Label htmlFor="proto-tls">TLS</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value={ListenerProtocol.TCP} id="proto-tcp" />
+                  <Label htmlFor="proto-tcp">TCP</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value={ListenerProtocol.HBONE} id="proto-hbone" />
+                  <Label htmlFor="proto-hbone">HBONE</Label>
                 </div>
               </RadioGroup>
-              <p className="text-xs text-muted-foreground">
-                Select the protocol this listener will handle (Model Control Protocol or
-                Agent-to-Agent).
-              </p>
             </div>
+
             <div className="space-y-2">
-              <Label htmlFor="address">Address</Label>
+              <Label htmlFor="hostname">Hostname</Label>
               <Input
-                id="address"
-                value={newListener.address}
-                onChange={(e) => setNewListener({ ...newListener, address: e.target.value })}
-                placeholder="0.0.0.0"
+                id="hostname"
+                value={newListener.hostname}
+                onChange={(e) => setNewListener({ ...newListener, hostname: e.target.value })}
+                placeholder="localhost"
               />
               <p className="text-xs text-muted-foreground">
-                The IP address the listener will bind to.
+                The hostname the listener will bind to. Can include wildcards.
               </p>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="port">Port</Label>
-              <Input
-                id="port"
-                value={newListener.port}
-                onChange={(e) => setNewListener({ ...newListener, port: e.target.value })}
-                placeholder="5555"
-              />
-              <p className="text-xs text-muted-foreground">The port number for the listener.</p>
             </div>
           </div>
           <DialogFooter>
@@ -639,7 +780,10 @@ export function ListenerConfig({
             >
               Cancel
             </Button>
-            <Button onClick={handleAddListener} disabled={isSubmitting}>
+            <Button
+              onClick={handleAddListener}
+              disabled={isSubmitting || !newListener.targetBindPort}
+            >
               {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Add Listener
             </Button>
@@ -650,7 +794,9 @@ export function ListenerConfig({
       {/* JWT Configuration Dialog */}
       <Dialog
         open={configDialog.type === "jwt" && configDialog.isOpen}
-        onOpenChange={(open) => !open && setConfigDialog({ ...configDialog, isOpen: false })}
+        onOpenChange={(open: boolean) =>
+          !open && setConfigDialog({ ...configDialog, isOpen: false })
+        }
       >
         <DialogContent>
           <DialogHeader>
@@ -659,7 +805,7 @@ export function ListenerConfig({
           </DialogHeader>
           <JWTConfigForm
             listener={configDialog.listener}
-            onSave={handleUpdateListener}
+            onSave={(listener) => handleUpdateListener(listener, configDialog.bindPort)}
             onCancel={() => setConfigDialog({ ...configDialog, isOpen: false })}
           />
         </DialogContent>
@@ -668,7 +814,9 @@ export function ListenerConfig({
       {/* TLS Configuration Dialog */}
       <Dialog
         open={configDialog.type === "tls" && configDialog.isOpen}
-        onOpenChange={(open) => !open && setConfigDialog({ ...configDialog, isOpen: false })}
+        onOpenChange={(open: boolean) =>
+          !open && setConfigDialog({ ...configDialog, isOpen: false })
+        }
       >
         <DialogContent>
           <DialogHeader>
@@ -677,7 +825,7 @@ export function ListenerConfig({
           </DialogHeader>
           <TLSConfigForm
             listener={configDialog.listener}
-            onSave={handleUpdateListener}
+            onSave={(listener) => handleUpdateListener(listener, configDialog.bindPort)}
             onCancel={() => setConfigDialog({ ...configDialog, isOpen: false })}
           />
         </DialogContent>
@@ -686,7 +834,9 @@ export function ListenerConfig({
       {/* RBAC Configuration Dialog */}
       <Dialog
         open={configDialog.type === "rbac" && configDialog.isOpen}
-        onOpenChange={(open) => !open && setConfigDialog({ ...configDialog, isOpen: false })}
+        onOpenChange={(open: boolean) =>
+          !open && setConfigDialog({ ...configDialog, isOpen: false })
+        }
       >
         <DialogContent>
           <DialogHeader>
@@ -695,77 +845,46 @@ export function ListenerConfig({
           </DialogHeader>
           <RBACConfigForm
             listener={configDialog.listener}
-            onSave={handleUpdateListener}
+            onSave={(listener) => handleUpdateListener(listener, configDialog.bindPort)}
             onCancel={() => setConfigDialog({ ...configDialog, isOpen: false })}
           />
         </DialogContent>
       </Dialog>
 
-      {/* Delete Configuration Confirmation Dialog */}
+      {/* Delete Confirmation Dialog */}
       <Dialog
-        open={deleteConfigDialog.isOpen}
-        onOpenChange={(open) =>
-          !open && setDeleteConfigDialog({ ...deleteConfigDialog, isOpen: false })
+        open={deleteDialog.isOpen}
+        onOpenChange={(open: boolean) =>
+          !open && setDeleteDialog({ ...deleteDialog, isOpen: false })
         }
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>
-              Delete {deleteConfigDialog.configType?.toUpperCase()} Configuration
-            </DialogTitle>
+            <DialogTitle>Delete {deleteDialog.type === "bind" ? "Bind" : "Listener"}</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete the{" "}
-              {deleteConfigDialog.configType === "jwt"
-                ? "JWT authentication and associated RBAC policies"
-                : `${deleteConfigDialog.configType?.toUpperCase()} configuration`}{" "}
-              for this listener? This action cannot be undone.
+              {deleteDialog.type === "bind"
+                ? `Are you sure you want to delete the bind for port ${deleteDialog.bindPort}? This will also delete all listeners in this bind.`
+                : `Are you sure you want to delete the listener "${deleteDialog.listenerName}"?`}{" "}
+              This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() =>
-                setDeleteConfigDialog({ isOpen: false, listenerIndex: -1, configType: null })
-              }
+              onClick={() => setDeleteDialog({ ...deleteDialog, isOpen: false })}
               disabled={isSubmitting}
             >
               Cancel
             </Button>
             <Button
               variant="destructive"
-              onClick={handleDeleteConfiguration}
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Delete Configuration
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete Listener Confirmation Dialog */}
-      <Dialog
-        open={deleteDialog.isOpen}
-        onOpenChange={(open) => !open && setDeleteDialog({ ...deleteDialog, isOpen: false })}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete Listener</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete this listener? This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setDeleteDialog({ isOpen: false, listenerIndex: -1 })}
-              disabled={isSubmitting}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => handleDeleteListener(deleteDialog.listenerIndex)}
+              onClick={() => {
+                if (deleteDialog.type === "bind" && deleteDialog.bindPort) {
+                  handleDeleteBind(deleteDialog.bindPort);
+                } else if (deleteDialog.type === "listener" && deleteDialog.listenerName) {
+                  handleDeleteListener(deleteDialog.listenerName);
+                }
+              }}
               disabled={isSubmitting}
             >
               {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}

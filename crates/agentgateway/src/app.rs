@@ -97,7 +97,7 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 	.await
 	.context("admin server starts")?;
 	#[cfg(feature = "ui")]
-	admin_server.set_admin_handler(Arc::new(crate::ui::UiHandler::new()));
+	admin_server.set_admin_handler(Arc::new(crate::ui::UiHandler::new(config.clone())));
 
 	let sub_registry = metrics::sub_registry(&mut registry);
 	let tracer = trc::Tracer::new(&config.tracing)?;

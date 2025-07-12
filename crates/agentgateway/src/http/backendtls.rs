@@ -56,7 +56,7 @@ static SYSTEM_ROOT: Lazy<rustls_native_certs::CertificateResult> =
 
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct LocalBackendTLS {
 	cert: Option<PathBuf>,
 	key: Option<PathBuf>,
