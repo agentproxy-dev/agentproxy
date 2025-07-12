@@ -85,6 +85,7 @@ num_cpus = "1.17"
 once_cell = "1.21"
 #openapi = "0.1"
 openapiv3 = "2.2"
+openapiv3_1 = "0.1.2"
 opentelemetry = "0.30"
 opentelemetry-http = "0.30"
 opentelemetry-otlp = { version = "0.30", features = ["grpc-tonic"] }

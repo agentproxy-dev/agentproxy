@@ -1,0 +1,86 @@
+openapi: "3.1.0"
+info:
+  title: Advanced Schema Test API
+  version: "1.0.0"
+servers:
+  - url: https://api.example.com
+paths:
+  /advanced-schema:
+    post:
+      operationId: testAdvancedSchema
+      summary: Test advanced JSON Schema Draft 2020-12 features
+      description: Test schema composition and validation keywords
+      requestBody:
+        required: true
+        description: Advanced schema with composition and validation
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - contact
+              properties:
+                name:
+                  type: string
+                  minLength: 2
+                  maxLength: 50
+                  pattern: "^[A-Za-z\\s]+$"
+                  description: "Person's full name"
+                contact:
+                  anyOf:
+                    - type: object
+                      properties:
+                        email:
+                          type: ["string", "null"]
+                          format: email
+                        phone:
+                          type: string
+                          pattern: "^\\+?[1-9]\\d{1,14}$"
+                      required: ["email"]
+                    - type: object
+                      properties:
+                        address:
+                          type: object
+                          properties:
+                            street:
+                              type: string
+                            city:
+                              type: string
+                            zipCode:
+                              type: string
+                              pattern: "^\\d{5}(-\\d{4})?$"
+                          required: ["street", "city"]
+                      required: ["address"]
+                age:
+                  oneOf:
+                    - type: "null"
+                    - type: integer
+                      minimum: 0
+                      maximum: 150
+                      multipleOf: 1
+                tags:
+                  type: array
+                  items:
+                    type: string
+                    minLength: 1
+                  minItems: 0
+                  maxItems: 10
+                  uniqueItems: true
+                metadata:
+                  allOf:
+                    - type: object
+                      properties:
+                        created:
+                          type: string
+                          format: date-time
+                    - type: object
+                      properties:
+                        updated:
+                          type: ["string", "null"]
+                          format: date-time
+      responses:
+        '201':
+          description: Advanced schema processed successfully
+        '400':
+          description: Invalid schema data

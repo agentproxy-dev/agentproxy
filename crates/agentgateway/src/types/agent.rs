@@ -6,6 +6,7 @@ use std::io::Cursor;
 use std::marker::PhantomData;
 use std::net::{IpAddr, SocketAddr};
 use std::num::NonZeroU16;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::{cmp, net};
 
@@ -13,7 +14,8 @@ use anyhow::anyhow;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use once_cell::sync::Lazy;
-use openapiv3::OpenAPI;
+use openapiv3::OpenAPI as OpenAPIv3;
+use openapiv3_1::OpenApi as OpenAPIv3_1;
 use regex::Regex;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use rustls::{ClientConfig, ServerConfig};
@@ -520,6 +522,85 @@ pub struct StreamableHTTPTargetSpec {
 	pub path: String,
 }
 
+/// Unified OpenAPI specification that can handle both 3.0 and 3.1 versions
+#[derive(Clone)]
+pub enum OpenAPI {
+	V3_0(Arc<OpenAPIv3>),
+	V3_1(Arc<OpenAPIv3_1>),
+}
+
+impl std::fmt::Debug for OpenAPI {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			OpenAPI::V3_0(spec) => f.debug_tuple("V3_0").field(&spec.openapi).finish(),
+			OpenAPI::V3_1(_spec) => f.debug_tuple("V3_1").field(&"3.1").finish(),
+		}
+	}
+}
+
+impl OpenAPI {
+	/// Get the OpenAPI version string
+	pub fn version(&self) -> String {
+		match self {
+			OpenAPI::V3_0(spec) => spec.openapi.clone(),
+			OpenAPI::V3_1(_spec) => "3.1".to_string(),
+		}
+	}
+}
+
+impl serde::Serialize for OpenAPI {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: serde::Serializer,
+	{
+		// For serialization purposes, we'll serialize the version info
+		// The actual schema content is not typically serialized
+		match self {
+			OpenAPI::V3_0(spec) => {
+				let mut map = serializer.serialize_map(Some(2))?;
+				map.serialize_entry("version", "3.0")?;
+				map.serialize_entry("openapi", &spec.openapi)?;
+				map.end()
+			},
+			OpenAPI::V3_1(_spec) => {
+				let mut map = serializer.serialize_map(Some(2))?;
+				map.serialize_entry("version", "3.1")?;
+				map.serialize_entry("openapi", "3.1")?;
+				map.end()
+			},
+		}
+	}
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum OpenAPIVersion {
+	V3_0,
+	V3_1,
+}
+
+/// Detect OpenAPI version from the content string
+pub fn detect_openapi_version(content: &str) -> Result<OpenAPIVersion, Box<dyn std::error::Error + Send + Sync>> {
+	// Parse just enough to get the version field
+	let value: serde_json::Value = yamlviajson::from_str(content)
+		.map_err(|e| format!("Failed to parse content: {}", e))?;
+	
+	let version = value
+		.get("openapi")
+		.and_then(|v| v.as_str())
+		.ok_or("Missing 'openapi' field")?;
+	
+	if version.starts_with("3.0") {
+		Ok(OpenAPIVersion::V3_0)
+	} else if version.starts_with("3.1") {
+		Ok(OpenAPIVersion::V3_1)
+	} else {
+		Err(format!(
+			"Unsupported OpenAPI version: {}. Only 3.0.x and 3.1.x are supported.",
+			version
+		).into())
+	}
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
@@ -544,14 +625,29 @@ where
 	}
 	let s = Serde::deserialize(deserializer)?;
 
-	let s = match s {
+	let content = match s {
 		Serde::File(f) => {
 			let f = std::fs::read(f).map_err(serde::de::Error::custom)?;
 			String::from_utf8(f).map_err(serde::de::Error::custom)?
 		},
 		Serde::Inline(s) => s,
 	};
-	let schema: OpenAPI = yamlviajson::from_str(s.as_str()).map_err(serde::de::Error::custom)?;
+
+	// Detect the OpenAPI version and parse accordingly
+	let version = detect_openapi_version(&content).map_err(serde::de::Error::custom)?;
+	let schema = match version {
+		OpenAPIVersion::V3_0 => {
+			let spec: OpenAPIv3 = yamlviajson::from_str(&content)
+				.map_err(serde::de::Error::custom)?;
+			OpenAPI::V3_0(Arc::new(spec))
+		},
+		OpenAPIVersion::V3_1 => {
+			let spec: OpenAPIv3_1 = yamlviajson::from_str(&content)
+				.map_err(serde::de::Error::custom)?;
+			OpenAPI::V3_1(Arc::new(spec))
+		},
+	};
+
 	Ok(Arc::new(schema))
 }
 
